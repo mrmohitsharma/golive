@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>CoGolfer Live Admin</title>
+<style>
+  :root { --bg:#f4f6f5; --panel:#fff; --line:#e1e6e3; --ink:#18201c; --muted:#66736c; --green:#2e7d4f; --green-soft:#e6f2ea; --gold:#a8861c; --red:#c62828; --red-soft:#fdecec; --amber:#b26a00; --amber-soft:#fff4e0; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  button, input, select { font:inherit; }
+  header.top { background:#11261a; color:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header.top .brand { font-weight:800; letter-spacing:.06em; text-transform:uppercase; font-size:12px; color:#e2c45a; }
+  header.top h1 { font-size:17px; margin:0; font-weight:700; }
+  header.top .sp { flex:1; }
+  header.top button { background:none; border:1px solid #3d5546; color:#fff; border-radius:6px; padding:5px 10px; cursor:pointer; }
+  nav { display:flex; gap:4px; padding:0 20px; background:#fff; border-bottom:1px solid var(--line); overflow-x:auto; }
+  nav button { background:none; border:0; border-bottom:3px solid transparent; padding:12px 12px 9px; cursor:pointer; color:var(--muted); font-weight:600; white-space:nowrap; }
+  nav button.on { color:var(--ink); border-bottom-color:var(--green); }
+  main { max-width:1200px; margin:0 auto; padding:20px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .stat .v { font-size:24px; font-weight:800; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .stat .l { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
+  h2 { font-size:16px; margin:22px 0 10px; }
+  h2:first-child { margin-top:0; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .panel > .head { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .panel > .head h3 { margin:0; font-size:14px; flex:1; }
+  .panel > .body { padding:16px; }
+  .scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  th { font-size:12px; color:var(--muted); font-weight:600; background:#fafbfa; }
+  td.num, th.num { text-align:right; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:#f6faf7; }
+  .muted { color:var(--muted); }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+  .pill.live { background:var(--red); color:#fff; } .pill.ok { background:var(--green-soft); color:var(--green); }
+  .pill.bad { background:var(--red-soft); color:var(--red); } .pill.warn { background:var(--amber-soft); color:var(--amber); }
+  .pill.grey { background:#eef1ef; color:var(--muted); }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:7px; padding:7px 12px; cursor:pointer; font-weight:600; }
+  .btn.primary { background:var(--green); color:#fff; border-color:var(--green); }
+  .btn.danger { color:var(--red); border-color:#f0c5c5; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  input[type=text], input[type=number], input[type=email], input[type=password], select { border:1px solid #cdd5d0; border-radius:7px; padding:7px 9px; background:#fff; min-width:0; }
+  label.f { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); font-weight:600; }
+  label.f input { color:var(--ink); font-weight:400; font-size:14px; }
+  .form { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
+  .row { display:flex; gap:10px; align-items:end; flex-wrap:wrap; }
+  .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+  .credit-pos { color:var(--green); font-weight:600; } .credit-neg { color:var(--red); }
+  .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#11261a; color:#fff; padding:10px 16px; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,.2); z-index:10; max-width:90vw; }
+  .toast.err { background:var(--red); }
+  .login { max-width:360px; margin:12vh auto; }
+  .login .card { padding:24px; display:grid; gap:12px; }
+  .back { background:none; border:0; color:var(--green); font-weight:600; cursor:pointer; padding:0; margin-bottom:10px; }
+  .cols { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; }
+  @media (max-width:860px) { .cols { grid-template-columns:1fr; } main { padding:16px; } }
+  @media (max-width:560px) { .grid { grid-template-columns:1fr 1fr; gap:10px; } .stat .v { font-size:20px; } header.top .who { display:none; } header.top { padding:10px 16px; } nav { padding:0 8px; } }
+  .empty { padding:18px 16px; color:var(--muted); }
+  .switch { display:flex; gap:8px; align-items:center; font-weight:600; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(() => {
+  const root = document.getElementById('root');
+  const store = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch {} } };
+  let token = store.get('cg_admin_token');
+  let me = null, tab = 'overview', clubId = null, timer = null;
+  const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const cr = (n) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const when = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '–';
+  const day = (iso) => iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '–';
+
+  const el = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of kids.flat()) if (c != null && c !== false) n.append(c);
+    return n;
+  };
+  const toast = (msg, err) => { const t = el('div', { class: 'toast' + (err ? ' err' : ''), text: msg }); document.body.append(t); setTimeout(() => t.remove(), err ? 6000 : 2500); };
+
+  async function call(method, url, body) {
+    const r = await fetch(url, { method, headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const data = r.status === 204 ? null : await r.json().catch(() => null);
+    if (r.status === 401) { logout(); throw new Error('Signed out'); }
+    if (!r.ok) throw new Error((data && data.error && data.error.message) || ('Error ' + r.status));
+    return data;
+  }
+  const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { if (e.message !== 'Signed out') toast(e.message, true); } };
+
+  function logout() { token = null; me = null; store.set('cg_admin_token', null); render(); }
+
+  // ------------------------------------------------------------------ shell
+  async function render() {
+    clearInterval(timer);
+    if (!token) return renderLogin();
+    if (!me) {
+      try {
+        const r = await call('GET', '/api/me');
+        if (!r.principal.platformAdmin) { root.replaceChildren(el('div', { class: 'login' }, el('div', { class: 'card' }, el('h2', { text: 'Not an administrator' }), el('p', { class: 'muted', text: 'This account cannot open the CoGolfer Live admin panel.' }), el('button', { class: 'btn', onclick: logout, text: 'Sign out' })))); return; }
+        me = r.principal;
+      } catch { return; }
+    }
+    const tabs = [['overview', 'Overview'], ['live', 'Live now'], ['clubs', 'Clubs'], ['pricing', 'Pricing & packs'], ['payments', 'Payments'], ['admins', 'Admins']];
+    const main = el('main');
+    root.replaceChildren(
+      el('header', { class: 'top' }, el('div', {}, el('div', { class: 'brand', text: 'CoGolfer Live' }), el('h1', { text: 'Admin' })), el('div', { class: 'sp' }), el('span', { class: 'muted who', style: 'color:#b9c9be', text: me.email }), el('button', { onclick: logout, text: 'Sign out' })),
+      el('nav', {}, tabs.map(([k, label]) => el('button', { class: tab === k ? 'on' : '', onclick: () => { tab = k; clubId = null; render(); }, text: label }))),
+      main,
+    );
+    main.append(el('p', { class: 'muted', text: 'Loading…' }));
+    const views = { overview, live, clubs: () => (clubId ? club(clubId) : clubs()), pricing, payments, admins };
+    await guard(async () => main.replaceChildren(await views[tab]()))();
+    if (tab === 'live' || tab === 'overview') timer = setInterval(guard(async () => main.replaceChildren(await views[tab]())), 15000);
+  }
+
+  function renderLogin() {
+    const email = el('input', { type: 'email', placeholder: 'you@cogolfers.com', autocomplete: 'username' });
+    const pass = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
+    const go = guard(async (e) => {
+      e.preventDefault();
+      const r = await call('POST', '/api/auth/login', { email: email.value, password: pass.value });
+      token = r.token; store.set('cg_admin_token', token); render();
+    });
+    root.replaceChildren(el('div', { class: 'login' }, el('form', { class: 'card', onsubmit: go },
+      el('div', { style: 'font-weight:800;letter-spacing:.06em;font-size:12px;color:var(--gold);text-transform:uppercase', text: 'CoGolfer Live' }),
+      el('h2', { style: 'margin:0', text: 'Admin sign in' }), email, pass, el('button', { class: 'btn primary', type: 'submit', text: 'Sign in' }))));
+  }
+
+  const table = (heads, rows, empty) => rows.length
+    ? el('div', { class: 'scroll' }, el('table', {}, el('thead', {}, el('tr', {}, heads.map((h) => el('th', { class: h.endsWith(' ') ? 'num' : '', text: h.trim() })))), el('tbody', {}, rows)))
+    : el('div', { class: 'empty', text: empty });
+  const stat = (label, value, sub) => el('div', { class: 'card stat' }, el('div', { class: 'l', text: label }), el('div', { class: 'v', text: value }), sub ? el('div', { class: 'muted', text: sub }) : null);
+
+  // ------------------------------------------------------------------ overview
+  async function overview() {
+    const o = await call('GET', '/api/admin/overview');
+    const lv = await call('GET', '/api/admin/live');
+    return el('div', {},
+      !o.billingEnabled ? el('div', { class: 'card', style: 'background:var(--amber-soft);margin-bottom:12px', text: 'Billing is switched off on this server (BILLING_ENABLED=false): no camera or minute limits apply.' }) : null,
+      el('div', { class: 'grid' },
+        stat('Live now', String(o.liveNow)),
+        stat('Clubs', String(o.clubs), o.suspended ? `${o.suspended} suspended` : null),
+        stat('Revenue this month', inr(o.revenueThisMonthInr), `${inr(o.revenueTotalInr)} all time`),
+        stat('Credits used this month', cr(o.creditsSpentThisMonth), `${cr(o.paidMinutesThisMonth)} paid live minutes`),
+        stat('Tournaments this month', String(o.tournamentsThisMonth)),
+        stat('Credits held by clubs', cr(o.creditsHeldByClubs)),
+        stat('Online payments', o.paymentsEnabled ? 'On' : 'Off', o.paymentsEnabled ? `Cashfree ${o.cashfreeMode}` : 'Add Cashfree keys to the server'),
+      ),
+      el('h2', { text: 'Live now' }), liveTable(lv.live));
+  }
+
+  // ------------------------------------------------------------------ live
+  function liveTable(list) {
+    return el('div', { class: 'panel' }, table(['Tournament', 'Club', 'Mode', 'Cameras', 'Live min ', 'Minutes left ', 'Balance ', ''], list.map((l) =>
+      el('tr', {},
+        el('td', {}, el('strong', { text: l.tournamentName }), l.venue ? el('div', { class: 'muted', text: l.venue }) : null),
+        el('td', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); tab = 'clubs'; clubId = l.orgId; render(); }, text: l.orgName })),
+        el('td', { text: l.mode === 'cloud' ? 'Cloud' : 'Laptop' }),
+        el('td', { text: `${l.cameras} / ${l.cameraLimit}` }),
+        el('td', { class: 'num', text: String(l.liveMinutes) }),
+        el('td', { class: 'num' }, l.grace.active ? el('span', { class: 'pill bad', text: `Grace ${Math.ceil((l.grace.secondsLeft || 0) / 60)} min` }) : l.remainingMinutes === null ? el('span', { class: 'muted', text: 'No limit' }) : el('span', { class: l.remainingMinutes <= 10 ? 'pill warn' : '', text: String(l.remainingMinutes) })),
+        el('td', { class: 'num', text: cr(l.balance) }),
+        el('td', {}, el('a', { href: l.watchUrl, target: '_blank', rel: 'noopener', text: 'Watch' })),
+      )), 'Nothing is live right now.'));
+  }
+  async function live() {
+    const r = await call('GET', '/api/admin/live');
+    return el('div', {}, el('p', { class: 'muted', style: 'margin-top:0', text: 'Refreshes every 15 seconds.' }), liveTable(r.live));
+  }
+
+  // ------------------------------------------------------------------ clubs
+  async function clubs() {
+    const q = el('input', { type: 'text', placeholder: 'Search club name or owner email', style: 'flex:1;min-width:200px' });
+    const box = el('div');
+    const load = guard(async () => {
+      const r = await call('GET', '/api/admin/orgs' + (q.value.trim() ? '?q=' + encodeURIComponent(q.value.trim()) : ''));
+      box.replaceChildren(table(['Club', 'Owners', 'Status', 'Balance ', 'Tournaments ', 'Live min ', 'Paid ', 'Joined'], r.orgs.map((o) =>
+        el('tr', { class: 'click', onclick: () => { clubId = o.id; render(); } },
+          el('td', {}, el('strong', { text: o.name })),
+          el('td', { class: 'muted', text: o.owners || '–' }),
+          el('td', {}, o.liveNow ? el('span', { class: 'pill live', text: 'LIVE' }) : null, ' ', o.suspended ? el('span', { class: 'pill bad', text: 'Suspended' }) : el('span', { class: 'pill ok', text: 'Active' }), o.customPricing ? ' ' : null, o.customPricing ? el('span', { class: 'pill warn', text: 'Custom price' }) : null),
+          el('td', { class: 'num', text: cr(o.balance) }),
+          el('td', { class: 'num', text: String(o.tournaments) }),
+          el('td', { class: 'num', text: String(o.liveMinutes) }),
+          el('td', { class: 'num', text: inr(o.paidInr) }),
+          el('td', { text: day(o.createdAt) }),
+        )), 'No clubs match.'));
+    });
+    let t; q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(load, 250); });
+    load();
+    return el('div', { class: 'panel' }, el('div', { class: 'head' }, q), box);
+  }
+
+  const kindText = { purchase: 'Bought credits', cameras: 'Extra cameras', minutes: 'Live minutes', admin: 'Adjusted by CoGolfers', refund: 'Refund' };
+
+  async function club(id) {
+    const d = await call('GET', `/api/admin/orgs/${id}`);
+    const reload = () => render();
+
+    // Credits
+    const amt = el('input', { type: 'number', step: '0.01', placeholder: 'e.g. 500 or -100', style: 'width:150px' });
+    const note = el('input', { type: 'text', placeholder: 'Reason (shown to the club)', style: 'flex:1;min-width:180px' });
+    const adjust = guard(async () => {
+      const n = Number(amt.value);
+      if (!n) return toast('Enter an amount', true);
+      const r = await call('POST', `/api/admin/orgs/${id}/credits`, { credits: n, note: note.value.trim() || (n > 0 ? 'Added by CoGolfers' : 'Removed by CoGolfers') });
+      toast(`Balance now ${cr(r.balance)} credits`); reload();
+    });
+
+    // Suspension
+    const reason = el('input', { type: 'text', value: d.suspendedReason || '', placeholder: 'Reason (shown to the club)', style: 'flex:1;min-width:180px' });
+    const suspend = guard(async (on) => {
+      if (on && !confirm(`Suspend ${d.org.name}? They cannot go live, buy cameras or pay, and a live broadcast is ended now.`)) return;
+      await call('PATCH', `/api/admin/orgs/${id}/billing`, { suspended: on, suspendedReason: on ? (reason.value.trim() || null) : null });
+      toast(on ? 'Club suspended' : 'Club active again'); reload();
+    });
+
+    // Custom pricing
+    const keys = [['freeCameras', 'Free cameras / tournament', '1'], ['freeMinutes', 'Free live minutes / tournament', '1'], ['cameraPrice', 'Credits per extra camera', '0.01'], ['minutePrice', 'Credits per live minute', '0.01'], ['graceMinutes', 'Grace minutes', '1']];
+    const inputs = Object.fromEntries(keys.map(([k, , step]) => [k, el('input', { type: 'number', min: '0', step, value: d.overrides[k] ?? '', placeholder: `Default ${d.platformPricing[k]}` })]));
+    const savePricing = guard(async () => {
+      const overrides = {};
+      for (const [k] of keys) if (inputs[k].value !== '') overrides[k] = Number(inputs[k].value);
+      await call('PATCH', `/api/admin/orgs/${id}/billing`, { overrides });
+      toast('Pricing saved'); reload();
+    });
+
+    return el('div', {},
+      el('button', { class: 'back', onclick: () => { clubId = null; render(); }, text: '← All clubs' }),
+      el('div', { class: 'row', style: 'align-items:center;margin-bottom:14px' }, el('h2', { style: 'margin:0', text: d.org.name }), d.suspended ? el('span', { class: 'pill bad', text: 'Suspended' }) : el('span', { class: 'pill ok', text: 'Active' }),
+        el('span', { class: 'muted', text: `Joined ${day(d.org.createdAt)} · Owners: ${d.members.filter((m) => m.role === 'owner').map((m) => m.email).join(', ') || '–'}` })),
+      el('div', { class: 'grid', style: 'margin-bottom:16px' },
+        stat('Balance', cr(d.balance) + ' credits'),
+        stat('Free cameras', String(d.pricing.freeCameras), `then ${cr(d.pricing.cameraPrice)} credits each`),
+        stat('Free minutes', String(d.pricing.freeMinutes), `then ${cr(d.pricing.minutePrice)} credits / min`),
+        stat('Billing contact', d.details.phone || '–', [d.details.name, d.details.gstin && 'GSTIN ' + d.details.gstin].filter(Boolean).join(' · ') || null),
+      ),
+      el('div', { class: 'cols' },
+        el('div', { class: 'panel' }, el('div', { class: 'head' }, el('h3', { text: 'Add or remove credits' })), el('div', { class: 'body' },
+          el('div', { class: 'row' }, amt, note, el('button', { class: 'btn primary', onclick: adjust, text: 'Apply' })),
+          el('div', { class: 'hint', text: 'Use a minus sign to remove credits. Every change is recorded with your email.' }))),
+        el('div', { class: 'panel' }, el('div', { class: 'head' }, el('h3', { text: 'Account status' })), el('div', { class: 'body' },
+          el('div', { class: 'row' }, reason, d.suspended ? el('button', { class: 'btn primary', onclick: () => suspend(false), text: 'Reactivate' }) : el('button', { class: 'btn danger', onclick: () => suspend(true), text: 'Suspend' })),
+          el('div', { class: 'hint', text: 'A suspended club cannot go live, start a cloud engine, buy cameras or pay.' }))),
+      ),
+      el('div', { class: 'panel', style: 'margin-top:16px' }, el('div', { class: 'head' }, el('h3', { text: 'Custom pricing for this club' }), el('button', { class: 'btn primary', onclick: savePricing, text: 'Save' })), el('div', { class: 'body' },
+        el('div', { class: 'form' }, keys.map(([k, label]) => el('label', { class: 'f' }, label, inputs[k]))),
+        el('div', { class: 'hint', text: 'Leave a box empty to use the platform price. Set the minute price to 0 for unlimited live time.' }))),
+      el('h2', { text: 'Tournaments' }),
+      el('div', { class: 'panel' }, table(['Tournament', 'Date', 'Cameras ', 'Extra bought ', 'Live min ', 'Paid min ', ''], d.tournaments.map((t) =>
+        el('tr', {}, el('td', {}, el('strong', { text: t.name }), t.venue ? el('div', { class: 'muted', text: t.venue }) : null), el('td', { text: t.startsOn || '–' }),
+          el('td', { class: 'num', text: String(t.cameras) }), el('td', { class: 'num', text: String(t.extraCameras) }), el('td', { class: 'num', text: String(t.liveMinutes) }), el('td', { class: 'num', text: String(t.paidMinutes) }),
+          el('td', {}, t.liveNow ? el('span', { class: 'pill live', text: 'LIVE' }) : t.archived ? el('span', { class: 'pill grey', text: 'Archived' }) : null))), 'No tournaments yet.')),
+      el('h2', { text: 'Credit history' }),
+      el('div', { class: 'panel' }, table(['When', 'What', 'Tournament', 'Qty ', 'Credits ', 'By'], d.transactions.map((x) =>
+        el('tr', {}, el('td', { text: when(x.at) }), el('td', {}, kindText[x.kind] || x.kind, x.note && x.kind !== 'minutes' ? el('div', { class: 'muted', text: x.note }) : null), el('td', { text: x.tournamentName || '–' }),
+          el('td', { class: 'num', text: x.quantity == null ? '' : String(x.quantity) }), el('td', { class: 'num ' + (x.credits >= 0 ? 'credit-pos' : 'credit-neg'), text: (x.credits > 0 ? '+' : '') + cr(x.credits) }), el('td', { class: 'muted', text: x.by || '' }))), 'No credit activity yet.')),
+      el('h2', { text: 'Payments' }), paymentsTable(d.payments, false),
+      el('h2', { text: 'People' }),
+      el('div', { class: 'panel' }, table(['Name', 'Email', 'Role'], d.members.map((m) => el('tr', {}, el('td', { text: m.name }), el('td', { text: m.email }), el('td', { text: m.role }))), 'No members.')),
+    );
+  }
+
+  // ------------------------------------------------------------------ pricing
+  async function pricing() {
+    const s = await call('GET', '/api/admin/settings');
+    const fields = [['freeCameras', 'Free cameras per tournament', '1', 'Each tournament can connect this many camera phones at no cost.'], ['cameraPrice', 'Credits per extra camera', '0.01', 'Bought per tournament by the club.'], ['freeMinutes', 'Free live minutes per tournament', '1', 'Counted from Go live to End stream.'], ['minutePrice', 'Credits per live minute', '0.01', 'Charged for each started minute after the free minutes. 0 = unlimited.'], ['graceMinutes', 'Grace minutes when credits run out', '1', 'The director is warned at 10 and 2 minutes left; after the grace period the stream ends.']];
+    const inputs = Object.fromEntries(fields.map(([k, , step]) => [k, el('input', { type: 'number', min: '0', step, value: s.pricing[k] })]));
+    let packs = s.packs.map((p) => ({ ...p }));
+    const packBox = el('div');
+    const drawPacks = () => packBox.replaceChildren(table(['Id', 'Name', 'Price (₹)', 'Credits', 'Bonus', ''], packs.map((p, i) => {
+      const inp = (k, type, w) => el('input', { type, value: p[k], style: `width:${w}px`, oninput: (e) => { p[k] = type === 'number' ? Number(e.target.value) : e.target.value; bonus.textContent = bonusText(p); } });
+      const bonus = el('span', { class: 'muted', text: bonusText(p) });
+      return el('tr', {}, el('td', {}, inp('id', 'text', 100)), el('td', {}, inp('label', 'text', 140)), el('td', {}, inp('priceInr', 'number', 110)), el('td', {}, inp('credits', 'number', 110)), el('td', {}, bonus),
+        el('td', {}, el('button', { class: 'btn danger', onclick: () => { packs.splice(i, 1); drawPacks(); }, text: 'Remove' })));
+    }), 'No packs: add at least one.'));
+    const bonusText = (p) => p.priceInr > 0 && p.credits > p.priceInr ? `+${Math.round((p.credits / p.priceInr - 1) * 100)}%` : '';
+    drawPacks();
+    const save = guard(async () => {
+      const pricing = Object.fromEntries(fields.map(([k]) => [k, Number(inputs[k].value)]));
+      const r = await call('PUT', '/api/admin/settings', { pricing, packs });
+      packs = r.packs.map((p) => ({ ...p })); drawPacks(); toast('Saved. New prices apply from now on.');
+    });
+    return el('div', {},
+      el('div', { class: 'panel' }, el('div', { class: 'head' }, el('h3', { text: 'Platform pricing' })), el('div', { class: 'body' },
+        el('div', { class: 'form' }, fields.map(([k, label, , hint]) => el('label', { class: 'f', title: hint }, label, inputs[k]))),
+        el('div', { class: 'hint', text: 'Applies to every club without custom pricing. Prices are in credits; clubs buy credits with the packs below.' }))),
+      el('div', { class: 'panel', style: 'margin-top:16px' }, el('div', { class: 'head' }, el('h3', { text: 'Credit packs' }),
+        el('button', { class: 'btn', onclick: () => { packs.push({ id: 'pack' + (packs.length + 1), label: 'New pack', priceInr: 1000, credits: 1000 }); drawPacks(); }, text: 'Add pack' })), packBox,
+        el('div', { class: 'body hint', style: 'margin:0', text: 'What clubs see under Buy credits. The price is charged through Cashfree in rupees. Ids must be unique; changing an id does not affect past payments.' })),
+      el('div', { style: 'margin-top:16px' }, el('button', { class: 'btn primary', onclick: save, text: 'Save pricing and packs' })));
+  }
+
+  // ------------------------------------------------------------------ payments
+  const statusPill = (s) => el('span', { class: 'pill ' + ({ paid: 'ok', created: 'warn', failed: 'bad', expired: 'grey' })[s], text: ({ paid: 'Paid', created: 'Waiting', failed: 'Failed', expired: 'Expired' })[s] || s });
+  function paymentsTable(list, showClub = true) {
+    const recheck = guard(async (p) => { const r = await call('POST', `/api/admin/payments/${p.id}/recheck`); toast(r.payment.status === 'paid' ? 'Paid: credits added' : 'Cashfree still reports: ' + r.payment.status); render(); });
+    return el('div', { class: 'panel' }, table(['When', ...(showClub ? ['Club'] : []), 'Order', 'Amount ', 'Credits ', 'Status', ''], list.map((p) =>
+      el('tr', {}, el('td', { text: when(p.createdAt) }), showClub ? el('td', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); tab = 'clubs'; clubId = p.orgId; render(); }, text: p.orgName })) : null,
+        el('td', { class: 'muted', text: p.orderId }), el('td', { class: 'num', text: inr(p.amountInr) }), el('td', { class: 'num', text: cr(p.credits) }), el('td', {}, statusPill(p.status)),
+        el('td', {}, p.status === 'created' ? el('button', { class: 'btn', onclick: () => recheck(p), text: 'Check with Cashfree' }) : null))), 'No payments.'));
+  }
+  async function payments() {
+    const sel = el('select', {}, ['', 'paid', 'created', 'expired', 'failed'].map((v) => el('option', { value: v, text: v ? ({ paid: 'Paid', created: 'Waiting', failed: 'Failed', expired: 'Expired' })[v] : 'All payments' })));
+    const box = el('div');
+    const load = guard(async () => box.replaceChildren(paymentsTable((await call('GET', '/api/admin/payments' + (sel.value ? '?status=' + sel.value : ''))).payments)));
+    sel.addEventListener('change', load);
+    await load();
+    return el('div', {}, el('div', { class: 'row', style: 'margin-bottom:12px' }, sel), box);
+  }
+
+  // ------------------------------------------------------------------ admins
+  async function admins() {
+    const r = await call('GET', '/api/admin/admins');
+    const email = el('input', { type: 'email', placeholder: 'Email of an existing account', style: 'flex:1;min-width:220px' });
+    const add = guard(async () => { await call('POST', '/api/admin/admins', { email: email.value.trim() }); toast('Administrator added'); render(); });
+    const remove = guard(async (a) => { if (!confirm(`Remove admin access for ${a.email}?`)) return; await call('DELETE', `/api/admin/admins/${a.id}`); toast('Removed'); if (a.id === me.id) logout(); else render(); });
+    return el('div', {},
+      el('div', { class: 'panel' }, el('div', { class: 'head' }, el('h3', { text: 'CoGolfers administrators' })), table(['Name', 'Email', ''], r.admins.map((a) =>
+        el('tr', {}, el('td', { text: a.name }), el('td', { text: a.email }), el('td', {}, el('button', { class: 'btn danger', onclick: () => remove(a), text: 'Remove' })))), 'No admins.')),
+      el('div', { class: 'panel', style: 'margin-top:16px' }, el('div', { class: 'head' }, el('h3', { text: 'Add an administrator' })), el('div', { class: 'body' },
+        el('div', { class: 'row' }, email, el('button', { class: 'btn primary', onclick: add, text: 'Add' })),
+        el('div', { class: 'hint', text: 'Administrators see every club, change prices and credits, and can suspend clubs. The person must already have an account.' }))));
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

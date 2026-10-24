@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CoGolfer Live graphics</title>
+<meta name="viewport" content="width=1920,height=1080">
+<!--
+  Broadcast overlay for OBS (Browser Source, 1920x1080, transparent background).
+  Live data arrives over Server-Sent Events from /api/graphics/<tournament>/events.
+  Golf convention: scores under par are red.
+-->
+<style>
+  :root {
+    --green: #10301f;
+    --green-2: #1d4a31;
+    --gold: #d9b45a;
+    --ink: #0d1110;
+    --paper: #f6f4ee;
+    --red: #d83a2e;
+    --muted: #a9b8ae;
+    --font: "Barlow Condensed", "Roboto Condensed", "DejaVu Sans Condensed", "Arial Narrow", sans-serif;
+    --ease: cubic-bezier(.2, .8, .2, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; font-family: var(--font); color: #fff; }
+  .hide { opacity: 0 !important; transform: translateX(var(--off, -40px)) !important; pointer-events: none; }
+  .block { transition: opacity .45s var(--ease), transform .55s var(--ease); }
+
+  /* ---------- score bug (top left) */
+  #bug { position: absolute; left: 64px; top: 52px; display: flex; align-items: stretch; height: 58px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.35)); }
+  #bug .live { background: var(--red); padding: 0 16px; display: flex; align-items: center; font-weight: 800; font-size: 24px; letter-spacing: 2px; }
+  #bug .live::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: #fff; margin-right: 10px; animation: pulse 1.6s infinite; }
+  #bug .name { background: var(--green); padding: 0 22px; display: flex; align-items: center; font-weight: 700; font-size: 28px; letter-spacing: .5px; text-transform: uppercase; border-bottom: 4px solid var(--gold); }
+  #bug .leader { background: rgba(13,17,16,.86); padding: 0 20px; display: flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 600; }
+  #bug .leader .lbl { color: var(--gold); font-size: 18px; letter-spacing: 2px; font-weight: 700; }
+  #bug .hole { background: var(--paper); color: var(--ink); padding: 0 18px; display: flex; align-items: center; font-weight: 800; font-size: 24px; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+
+  /* ---------- replay (top right) */
+  #replay { position: absolute; right: 64px; top: 52px; --off: 40px; height: 58px; display: flex; align-items: center; padding: 0 26px 0 22px;
+    background: linear-gradient(90deg, var(--red), #a8231a); font-weight: 800; font-size: 30px; letter-spacing: 6px; overflow: hidden;
+    filter: drop-shadow(0 6px 18px rgba(0,0,0,.35)); }
+  #replay::before { content: "↺"; font-size: 30px; margin-right: 14px; letter-spacing: 0; }
+  #replay::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.35) 50%, transparent 70%);
+    transform: translateX(-100%); animation: sweep 2.2s infinite; }
+  @keyframes sweep { to { transform: translateX(100%) } }
+
+  /* ---------- hole card (right) */
+  #hole { position: absolute; right: 64px; top: 300px; width: 330px; --off: 60px; filter: drop-shadow(0 10px 28px rgba(0,0,0,.4)); }
+  #hole .top { background: var(--green); padding: 18px 26px 12px; border-top: 6px solid var(--gold); }
+  #hole .top .k { font-size: 22px; letter-spacing: 6px; color: var(--gold); font-weight: 700; }
+  #hole .top .n { font-size: 120px; line-height: .95; font-weight: 800; }
+  #hole .rows { background: var(--paper); color: var(--ink); }
+  #hole .row { display: flex; justify-content: space-between; padding: 12px 26px; font-size: 30px; font-weight: 700; border-top: 1px solid rgba(0,0,0,.08); }
+  #hole .row span:first-child { color: #5a6a60; font-size: 22px; letter-spacing: 3px; align-self: center; }
+
+  /* ---------- lower third (bottom left) */
+  #lt { position: absolute; left: 64px; bottom: 96px; display: flex; align-items: stretch; filter: drop-shadow(0 10px 28px rgba(0,0,0,.45)); }
+  #lt .main { background: var(--green); min-width: 620px; padding: 14px 30px 16px; border-left: 8px solid var(--gold); }
+  #lt .title { font-size: 58px; font-weight: 800; line-height: 1; text-transform: uppercase; letter-spacing: .5px; }
+  #lt .sub { font-size: 26px; color: var(--muted); margin-top: 6px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+  #lt .stat { background: var(--paper); color: var(--ink); min-width: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 22px; }
+  #lt .stat + .stat { border-left: 1px solid rgba(0,0,0,.1); }
+  #lt .stat .v { font-size: 56px; font-weight: 800; line-height: 1; }
+  #lt .stat .k { font-size: 18px; letter-spacing: 3px; color: #5a6a60; font-weight: 700; margin-top: 4px; }
+  #lt .stat.under .v { color: var(--red); }
+  #q { position: absolute; left: 64px; bottom: 96px; width: 1100px; filter: drop-shadow(0 10px 28px rgba(0,0,0,.45)); }
+  #q .head { background: var(--gold); color: #1a1a1a; display: inline-flex; gap: 14px; align-items: center; padding: 8px 22px; font-size: 22px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; }
+  #q .head .src { font-size: 18px; letter-spacing: 2px; opacity: .75; }
+  #q .body { background: var(--green); border-left: 8px solid var(--gold); padding: 16px 30px 20px; }
+  #q .who { font-size: 26px; color: var(--muted); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  #q .text { font-size: 40px; font-weight: 700; line-height: 1.2; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* ---------- leaderboard (left) */
+  #lb { position: absolute; left: 64px; top: 150px; width: 520px; filter: drop-shadow(0 10px 28px rgba(0,0,0,.45)); }
+  /* Title on one line, venue under it: long course names never collide with the title. */
+  #lb .head { background: var(--green); padding: 12px 22px 12px; border-top: 6px solid var(--gold); }
+  #lb .head .t { font-size: 32px; font-weight: 800; letter-spacing: 3px; line-height: 1.15; }
+  #lb .head .c { font-size: 16px; color: var(--gold); letter-spacing: 3px; font-weight: 700; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lb .head .c:empty { display: none; }
+  #lb .r { display: grid; grid-template-columns: 74px 1fr 90px 74px; align-items: center; height: 54px; padding: 0 22px; font-size: 30px; font-weight: 700;
+    background: rgba(246,244,238,.96); color: var(--ink); border-top: 1px solid rgba(0,0,0,.07); }
+  #lb .r:nth-child(even) { background: rgba(236,233,224,.96); }
+  #lb .r .pos { color: #5a6a60; font-size: 26px; }
+  #lb .r .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+  #lb .r .tp { text-align: right; }
+  #lb .r .tp.under { color: var(--red); }
+  #lb .r .th { text-align: right; color: #5a6a60; font-size: 24px; }
+  #lb .cols { display: grid; grid-template-columns: 74px 1fr 90px 74px; padding: 6px 22px; background: var(--green-2); font-size: 16px; letter-spacing: 3px; color: var(--muted); font-weight: 700; }
+  #lb .cols span:nth-child(3), #lb .cols span:nth-child(4) { text-align: right; }
+
+  #offline { position: absolute; right: 16px; bottom: 12px; font: 600 14px/1 var(--font); color: rgba(255,255,255,.5); }
+</style>
+</head>
+<body>
+  <div id="bug" class="block hide">
+    <div class="live">LIVE</div>
+    <div class="name" id="bugName"></div>
+    <div class="leader" id="bugLeader"></div>
+    <div class="hole" id="bugHole"></div>
+  </div>
+
+  <div id="replay" class="block hide">REPLAY</div>
+
+  <div id="hole" class="block hide">
+    <div class="top"><div class="k">HOLE</div><div class="n" id="holeN"></div></div>
+    <div class="rows" id="holeRows"></div>
+  </div>
+
+  <div id="lb" class="block hide">
+    <div class="head"><div class="t" id="lbTitle">LEADERBOARD</div><div class="c" id="lbVenue"></div></div>
+    <div class="cols"><span>POS</span><span>PLAYER</span><span>TO PAR</span><span>THRU</span></div>
+    <div id="lbRows"></div>
+  </div>
+
+  <div id="lt" class="block hide">
+    <div class="main"><div class="title" id="ltTitle"></div><div class="sub" id="ltSub"></div></div>
+    <div class="stat" id="ltPos"><div class="v"></div><div class="k">POS</div></div>
+    <div class="stat" id="ltPar"><div class="v"></div><div class="k">TO PAR</div></div>
+    <div class="stat" id="ltThru"><div class="v"></div><div class="k">THRU</div></div>
+  </div>
+
+  <div id="q" class="block hide">
+    <div class="head">Viewer question <span class="src" id="qSrc"></span></div>
+    <div class="body"><div class="who" id="qWho"></div><div class="text" id="qText"></div></div>
+  </div>
+
+  <div id="offline"></div>
+
+<script>
+(function () {
+  var parts = location.pathname.split('/');
+  var tid = parts[parts.length - 1];
+  var key = new URLSearchParams(location.search).get('k') || '';
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); };
+  var show = function (el, on) { el.classList.toggle('hide', !on); };
+  var under = function (tp) { return typeof tp === 'string' && tp.charAt(0) === '-'; };
+
+  function render(s) {
+    window.__graphicsState = s;
+    // Score bug
+    show($('bug'), !!s.scoreBug);
+    if (s.scoreBug) {
+      $('bugName').textContent = s.tournament.name;
+      var l = s.scoreBug.leader;
+      $('bugLeader').innerHTML = l
+        ? '<span class="lbl">LEADER</span><span>' + esc(l.name).toUpperCase() + '</span><span style="color:' + (under(l.toPar) ? '#ff6b5e' : '#fff') + '">' + esc(l.toPar) + '</span>' +
+          (l.thru && l.thru !== '–' ? '<span style="color:#a9b8ae;font-size:22px">' + (l.thru === 'F' ? 'F' : 'THRU ' + esc(l.thru)) + '</span>' : '')
+        : '';
+      $('bugLeader').style.display = l ? 'flex' : 'none';
+      $('bugHole').textContent = s.scoreBug.onAirHole ? 'HOLE ' + s.scoreBug.onAirHole : '';
+      $('bugHole').style.display = s.scoreBug.onAirHole ? 'flex' : 'none';
+    }
+    // Replay
+    show($('replay'), !!s.replay);
+    // Hole card
+    show($('hole'), !!s.holeCard);
+    if (s.holeCard) {
+      $('holeN').textContent = s.holeCard.hole;
+      var rows = [['PAR', s.holeCard.par]];
+      if (s.holeCard.yardage) rows.push(['YARDS', s.holeCard.yardage]);
+      if (s.holeCard.average) rows.push(['FIELD AVG', s.holeCard.average]);
+      $('holeRows').innerHTML = rows.map(function (r) { return '<div class="row"><span>' + r[0] + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('');
+    }
+    // Leaderboard (hidden while the lower third is up, to keep the frame clean)
+    var lbOn = !!s.leaderboard && !s.lowerThird && !s.question;
+    show($('lb'), lbOn);
+    if (s.leaderboard) {
+      $('lbTitle').textContent = s.leaderboard.title;
+      $('lbVenue').textContent = (s.tournament.venue || '').toUpperCase();
+      $('lbRows').innerHTML = s.leaderboard.rows.map(function (r) {
+        return '<div class="r"><span class="pos">' + esc(r.position) + '</span><span class="nm">' + esc(r.name) + '</span>' +
+          '<span class="tp' + (under(r.toPar) ? ' under' : '') + '">' + esc(r.toPar) + '</span><span class="th">' + esc(r.thru) + '</span></div>';
+      }).join('') || '<div class="r"><span></span><span class="nm" style="color:#5a6a60">NO SCORES YET</span><span></span><span></span></div>';
+    }
+    // Lower third
+    show($('q'), !!s.question);
+    if (s.question) {
+      $('qWho').textContent = s.question.author;
+      $('qText').textContent = s.question.text;
+      $('qSrc').textContent = ({ youtube: 'via YouTube', facebook: 'via Facebook', watch: 'via CoGolfers' })[s.question.source] || '';
+    }
+    show($('lt'), !!s.lowerThird);
+    if (s.lowerThird) {
+      $('ltTitle').textContent = s.lowerThird.title;
+      $('ltSub').textContent = s.lowerThird.subtitle || '';
+      $('ltSub').style.display = s.lowerThird.subtitle ? 'block' : 'none';
+      var stat = function (id, v, cls) {
+        var el = $(id);
+        el.style.display = v ? 'flex' : 'none';
+        el.querySelector('.v').textContent = v || '';
+        el.classList.toggle('under', !!cls);
+      };
+      stat('ltPos', s.lowerThird.position);
+      stat('ltPar', s.lowerThird.toPar && s.lowerThird.toPar !== '–' ? s.lowerThird.toPar : '', under(s.lowerThird.toPar));
+      stat('ltThru', s.lowerThird.thru ? s.lowerThird.thru.replace('THRU ', '') : '');
+    }
+  }
+
+  function connect() {
+    var es = new EventSource('/api/graphics/' + encodeURIComponent(tid) + '/events?k=' + encodeURIComponent(key));
+    es.onmessage = function (e) {
+      $('offline').textContent = '';
+      try { render(JSON.parse(e.data)); } catch (err) { /* ignore malformed */ }
+    };
+    es.onerror = function () { $('offline').textContent = 'reconnecting…'; };
+  }
+  connect();
+})();
+</script>
+</body>
+</html>

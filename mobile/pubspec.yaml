@@ -1,0 +1,33 @@
+name: cogolfer_live
+description: CoGolfer Live. Camera, scorer, commentator and director apps for live golf tournament broadcasts.
+publish_to: none
+version: 0.2.0+2
+
+environment:
+  sdk: ^3.10.0
+  # 3.44+ builds iOS plugins with Swift Package Manager by default (needed for HaishinKit).
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cg_streamer:
+    path: packages/cg_streamer
+  flutter_webrtc: ^1.6.2
+  http: ^1.4.0
+  web_socket_channel: ^3.0.3
+  shared_preferences: ^2.5.3
+  # Scan the organiser's QR poster to join (volunteers).
+  mobile_scanner: ^7.4.2
+  # Open YouTube consent, watch links and clips in the browser.
+  url_launcher: ^6.3.3
+  # Share join invites, clip links and the engine .env.
+  share_plus: ^13.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

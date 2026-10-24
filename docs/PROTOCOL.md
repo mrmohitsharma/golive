@@ -1,0 +1,88 @@
+# Real-time protocol and APIs
+
+Source of truth: `server/src/hub.ts`, `server/src/protocol.ts`, `server/src/routes/*.ts`.
+
+## Authentication
+
+| Who | How | Token |
+|---|---|---|
+| Account | `POST /api/auth/login` `{email,password}` or `POST /api/auth/signup` `{name,email,password,orgName}` | JWT (12 h) + `user` + `orgs[]` |
+| Volunteer | `POST /api/join` `{code, deviceId, name}` | JWT scoped to one tournament and role (2 days) + `role`, `guest`, `tournament` |
+| OBS agent | `POST /api/engine/token` `{tournamentId, engineKey}` | engine JWT for that tournament |
+
+Send `Authorization: Bearer <jwt>` on REST and on the WebSocket `wss://<server>/ws` (or `?token=`). `GET /api/me` returns the principal (and orgs, or the guest's tournament). `GET /api/info` (no auth) says which features the server has: `signup`, `youtube`, `cloudProduction`, `cloudCostPerHour`.
+
+## REST (main endpoints)
+
+| Area | Endpoints |
+|---|---|
+| Organisations | `GET/POST /api/orgs` · `GET/POST /api/orgs/:id/members` · `PATCH/DELETE /api/orgs/:id/members/:userId` |
+| YouTube connect | `GET /api/orgs/:id/youtube` · `POST /api/orgs/:id/youtube/connect` → `{url}` (open in browser) · `DELETE /api/orgs/:id/youtube` · `GET /api/youtube/callback` (Google redirect) |
+| Facebook connect | `GET /api/orgs/:id/facebook` → `{enabled, connected, userName, pages[], pageId, pageName}` · `POST …/facebook/connect` → `{url}` · `PUT …/facebook/page` `{pageId}` · `DELETE …/facebook` · `GET /api/facebook/callback` |
+| Platforms | `GET/PATCH /api/tournaments/:id/outputs` — `{youtube:{enabled}, facebook:{enabled}, instagram:{enabled?, streamUrl?, streamKey?, clear?}}` → `{relay, platforms:[{platform, configured, enabled, state: off·connecting·live·retrying, error, link, hint}]}` |
+| Billing (club) | `GET /api/orgs/:id/billing` → `{enabled, balance, pricing, packs[], paymentsEnabled, suspended, details (owner), transactions[]}` · `PUT …/billing/details` `{name, phone, email, gstin}` (owner) · `POST …/billing/checkout` `{packId, phone?}` → `{payment, checkoutUrl}` · `GET /api/payments/:id` (status + balance) |
+| Billing (tournament) | `GET /api/tournaments/:id/billing` → `{cameras{free, extra, limit, used, price}, minutes{free, liveSeconds, billed, price, freeSecondsLeft, remainingSeconds|null}, grace{active, secondsLeft}, balance, canGoLive, reason}` · `POST …/billing/cameras` `{count}` (402 `insufficient_credits`). Camera registration over the limit: 402 `camera_limit` |
+| Cashfree | page `GET /pay/:paymentId` (opens Cashfree checkout) · return `GET /pay/:paymentId/done` · webhook `POST /api/payments/cashfree/webhook` (signature `x-webhook-signature` = base64 HMAC-SHA256 of timestamp + body) |
+| Admin (platform admins) | page `GET /admin` · `GET /api/admin/overview` · `GET/PUT /api/admin/settings` `{pricing, packs}` · `GET /api/admin/orgs[?q=]` · `GET /api/admin/orgs/:id` · `PATCH /api/admin/orgs/:id/billing` `{overrides, suspended, suspendedReason}` · `POST /api/admin/orgs/:id/credits` `{credits, note}` · `GET /api/admin/live` · `GET /api/admin/payments[?status=]` · `POST /api/admin/payments/:id/recheck` · `GET/POST /api/admin/admins` · `DELETE /api/admin/admins/:userId` |
+| Chat (public) | `GET /api/public/tournaments/:id/chat?after=<id>&v=<version>` → `{enabled, slowSec, version, unchanged}` or `{…, messages[{id, source: watch·youtube·facebook, author, text, question, pinned, at}], hidden[ids], pinned}` · `POST …/chat/name` `{name}` → `{token, name}` · `POST …/chat` `{text}` with `Authorization: Bearer <chat token>` (errors `chat_name_needed`, `slow_mode`, `no_links`, `chat_off`, `chat_banned`) |
+| Chat (staff) | `GET /api/tournaments/:id/chat?v=` (commentator+) → messages incl. `hidden`, `answered`, and `sources{youtube, facebook: {state: off·reading·error, error}}` · `PATCH /api/chat/:id` `{answered}` (commentator) `{hidden, pinned}` (director) · `POST /api/chat/:id/ban` · `POST /api/chat/:id/on-air` `{visible}` → Viewer question graphic. Tournament `PATCH` takes `chatEnabled`, `chatSlowSec` |
+| Public (no login, CORS) | `GET /api/public/live` · `GET /api/public/tournaments/:id` · page `GET /watch[/:id]` |
+| Tournaments | `GET /api/tournaments` (with `role`) · `POST /api/orgs/:id/tournaments` · `PATCH /api/tournaments/:id` (name, venue, autoFallback, archived, mode) · `GET /api/tournaments/:id/state` (same as WS snapshot) · `GET …/switch-log` |
+| Join codes | `GET/POST /api/tournaments/:id/join-codes` · `DELETE …/join-codes/:code` · `GET …/join-codes/:code/qr.png` · public page `GET /join/:code` |
+| Engine | `GET …/engine-setup` (`.env` text) · `POST …/engine-key/rotate` · `POST …/cloud-engine/start` · `POST …/cloud-engine/stop[?force=true]` |
+| YouTube broadcast | `POST …/youtube/broadcast` `{title?, privacy}` · `DELETE …/youtube/broadcast` |
+| Cameras | `POST …/cameras/register` → `camera`, `publish{srtUrl,latencyMs}` · `GET/PATCH/DELETE /api/cameras/:id` · `GET /api/cameras/:id/publish` · `POST …/rotate-key` · `GET …/thumbnail.jpg` |
+| Commentary | `POST …/commentators/register` → `commentator`, `publish{whipUrl, bearer}` · `DELETE /api/commentators/:id` |
+| Scoring | `GET/PUT …/holes` (`{preset:"par72"}` or `{holes:[{number,par,yardage}]}`) · `GET/POST …/players` (`{csv}` or `{players:[…]}`) · `PATCH/DELETE /api/players/:id` · `PUT …/scores` `{playerId, hole, strokes|null}` · `GET …/leaderboard[?category=]` |
+| Graphics | `GET/PATCH …/graphics` · overlay page `GET /graphics/:tid?k=<graphicsKey>` · SSE `GET /api/graphics/:tid/events?k=` |
+| Audio | `GET/PATCH …/audio` |
+| Clips | `POST …/clips` `{cameraId, secondsBack, durationSec, title?}` (202) · `GET …/clips` · `GET/PATCH {public}/DELETE /api/clips/:id` · `POST /api/clips/:id/share` → signed URLs · `GET /api/clips/:id/{landscape.mp4,vertical.mp4,thumb.jpg}[?sig=]` |
+
+Errors are `{"error":{"code","message"}}` with a human-readable message the apps show as-is.
+
+## WebSocket
+
+Every frame is JSON with a `type`. Server → any client: `hello`, `error {code,message}`, `pong`.
+
+### Directors and staff (`subscribe {tournamentId}`)
+
+Who receives what depends on capability: **direct** (owner, director), **watch** (+ commentator), **view** (+ scorer, camera).
+
+| type | to | fields |
+|---|---|---|
+| `snapshot` | view+ | `tournament`, `role`, `leaderboard` (top 20), `serverTime`; watch+ also `cameras[]`, `commentators[]`, `engine`, `mediaServer`, `graphics`, `audio`, `production`, `youtube` |
+| `cameras` | watch | `cameras[]`, `commentators[]`, `mediaServer` (every health poll) |
+| `engine` | watch | engine state; `programmeCameraId` is confirmed by OBS; `replayActive`, `fallbackActive`, `streaming{…}`, `warnings[]` |
+| `leaderboard` | view | `rows[]` (top 20) after every score |
+| `graphics`, `audio`, `production`, `youtube` | direct | full state after each change (YouTube every 15 s while a director is connected) |
+| `outputs` | direct | platform states (same shape as `GET …/outputs`) whenever a relay connects, goes live, retries or stops |
+| `billing` | direct | tournament billing (same shape as `GET …/billing`) every meter tick while live and after purchases; also in `snapshot` for directors |
+| `chat` | watch | nudge: the viewer comments changed; fetch `GET …/chat?v=` |
+| `meters` | direct | `levels {obsInputName: peak dBFS}` ~4×/s |
+| `clip` | direct | clip object on create and on each status change (`queued → processing → ready|failed`) |
+| `alert` | direct | `level`, `message`, `at` |
+| `command.result` | sender | `requestId`, `action`, `ok`, `error?` |
+
+Director → server: `command {action, cameraId?, requestId, seconds?, slowmo?}` with `action` ∈ `preview`, `take` (no camera = current preview), `cut`, `fallback`, `replay` (5–60 s, `slowmo` = half speed), `stream.start`, `stream.stop`. `stream.start` fails with the billing reason when the club is suspended or has no live minutes left.
+
+### Camera phone (`camera.join {cameraId}`)
+
+← `camera.joined` / `camera.updated {camera}`, `camera.removed`, `tally {onAir, preview}`. → `telemetry {state, bitrateKbps, battery, charging, durationSec, appState, resolution, fps, thermal, error}`.
+
+### OBS agent (`engine.hello`)
+
+← `engine.config`: `mode`, `fallbackScene`, `replayScene`, `cameras[] {id, name, hole, sceneName, inputName, srtUrl}`, `commentators[] {inputName, srtUrl}`, `graphicsUrl`, `output {server, key}|null` (the server's SRT programme ingest when any platform is set up; null = keep OBS / `.env` settings), `audio`, `canvas` (cloud only).
+← `engine.audio {audio}`; ← `command {id, action, cameraId, sceneName | url, durationSec, returnScene}` (`replay.play` for replays).
+→ `engine.state {state}`, `engine.meters {levels}`, `command.result {id, ok, error?}`.
+
+## MediaMTX auth hook
+
+`POST /internal/mediamtx/auth?secret=…` for every action, deny by default:
+
+| action | allowed when |
+|---|---|
+| publish | camera path: SRT only + that camera's publish key. Commentary path: WebRTC (WHIP, `Authorization: Bearer com:<key>`) or SRT + that commentator's key. Programme path `prog-<tournament id>`: SRT only + the tournament's output key |
+| read | internal user; the tournament's read key (OBS); a JWT with **watch** for that tournament (WHEP previews) |
+| api, metrics, playback, pprof | internal user only |
+
+SRT stream IDs: `publish:<path>:cam:<key>` (phones), `read:<path>:engine:<readKey>` (OBS). `latency` is milliseconds in phone URLs, microseconds in OBS/FFmpeg URLs.

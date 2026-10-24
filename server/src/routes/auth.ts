@@ -1,0 +1,134 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import type { Ctx } from '../context.js';
+import { HttpError } from '../errors.js';
+import { hashPassword, requireAuth, signPrincipal, verifyPassword, type Principal } from '../auth.js';
+import { constantTimeEqual, guestId, normaliseJoinCode } from '../crypto.js';
+
+const email = z.string().trim().email().max(200);
+const password = z.string().min(8, 'Password must be at least 8 characters').max(200);
+
+export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
+  const { config, repo } = ctx;
+
+  const sessionFor = async (u: { id: string; email: string; name: string; is_platform_admin: boolean }) => {
+    const principal: Principal = { kind: 'user', id: u.id, email: u.email, name: u.name, platformAdmin: u.is_platform_admin };
+    const orgs = await repo.memberships(u.id);
+    return {
+      token: signPrincipal(config, principal),
+      user: { id: u.id, email: u.email, name: u.name, platformAdmin: u.is_platform_admin },
+      orgs: orgs.map((o) => ({ id: o.org_id, name: o.org_name, role: o.role })),
+    };
+  };
+
+  /** Self-serve: an organiser creates an account and their club in one step. */
+  app.post('/api/auth/signup', async (req, reply) => {
+    if (!config.SIGNUP_ENABLED) throw new HttpError(403, 'signup_disabled', 'Sign-up is closed on this server. Ask an organiser to add you.');
+    const body = z
+      .object({ name: z.string().trim().min(1).max(80), email, password, orgName: z.string().trim().min(2).max(100) })
+      .parse(req.body);
+    if (await repo.userByEmail(body.email)) throw new HttpError(409, 'email_taken', 'An account with that email already exists. Sign in instead.');
+    const passwordHash = await hashPassword(body.password);
+    const user = await repo.tx(async (c) => {
+      const u = await repo.createUser({ email: body.email, name: body.name, passwordHash }, c);
+      const org = await repo.createOrg(body.orgName, c);
+      await repo.addMember(org.id, u.id, 'owner', c);
+      return u;
+    });
+    reply.status(201);
+    return sessionFor(user);
+  });
+
+  app.post('/api/auth/login', async (req) => {
+    const body = z.object({ email, password: z.string().min(1) }).parse(req.body);
+    const u = await repo.userByEmail(body.email);
+    if (!u || u.disabled || !(await verifyPassword(body.password, u.password_hash))) {
+      throw new HttpError(401, 'invalid_credentials', 'Email or password is incorrect.');
+    }
+    return sessionFor(u);
+  });
+
+  app.get('/api/me', { preHandler: requireAuth(config) }, async (req) => {
+    const p = req.principal!;
+    if (p.kind === 'user') {
+      const u = await repo.userById(p.id);
+      if (!u || u.disabled) throw new HttpError(401, 'unauthorized', 'Sign in again.');
+      const orgs = await repo.memberships(u.id);
+      return {
+        principal: { kind: 'user', id: u.id, email: u.email, name: u.name, platformAdmin: u.is_platform_admin },
+        orgs: orgs.map((o) => ({ id: o.org_id, name: o.org_name, role: o.role })),
+      };
+    }
+    const t = await repo.tournamentById(p.tournamentId);
+    if (!t || t.archived) throw new HttpError(401, 'unauthorized', 'This tournament has ended. Join again with a new code.');
+    return {
+      principal: { kind: p.kind, id: p.id, name: p.name, role: p.kind === 'guest' ? p.role : 'engine' },
+      tournament: { id: t.id, name: t.name, venue: t.venue },
+      orgs: [],
+    };
+  });
+
+  /**
+   * Volunteers join a tournament with the code printed on the QR poster. No account:
+   * the token is scoped to that tournament and role. The device id keeps the same
+   * identity (and camera slot) if the volunteer rejoins.
+   */
+  app.post('/api/join', async (req) => {
+    const body = z
+      .object({ code: z.string().min(4).max(20), deviceId: z.string().min(8).max(128), name: z.string().trim().min(1).max(60) })
+      .parse(req.body);
+    const jc = await repo.joinCode(normaliseJoinCode(body.code));
+    if (!jc || jc.revoked || (jc.expires_at && jc.expires_at.getTime() < Date.now())) {
+      throw new HttpError(404, 'invalid_code', 'That code is not valid. Check it with the organiser.');
+    }
+    const t = await repo.tournamentById(jc.tournament_id);
+    if (!t || t.archived) throw new HttpError(404, 'invalid_code', 'That tournament has ended.');
+    await repo.useJoinCode(jc.code);
+    const principal: Principal = { kind: 'guest', id: guestId(t.id, body.deviceId), name: body.name, tournamentId: t.id, role: jc.role };
+    return {
+      token: signPrincipal(config, principal),
+      role: jc.role,
+      guest: { id: principal.id, name: body.name },
+      tournament: { id: t.id, name: t.name, venue: t.venue },
+    };
+  });
+
+  /** The OBS agent (laptop or cloud) exchanges the tournament's engine key for a token. */
+  app.post('/api/engine/token', async (req) => {
+    const body = z.object({ tournamentId: z.string().uuid(), engineKey: z.string().min(16) }).parse(req.body);
+    const t = await repo.tournamentById(body.tournamentId);
+    if (!t || !constantTimeEqual(body.engineKey, t.engine_key)) {
+      throw new HttpError(401, 'invalid_engine_key', 'Engine key or tournament ID is wrong. Copy them again from Tournament > Engine setup.');
+    }
+    return {
+      token: signPrincipal(config, { kind: 'engine', id: `engine-${t.id.slice(0, 8)}`, name: 'Broadcast engine', tournamentId: t.id }),
+      tournament: { id: t.id, name: t.name, mode: t.production_mode },
+    };
+  });
+
+  /** What a phone's own camera app opens after scanning the QR poster. */
+  app.get('/join/:code', async (req, reply) => {
+    const code = normaliseJoinCode((req.params as { code: string }).code);
+    const jc = await repo.joinCode(code);
+    const t = jc && !jc.revoked ? await repo.tournamentById(jc.tournament_id) : null;
+    const server = config.PUBLIC_BASE_URL.replace(/\/$/, '');
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const role = jc ? { camera: 'Camera operator', scorer: 'Scorer', commentator: 'Commentator' }[jc.role] : '';
+    reply.type('text/html; charset=utf-8');
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Join ${t ? esc(t.name) : 'CoGolfer Live'}</title>
+<style>body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:#0b0e10;color:#fff;margin:0;padding:24px;max-width:520px}
+h1{font-size:22px;margin:8px 0}.code{font:700 40px/1.2 ui-monospace,monospace;letter-spacing:6px;background:#1d3b2a;padding:16px;border-radius:12px;text-align:center;margin:20px 0}
+.muted{color:#aab4ad}ol{padding-left:20px;line-height:1.7}</style></head><body>
+${
+  t && jc
+    ? `<div class="muted">CoGolfer Live · ${esc(role)}</div><h1>${esc(t.name)}</h1>${t.venue ? `<div class="muted">${esc(t.venue)}</div>` : ''}
+<div class="code">${esc(code)}</div>
+<ol><li>Install <b>CoGolfer Live</b> (App Store / Google Play) and open it.</li>
+<li>Tap <b>Join with code</b>, then <b>Scan QR</b> on this poster, or type the server <b>${esc(server.replace(/^https?:\/\//, ''))}</b> and the code above.</li>
+<li>Enter your name and follow the steps on screen.</li></ol>`
+    : `<h1>This join code is not valid</h1><p class="muted">Ask the organiser for a new QR code.</p>`
+}
+</body></html>`;
+  });
+}

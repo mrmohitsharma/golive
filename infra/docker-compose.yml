@@ -1,0 +1,150 @@
+# CoGolfer Live Director: cloud stack.
+#
+#   Phones --SRT/UDP 8890--> mediamtx --SRT--> OBS (venue laptop, or cloud engine container) --> YouTube
+#   Apps --HTTPS/WSS 443--> caddy --> server (+ WebRTC previews/commentary via /webrtc, media on UDP 8189)
+#
+# First time:
+#   cp .env.example .env && edit .env
+#   docker compose --profile build build cloud-engine     # only if CLOUD_ENGINE_DRIVER=docker
+#   docker compose up -d --build
+
+name: cogolfer
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cg
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: cg_live
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cg -d cg_live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  server:
+    build: ../server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://cg:${POSTGRES_PASSWORD}@postgres:5432/cg_live
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      DATA_KEY: ${DATA_KEY:?set DATA_KEY}
+      PUBLIC_BASE_URL: https://${PUBLIC_DOMAIN}
+      SIGNUP_ENABLED: ${SIGNUP_ENABLED:-true}
+      MEDIAMTX_HOOK_SECRET: ${MEDIAMTX_HOOK_SECRET:?set MEDIAMTX_HOOK_SECRET}
+      MEDIAMTX_API_URL: http://mediamtx:9997
+      MEDIAMTX_RTSP_URL: rtsp://mediamtx:8554
+      MEDIAMTX_PLAYBACK_URL: http://mediamtx:9996
+      INTERNAL_MEDIA_USER: cg-internal
+      INTERNAL_MEDIA_PASS: ${INTERNAL_MEDIA_PASS:?set INTERNAL_MEDIA_PASS}
+      PUBLIC_SRT_HOST: ${PUBLIC_SRT_HOST:-${PUBLIC_DOMAIN}}
+      PUBLIC_SRT_PORT: "8890"
+      SRT_PASSPHRASE: ${SRT_PASSPHRASE:-}
+      SRT_LATENCY_MS: ${SRT_LATENCY_MS:-600}
+      PUBLIC_WEBRTC_BASE: https://${PUBLIC_DOMAIN}/webrtc
+      THUMBNAIL_DIR: /data/thumbs
+      MEDIA_DIR: /data/media
+      # YouTube (optional): Google Cloud OAuth web client, redirect URI https://<domain>/api/youtube/callback
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Facebook Page live (optional): Meta app with Facebook Login, redirect URI https://<domain>/api/facebook/callback
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      # Viewer comments (YouTube chat costs API quota: see DEPLOYMENT §3f)
+      YOUTUBE_CHAT_POLL_SEC: ${YOUTUBE_CHAT_POLL_SEC:-15}
+      FACEBOOK_COMMENTS_POLL_SEC: ${FACEBOOK_COMMENTS_POLL_SEC:-4}
+      CHAT_BLOCKED_WORDS: ${CHAT_BLOCKED_WORDS:-}
+      # Instagram 9:16 re-encode bitrate (kbps)
+      INSTAGRAM_VIDEO_KBPS: ${INSTAGRAM_VIDEO_KBPS:-3500}
+      # Public watch page / API for the CoGolfers website (comma-separated origins)
+      PUBLIC_CORS_ORIGINS: ${PUBLIC_CORS_ORIGINS:-}
+      WATCH_EMBED_ORIGINS: ${WATCH_EMBED_ORIGINS:-}
+      # Billing: free cameras/minutes per tournament, paid extras from a credit wallet (prices in /admin)
+      BILLING_ENABLED: ${BILLING_ENABLED:-true}
+      # Cashfree payment gateway for buying credits (optional; without it staff add credits in /admin)
+      CASHFREE_CLIENT_ID: ${CASHFREE_CLIENT_ID:-}
+      CASHFREE_CLIENT_SECRET: ${CASHFREE_CLIENT_SECRET:-}
+      CASHFREE_ENV: ${CASHFREE_ENV:-sandbox}
+      # Cloud production mode (optional)
+      CLOUD_ENGINE_DRIVER: ${CLOUD_ENGINE_DRIVER:-none}
+      CLOUD_ENGINE_IMAGE: cogolfer/cloud-engine:latest
+      CLOUD_ENGINE_NETWORK: cogolfer_default
+      CLOUD_ENGINE_SERVER_URL: http://server:8080
+      CLOUD_ENGINE_MEDIA_BASE_URL: http://server:8080
+      ENGINE_SRT_HOST: mediamtx
+      ENGINE_SRT_PORT: "8890"
+      CLOUD_ENGINE_CPUS: ${CLOUD_ENGINE_CPUS:-6}
+      CLOUD_ENGINE_MEMORY_MB: ${CLOUD_ENGINE_MEMORY_MB:-6144}
+      CLOUD_ENGINE_IDLE_STOP_MIN: ${CLOUD_ENGINE_IDLE_STOP_MIN:-30}
+      CLOUD_ENGINE_COST_PER_HOUR: ${CLOUD_ENGINE_COST_PER_HOUR:-0.35}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+    volumes:
+      - thumbs:/data/thumbs
+      - media:/data/media
+      # Needed only for CLOUD_ENGINE_DRIVER=docker (the server starts/stops engine containers).
+      # Remove this line if you do not use cloud production.
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Lets the unprivileged server user talk to the Docker socket (cloud engines only).
+    group_add:
+      - "${DOCKER_GID:-999}"
+    expose:
+      - "8080"
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.2
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      MTX_AUTHHTTPADDRESS: http://server:8080/internal/mediamtx/auth?secret=${MEDIAMTX_HOOK_SECRET}
+      MTX_WEBRTCADDITIONALHOSTS: ${PUBLIC_IP:?set PUBLIC_IP},${PUBLIC_DOMAIN}
+      MTX_PATHDEFAULTS_SRTPUBLISHPASSPHRASE: ${SRT_PASSPHRASE:-}
+      MTX_PATHDEFAULTS_SRTREADPASSPHRASE: ${SRT_PASSPHRASE:-}
+      MTX_PATHDEFAULTS_RECORDDELETEAFTER: ${RECORDING_RETENTION:-72h}
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+      - recordings:/recordings
+    ports:
+      - "8890:8890/udp"   # SRT: phones publish; laptop OBS reads
+      - "8189:8189/udp"   # WebRTC media: previews and commentary
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - server
+      - mediamtx
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?set PUBLIC_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # Image for cloud production (OBS + agent). Built, not run: the server starts one per event.
+  cloud-engine:
+    profiles: ["build"]
+    image: cogolfer/cloud-engine:latest
+    build:
+      context: ..
+      dockerfile: infra/cloud-engine/Dockerfile
+
+volumes:
+  pgdata:
+  thumbs:
+  media:
+  recordings:
+  caddy_data:
+  caddy_config:

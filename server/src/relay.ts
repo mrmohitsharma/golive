@@ -1,0 +1,202 @@
+import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
+import type { FastifyBaseLogger } from 'fastify';
+import type { Config } from './config.js';
+
+export type Platform = 'youtube' | 'facebook' | 'instagram';
+export const PLATFORMS: Platform[] = ['youtube', 'facebook', 'instagram'];
+
+export type RelayState = 'connecting' | 'live' | 'retrying';
+
+export interface RelayTarget {
+  platform: Platform;
+  /** Full RTMP(S) URL including the stream key. */
+  url: string;
+  /** Re-encode to 720x1280 (Instagram); otherwise the programme is copied untouched. */
+  vertical: boolean;
+}
+
+export interface RelayStatus {
+  platform: Platform;
+  state: RelayState;
+  since: string;
+  restarts: number;
+  error: string | null;
+}
+
+type SpawnFn = (cmd: string, args: string[]) => ChildProcess;
+
+interface Running {
+  target: RelayTarget;
+  proc: ChildProcess | null;
+  status: RelayStatus;
+  timer: NodeJS.Timeout | null;
+  lastOutUs: number;
+  wanted: boolean;
+  stderr: string;
+}
+
+/**
+ * Forwards a tournament's programme (read from MediaMTX) to each platform with its own
+ * FFmpeg process, so one platform failing or reconnecting never affects the others.
+ * YouTube and Facebook get the programme copied (no quality loss, almost no CPU);
+ * Instagram gets a 9:16 version: the full picture centred on a blurred, darkened fill.
+ */
+export class RelayManager {
+  private byTournament = new Map<string, Map<Platform, Running>>();
+
+  constructor(
+    private readonly config: Config,
+    private readonly log: FastifyBaseLogger,
+    private readonly onChange: (tournamentId: string) => void,
+    private readonly spawn: SpawnFn = (cmd, args) => nodeSpawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] }),
+  ) {}
+
+  static args(config: Config, input: string, t: RelayTarget): string[] {
+    const head = ['-hide_banner', '-loglevel', 'error', '-nostats', '-progress', 'pipe:1', '-rtsp_transport', 'tcp', '-i', input];
+    const tail = ['-f', 'flv', '-flvflags', 'no_duration_filesize', t.url];
+    if (!t.vertical) return [...head, '-map', '0:v', '-map', '0:a?', '-c', 'copy', ...tail];
+    const k = config.INSTAGRAM_VIDEO_KBPS;
+    const vf = [
+      '[0:v]split=2[bg][fg]',
+      // Blur at 1/4 size then scale up: same look, a fraction of the CPU.
+      '[bg]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=8:2,scale=720:1280,eq=brightness=-0.15[bgb]',
+      '[fg]scale=720:-2[fgs]',
+      '[bgb][fgs]overlay=(W-w)/2:(H-h)/2,setsar=1,fps=30[v]',
+    ].join(';');
+    return [
+      ...head,
+      '-filter_complex', vf, '-map', '[v]', '-map', '0:a?',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
+      '-b:v', `${k}k`, '-maxrate', `${k}k`, '-bufsize', `${k * 2}k`, '-g', '60', '-keyint_min', '60', '-sc_threshold', '0',
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '48000',
+      ...tail,
+    ];
+  }
+
+  /** Makes the running relays for a tournament match `targets` (start new, stop removed, restart changed). */
+  setTargets(tournamentId: string, input: string, targets: RelayTarget[]): void {
+    const map = this.byTournament.get(tournamentId) ?? new Map<Platform, Running>();
+    this.byTournament.set(tournamentId, map);
+    for (const [platform, r] of map) {
+      const next = targets.find((t) => t.platform === platform);
+      if (!next || next.url !== r.target.url || next.vertical !== r.target.vertical) {
+        this.kill(r);
+        map.delete(platform);
+      }
+    }
+    for (const t of targets) {
+      if (map.has(t.platform)) continue;
+      const r: Running = {
+        target: t,
+        proc: null,
+        status: { platform: t.platform, state: 'connecting', since: new Date().toISOString(), restarts: 0, error: null },
+        timer: null,
+        lastOutUs: 0,
+        wanted: true,
+        stderr: '',
+      };
+      map.set(t.platform, r);
+      this.run(tournamentId, input, r);
+    }
+    if (!map.size) this.byTournament.delete(tournamentId);
+    this.onChange(tournamentId);
+  }
+
+  stop(tournamentId: string): void {
+    const map = this.byTournament.get(tournamentId);
+    if (!map) return;
+    for (const r of map.values()) this.kill(r);
+    this.byTournament.delete(tournamentId);
+    this.onChange(tournamentId);
+  }
+
+  stopAll(): void {
+    for (const tid of [...this.byTournament.keys()]) this.stop(tid);
+  }
+
+  status(tournamentId: string): RelayStatus[] {
+    return [...(this.byTournament.get(tournamentId)?.values() ?? [])].map((r) => ({ ...r.status }));
+  }
+
+  isRunning(tournamentId: string): boolean {
+    return this.byTournament.has(tournamentId);
+  }
+
+  private set(tournamentId: string, r: Running, state: RelayState, error: string | null = r.status.error): void {
+    if (r.status.state === state && r.status.error === error) return;
+    r.status = { ...r.status, state, error, since: r.status.state === state ? r.status.since : new Date().toISOString() };
+    this.onChange(tournamentId);
+  }
+
+  private run(tournamentId: string, input: string, r: Running): void {
+    if (!r.wanted) return;
+    r.lastOutUs = 0;
+    r.stderr = '';
+    const proc = this.spawn(this.config.FFMPEG_PATH, RelayManager.args(this.config, input, r.target));
+    r.proc = proc;
+    let buf = '';
+    proc.stdout?.on('data', (d: Buffer) => {
+      buf += d.toString();
+      let i: number;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        const m = /^out_time_us=(\d+)/.exec(line);
+        if (m) {
+          const us = Number(m[1]);
+          // Media time moving forward = frames are reaching the platform.
+          if (us > r.lastOutUs && us > 500_000) this.set(tournamentId, r, 'live', null);
+          r.lastOutUs = Math.max(r.lastOutUs, us);
+        }
+      }
+    });
+    proc.stderr?.on('data', (d: Buffer) => {
+      r.stderr = (r.stderr + d.toString()).slice(-2000);
+    });
+    proc.on('error', (err) => {
+      r.stderr = err.message;
+    });
+    proc.on('exit', (code) => {
+      if (r.proc !== proc) return;
+      r.proc = null;
+      if (!r.wanted) return;
+      const wasLive = r.status.state === 'live';
+      if (wasLive) r.status.restarts = 0;
+      r.status.restarts++;
+      const err = lastLine(r.stderr) ?? `stopped (exit ${code ?? 'signal'})`;
+      this.log.warn({ tournamentId, platform: r.target.platform, err }, 'relay stopped, retrying');
+      this.set(tournamentId, r, 'retrying', friendly(err));
+      const delay = Math.min(this.config.RELAY_RETRY_MAX_SEC, 2 ** Math.min(r.status.restarts, 5)) * 1000;
+      r.timer = setTimeout(() => {
+        r.timer = null;
+        this.run(tournamentId, input, r);
+      }, delay);
+    });
+  }
+
+  private kill(r: Running): void {
+    r.wanted = false;
+    if (r.timer) clearTimeout(r.timer);
+    r.timer = null;
+    const p = r.proc;
+    r.proc = null;
+    if (p && p.exitCode === null) {
+      p.kill('SIGTERM');
+      setTimeout(() => p.exitCode === null && p.kill('SIGKILL'), 3000).unref();
+    }
+  }
+}
+
+function lastLine(s: string): string | null {
+  const lines = s.split('\n').map((l) => l.trim()).filter(Boolean);
+  return lines.at(-1) ?? null;
+}
+
+/** FFmpeg's words, made readable for a director. Stream keys never appear in them. */
+function friendly(err: string): string {
+  const e = err.replace(/rtmps?:\/\/\S+/g, '<platform>');
+  if (/404|not found|DESCRIBE/i.test(e)) return 'Waiting for the programme from OBS';
+  if (/Connection refused|timed out|Network is unreachable|Input\/output error/i.test(e)) return 'Cannot reach the platform; retrying';
+  if (/Broken pipe|Connection reset|End of file/i.test(e)) return 'The platform closed the connection (check the stream key / broadcast); retrying';
+  return e.slice(0, 200);
+}

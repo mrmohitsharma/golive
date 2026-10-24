@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+*.log
+# Flutter
+.dart_tool/
+build/
+.flutter-plugins*
+.packages
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

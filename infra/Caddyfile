@@ -1,0 +1,18 @@
+{$PUBLIC_DOMAIN} {
+	encode gzip
+
+	# The MediaMTX auth hook is internal-only (MediaMTX calls server:8080 directly).
+	handle /internal/* {
+		respond 404
+	}
+
+	# WebRTC (WHEP) signalling for Director previews -> MediaMTX.
+	handle_path /webrtc/* {
+		reverse_proxy mediamtx:8889
+	}
+
+	# REST API + WebSocket (/ws) -> CoGolfer server.
+	handle {
+		reverse_proxy server:8080
+	}
+}

@@ -1,0 +1,75 @@
+# MediaMTX configuration for CoGolfer Live Director.
+# Runtime-tested with MediaMTX v1.14.0; keys checked against v1.21.x (pinned in docker-compose).
+# Secrets are NOT stored here: docker-compose injects them as MTX_* environment overrides.
+
+logLevel: info
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 1024
+
+###############################################
+# Authentication: every publish/read/playback/api call is decided by the CoGolfer server.
+authMethod: http
+# Overridden by MTX_AUTHHTTPADDRESS (includes the shared hook secret).
+authHTTPAddress: http://server:8080/internal/mediamtx/auth?secret=CHANGE_ME
+authHTTPExclude: []
+
+###############################################
+# Control API and recording playback: internal only (Docker network).
+api: yes
+apiAddress: :9997
+metrics: no
+pprof: no
+# Instant replay and highlight clips read the recordings through this API.
+playback: yes
+playbackAddress: :9996
+
+###############################################
+# RTSP: internal only (thumbnail generator).
+rtsp: yes
+rtspTransports: [tcp]
+rtspAddress: :8554
+
+rtmp: no
+hls: no
+
+###############################################
+# WebRTC: Director/commentator previews (WHEP) and commentator microphones (WHIP).
+# Signalling via Caddy (https://<domain>/webrtc/...); media on UDP 8189.
+webrtc: yes
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ''
+webrtcIPsFromInterfaces: yes
+# Overridden by MTX_WEBRTCADDITIONALHOSTS with the VM public IP / domain.
+webrtcAdditionalHosts: []
+webrtcICEServers2: []
+
+###############################################
+# SRT: camera ingest from phones; OBS (laptop or cloud) reads cameras and commentary.
+srt: yes
+srtAddress: :8890
+
+pathDefaults:
+  source: publisher
+  # A phone reconnecting after a network drop replaces its own stale session.
+  overridePublisher: yes
+  srtPublishPassphrase:
+  srtReadPassphrase:
+
+  # Every camera and commentator is recorded in 1-second fMP4 parts so a replay or clip
+  # can be cut ~2 seconds after the moment. Old recordings are deleted automatically.
+  record: yes
+  recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordFormat: fmp4
+  recordPartDuration: 1s
+  recordSegmentDuration: 10m
+  # Overridden by MTX_PATHDEFAULTS_RECORDDELETEAFTER (RECORDING_RETENTION in .env).
+  recordDeleteAfter: 72h
+
+paths:
+  # The broadcast engine's programme (restreamed to YouTube/Facebook/Instagram by the
+  # server). Cameras are already recorded, so the programme is not.
+  "~^prog-":
+    record: no
+  all_others:

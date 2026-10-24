@@ -1,0 +1,25 @@
+name: cg_streamer
+description: SRT live camera publishing for CoGolfer Live. RootEncoder (Kotlin, Camera2) on Android, HaishinKit (Swift, AVFoundation) on iOS.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.cogolfers.cg_streamer
+        pluginClass: CgStreamerPlugin
+      ios:
+        pluginClass: CgStreamerPlugin
