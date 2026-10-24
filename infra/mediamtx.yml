@@ -35,11 +35,12 @@ hls: no
 
 ###############################################
 # WebRTC: Director/commentator previews (WHEP) and commentator microphones (WHIP).
-# Signalling via Caddy (https://<domain>/webrtc/...); media on UDP 8189.
+# Signalling via Caddy (https://<domain>/webrtc/...); media on UDP 8189, with TCP 8189 as a
+# fallback for networks that block UDP (office Wi-Fi, some home routers).
 webrtc: yes
 webrtcAddress: :8889
 webrtcLocalUDPAddress: :8189
-webrtcLocalTCPAddress: ''
+webrtcLocalTCPAddress: :8189
 webrtcIPsFromInterfaces: yes
 # Overridden by MTX_WEBRTCADDITIONALHOSTS with the VM public IP / domain.
 webrtcAdditionalHosts: []

@@ -42,6 +42,7 @@ Streaming continues with the screen off (foreground service, "camera is live" no
 | YouTube comments | Read with `liveChatMessages.list`, 5 quota units per read (~6,000 units for a 5-hour show at the default 15 s). YouTube's newer streaming method (`streamList`) has no documented web endpoint, so it is not used. | Request more quota; or raise `YOUTUBE_CHAT_POLL_SEC`. |
 | Facebook comments | Needs `pages_read_user_content` (App Review for other clubs; clubs connected earlier must reconnect). The 50 newest are read every 4 s, so in a flood of more than ~12 comments/second some are missed. Facebook may hide the commenter's name for some accounts ("Facebook viewer"). | — |
 | Chat | One-way: watch-page messages are not posted to YouTube/Facebook and staff cannot reply from the app. Viewers identify only by a typed name (anyone can type any name). | Phase 2: CoGolfers login for viewers. |
+| Live previews in a browser | WebRTC needs port 8189 (UDP, or TCP as a fallback) open on the server, and `PUBLIC_IP` set to the server's public IP. If both are blocked by the viewer's network, previews stay on "Connecting"; a TURN server would be the next step. | Open both rules in the AWS security group. |
 | Scorer conflicts | Two scorers entering the same player+hole: the last one received wins. | Assign one scorer per group. |
 
 ## Verification status

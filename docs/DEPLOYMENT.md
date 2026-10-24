@@ -18,6 +18,7 @@ Three pieces: the **server VM** (ingest, API, recording, optional cloud engines)
 | 443 | UDP | HTTP/3 (optional) |
 | 8890 | UDP | SRT: phones publish; a laptop OBS reads |
 | 8189 | UDP | WebRTC media: director previews, commentary microphones |
+| 8189 | TCP | WebRTC fallback when the viewer's network blocks UDP |
 
 **Start:**
 

@@ -115,6 +115,7 @@ services:
     ports:
       - "8890:8890/udp"   # SRT: phones publish; laptop OBS reads
       - "8189:8189/udp"   # WebRTC media: previews and commentary
+      - "8189:8189/tcp"   # WebRTC media fallback when a network blocks UDP
 
   caddy:
     image: caddy:2
