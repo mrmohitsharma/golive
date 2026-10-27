@@ -108,11 +108,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.golf_course, size: 56, color: Broadcast.preview),
+                    const Icon(Icons.live_tv, size: 56, color: Broadcast.onAir),
                     const SizedBox(height: 8),
-                    Text('CoGolfer Live', textAlign: TextAlign.center, style: theme.textTheme.headlineSmall),
+                    Text('Go Live', textAlign: TextAlign.center, style: theme.textTheme.headlineSmall),
                     const SizedBox(height: 4),
-                    Text('Broadcast your golf tournament live', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
+                    Text('Broadcast any event live, from phones', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
                     const SizedBox(height: 24),
                     SegmentedButton<_Mode>(
                       segments: const [
@@ -173,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextField(
                         controller: _org,
                         textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(labelText: 'Club or organisation', hintText: 'DLF Golf & Country Club'),
+                        decoration: const InputDecoration(labelText: 'Club or organisation', hintText: 'Your club, school or company'),
                       ),
                       const SizedBox(height: 12),
                     ],

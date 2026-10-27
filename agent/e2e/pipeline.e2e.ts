@@ -167,7 +167,7 @@ class Client {
 }
 
 async function main() {
-  console.log(`CoGolfer Live Director v2 end-to-end test (real OBS, cloud mode)\n  logs: ${work}\n`);
+  console.log(`Go Live Director v2 end-to-end test (real OBS, cloud mode)\n  logs: ${work}\n`);
   const engineLog = path.join(work, 'engine-home');
 
   await step('reset e2e database', async () => {
@@ -286,7 +286,7 @@ async function main() {
     const r = await ok('POST', `/api/admin/orgs/${owner.orgId}/credits`, { credits: 100, note: 'Welcome credits' }, token);
     if (r.balance !== 100) throw new Error(`balance ${r.balance}`);
     const page = await fetch(`${SERVER}/admin`);
-    if (!(await page.text()).includes('CoGolfer Live Admin')) throw new Error('admin page missing');
+    if (!(await page.text()).includes('Go Live Admin')) throw new Error('admin page missing');
     return token;
   });
   const codes = await step('QR join codes for camera, scorer and commentator volunteers', async () => {

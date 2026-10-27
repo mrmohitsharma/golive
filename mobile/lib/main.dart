@@ -20,7 +20,7 @@ class CoGolferLiveApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = ColorScheme.fromSeed(seedColor: Broadcast.course, brightness: Brightness.dark);
     return MaterialApp(
-      title: 'CoGolfer Live',
+      title: 'Go Live',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: scheme,

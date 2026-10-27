@@ -152,7 +152,7 @@ class _OrgScreenState extends State<OrgScreen> with WidgetsBindingObserver {
                   onChanged: (v) => setLocal(() => role = v ?? role),
                 ),
                 const SizedBox(height: 12),
-                Text('New to CoGolfer Live? Also give their name and a first password to share with them:', style: Theme.of(c).textTheme.bodySmall),
+                Text('New to Go Live? Also give their name and a first password to share with them:', style: Theme.of(c).textTheme.bodySmall),
                 const SizedBox(height: 8),
                 TextField(controller: name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Name (new accounts)')),
                 const SizedBox(height: 12),

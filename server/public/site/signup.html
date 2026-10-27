@@ -51,15 +51,24 @@
     <p class="switch-link">Camera operator, scorer or commentator? You don't need an account. Open the app and enter the code the organiser gave you.</p>
   </div>
   <aside class="auth-side" id="auth-side" aria-hidden="true">
-    <div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div class="tally-lamp"><i></i><span id="lamp-text">Standing by</span></div>
+    <div class="auth-wall" id="auth-wall"></div>
     <blockquote>
-      <p>Four phones, one director, three platforms. That is the whole crew.</p>
-      <footer>What you need for your first broadcast</footer>
+      <p>Every event deserves a broadcast. Yours starts here.</p>
+      <footer>2 cameras and 10 live minutes free on every event</footer>
     </blockquote>
   </aside>
 </main>
 {{> footer}}
+<script src="/site/scenes.js"></script>
+<script>
+  (function () {
+    var wall = document.getElementById('auth-wall');
+    if (!wall || !window.GoLiveScenes || window.matchMedia('(max-width: 860px)').matches) return;
+    ['wedding', 'cricket', 'concert', 'conference'].forEach(function (k) { wall.appendChild(GoLiveScenes.monitor(k, { short: true })); });
+    GoLiveScenes.autoCut(wall);
+  })();
+</script>
 <script src="/site/auth.js" defer></script>
 </body>
 </html>

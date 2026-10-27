@@ -113,7 +113,7 @@ class _JoinCodesScreenState extends State<JoinCodesScreen> {
     SharePlus.instance.share(ShareParams(
       subject: 'Join ${t.name} as ${c.role.label.toLowerCase()}',
       text: 'You’re helping with ${t.name} as ${c.role.label.toLowerCase()}.\n\n'
-          '1. Install CoGolfer Live.\n2. Open this link or tap “Join” and enter code ${c.display}:\n${c.joinUrl}',
+          '1. Install Go Live.\n2. Open this link or tap “Join” and enter code ${c.display}:\n${c.joinUrl}',
     ));
   }
 
@@ -132,7 +132,7 @@ class _JoinCodesScreenState extends State<JoinCodesScreen> {
                 const SizedBox(height: 16),
                 Text(c.display, style: const TextStyle(color: Colors.black, fontSize: 40, fontWeight: FontWeight.w800, letterSpacing: 6)),
                 const SizedBox(height: 8),
-                Text('Scan with the CoGolfer Live app (Join > Scan QR)', style: TextStyle(color: Colors.grey.shade800)),
+                Text('Scan with the Go Live app (Join > Scan QR)', style: TextStyle(color: Colors.grey.shade800)),
               ]),
             ),
           ),

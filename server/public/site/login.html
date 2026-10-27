@@ -36,8 +36,8 @@
     <p class="switch-link">Forgot your password? Email <a href="mailto:{{EMAIL}}?subject=Password%20reset">{{EMAIL}}</a> from your account email and we will reset it.</p>
   </div>
   <aside class="auth-side" id="auth-side" aria-hidden="true">
-    <div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div class="tally-lamp"><i></i><span id="lamp-text">Standing by</span></div>
+    <div class="auth-wall" id="auth-wall"></div>
     <blockquote>
       <p>Welcome back to the control room.</p>
       <footer>Your events, credits and channels are where you left them.</footer>
@@ -45,6 +45,15 @@
   </aside>
 </main>
 {{> footer}}
+<script src="/site/scenes.js"></script>
+<script>
+  (function () {
+    var wall = document.getElementById('auth-wall');
+    if (!wall || !window.GoLiveScenes || window.matchMedia('(max-width: 860px)').matches) return;
+    ['wedding', 'cricket', 'concert', 'conference'].forEach(function (k) { wall.appendChild(GoLiveScenes.monitor(k, { short: true })); });
+    GoLiveScenes.autoCut(wall);
+  })();
+</script>
 <script src="/site/auth.js" defer></script>
 </body>
 </html>

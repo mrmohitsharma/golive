@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CoGolfer Live</title>
+<title>Go Live</title>
 <style>
   :root { --bg:#0b0e10; --panel:#15191c; --line:#252b30; --ink:#f3f5f4; --muted:#9aa5a0; --live:#e53935; --green:#2e7d4f; --gold:#c9a227; --under:#ff6b6b; }
   * { box-sizing: border-box; }
@@ -101,14 +101,14 @@
 
   // ------------------------------------------------------------ list of tournaments
   async function list() {
-    document.title = 'CoGolfer Live · Watch';
+    document.title = 'Go Live · Watch';
     const data = await api('/api/public/live').catch(() => ({ tournaments: [] }));
     const items = data.tournaments.map((t) =>
       el('a', { href: '/watch/' + t.id },
         el('div', {}, el('strong', { text: t.name }), el('div', { class: 'sub', text: [t.venue, t.orgName, t.startsOn].filter(Boolean).join(' · ') })),
         livePill(t.live)));
     app.replaceChildren(
-      el('header', {}, el('div', {}, el('div', { class: 'brand', text: 'CoGolfer Live' }), el('h1', { text: 'Golf, live' }))),
+      el('header', {}, el('div', {}, el('div', { class: 'brand', text: 'Go Live' }), el('h1', { text: 'Live now' }))),
       el('div', { class: 'panel list' }, ...(items.length ? items : [el('div', { class: 'empty', text: 'No tournaments to show right now.' })])),
     );
     setTimeout(list, 30000);
@@ -300,12 +300,12 @@
     try {
       const d = await api('/api/public/tournaments/' + id);
       const t = d.tournament;
-      document.title = t.name + ' · CoGolfer Live';
+      document.title = t.name + ' · Go Live';
       const sig = JSON.stringify([t.name, t.venue, t.live, d.onAir && d.onAir.hole]);
       if (sig !== last) {
         last = sig;
         head.replaceChildren(el('div', { style: 'flex:1;min-width:0' },
-          el('div', { class: 'brand', text: t.orgName ? 'CoGolfer Live · ' + t.orgName : 'CoGolfer Live' }),
+          el('div', { class: 'brand', text: t.orgName ? 'Go Live · ' + t.orgName : 'Go Live' }),
           el('h1', { text: t.name }),
           el('div', { class: 'sub', text: [t.venue, d.onAir && d.onAir.hole ? 'On camera: hole ' + d.onAir.hole : null].filter(Boolean).join(' · ') })),
           livePill(t.live));
@@ -323,7 +323,7 @@
   app.replaceChildren(head,
     el('div', { class: 'grid' }, el('div', {}, playerBox, linksBox), sidePanel),
     clipsPanel,
-    el('footer', { text: 'Produced with CoGolfer Live' }));
+    el('footer', { text: 'Produced with Go Live' }));
   if (new URLSearchParams(location.search).get('tab') === 'chat') sideTab = 'chat';
   drawSide();
   renderComposer();

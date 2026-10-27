@@ -134,7 +134,7 @@ export function registerOrgRoutes(app: FastifyInstance, ctx: Ctx) {
     }
     try {
       const r = await youtube.completeConnect(q.code, q.state);
-      return page('YouTube connected', `Channel “${r.channelTitle.replace(/[<>&]/g, '')}” is connected. Go back to CoGolfer Live.`);
+      return page('YouTube connected', `Channel “${r.channelTitle.replace(/[<>&]/g, '')}” is connected. Go back to the ${config.BRAND_NAME} app.`);
     } catch (err) {
       reply.status(err instanceof HttpError ? err.status : 500);
       return page('YouTube was not connected', (err as Error).message.replace(/[<>&]/g, ''));
@@ -183,7 +183,7 @@ export function registerOrgRoutes(app: FastifyInstance, ctx: Ctx) {
       const r = await facebook.completeConnect(q.code, q.state);
       return resultPage(
         'Facebook connected',
-        `Connected as ${r.userName.replace(/[<>&]/g, '')} with ${r.pages} Page${r.pages === 1 ? '' : 's'}. ${r.pages > 1 ? 'Choose the Page to stream to in the app. ' : ''}Go back to CoGolfer Live.`,
+        `Connected as ${r.userName.replace(/[<>&]/g, '')} with ${r.pages} Page${r.pages === 1 ? '' : 's'}. ${r.pages > 1 ? 'Choose the Page to stream to in the app. ' : ''}Go back to the ${config.BRAND_NAME} app.`,
       );
     } catch (err) {
       reply.status(err instanceof HttpError ? err.status : 500);

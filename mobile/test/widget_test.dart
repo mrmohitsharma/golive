@@ -10,7 +10,7 @@ void main() {
   testWidgets('first screen is volunteer join, with QR scan and validation', (tester) async {
     final session = Session()..loaded = true;
     await tester.pumpWidget(MaterialApp(home: LoginScreen(session: session)));
-    expect(find.text('CoGolfer Live'), findsOneWidget);
+    expect(find.text('Go Live'), findsOneWidget);
     expect(find.text('Scan QR poster'), findsOneWidget);
     await tester.tap(find.text('Join tournament'));
     await tester.pump();

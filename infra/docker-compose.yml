@@ -1,4 +1,4 @@
-# CoGolfer Live Director: cloud stack.
+# Go Live: cloud stack.
 #
 #   Phones --SRT/UDP 8890--> mediamtx --SRT--> OBS (venue laptop, or cloud engine container) --> YouTube
 #   Apps --HTTPS/WSS 443--> caddy --> server (+ WebRTC previews/commentary via /webrtc, media on UDP 8189)
@@ -39,7 +39,7 @@ services:
       PUBLIC_BASE_URL: https://${PUBLIC_DOMAIN}
       SIGNUP_ENABLED: ${SIGNUP_ENABLED:-true}
       # Public website and legal pages (/, /signup, /login, /account, /terms, /privacy, /delete-account)
-      BRAND_NAME: ${BRAND_NAME:-ICCA Live}
+      BRAND_NAME: ${BRAND_NAME:-Go Live}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
       LEGAL_ENTITY: ${LEGAL_ENTITY:-}
       LEGAL_ADDRESS: ${LEGAL_ADDRESS:-}

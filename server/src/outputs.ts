@@ -141,7 +141,7 @@ export class OutputsService {
       try {
         await this.facebook.createLive(t, {
           title: `${t.name}${t.venue ? ` · ${t.venue}` : ''}`,
-          description: `Live from ${t.venue ?? t.name}. Produced with CoGolfer Live.`,
+          description: `Live from ${t.venue ?? t.name}. Produced with ${this.config.BRAND_NAME}.`,
         });
       } catch (err) {
         problems.push((err as Error).message);

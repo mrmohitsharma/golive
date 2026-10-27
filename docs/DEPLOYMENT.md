@@ -184,7 +184,7 @@ The server also serves the public website at the domain root:
 Fill in the legal details in `.env`, then `docker compose up -d`:
 
 ```
-BRAND_NAME=ICCA Live
+BRAND_NAME=Go Live
 SUPPORT_EMAIL=support@icca.co.in
 LEGAL_ENTITY=<registered company name>
 LEGAL_ADDRESS=<registered office address>

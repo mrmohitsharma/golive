@@ -17,7 +17,7 @@ fi
 echo "Flutter $ver"
 
 flutter create --org com.cogolfers --project-name cogolfer_live --platforms android,ios \
-  --description "CoGolfer Live Director" . >/dev/null
+  --description "Go Live: multi-camera live broadcasts from phones" . >/dev/null
 echo "✓ platform scaffolding generated (existing files kept)"
 
 # ---------------------------------------------------------------- iOS
@@ -27,9 +27,9 @@ if [ -f "$PLIST" ] && [ "$(uname)" = "Darwin" ]; then
   set_string() {
     /usr/libexec/PlistBuddy -c "Set :$1 $2" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :$1 string $2" "$PLIST"
   }
-  set_string CFBundleDisplayName "CoGolfer Live"
-  set_string NSCameraUsageDescription "CoGolfer Live streams this camera to the tournament control room when you tap Go Live, and scans the organiser's QR code."
-  set_string NSMicrophoneUsageDescription "CoGolfer Live sends course audio with the camera feed, and your voice when you commentate."
+  set_string CFBundleDisplayName "Go Live"
+  set_string NSCameraUsageDescription "Go Live streams this camera to the event control room when you tap Go Live, and scans the organiser's QR code."
+  set_string NSMicrophoneUsageDescription "Go Live sends event audio with the camera feed, and your voice when you commentate."
   # Status bar hidden on the full-screen camera.
   pb "Add :UIStatusBarHidden bool false"
   pb "Add :UIViewControllerBasedStatusBarAppearance bool true"
@@ -47,6 +47,13 @@ fi
 flutter config --enable-swift-package-manager >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------- Android
+# App name under the icon. The package id (com.cogolfers.cogolfer_live) stays the same so
+# installed apps keep updating.
+MANIFEST=android/app/src/main/AndroidManifest.xml
+if [ -f "$MANIFEST" ]; then
+  sed -i.bak -E 's/android:label="[^"]*"/android:label="Go Live"/' "$MANIFEST" && rm -f "$MANIFEST.bak"
+  echo "✓ Android app name set to Go Live"
+fi
 # share_plus 13 needs Android Gradle Plugin >= 8.12.1 and Gradle >= 8.13.
 SETTINGS=android/settings.gradle.kts
 if [ -f "$SETTINGS" ]; then

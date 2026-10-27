@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
-<title>CoGolfer Live Admin</title>
+<title>Go Live Admin</title>
 <style>
   :root { --bg:#f4f6f5; --panel:#fff; --line:#e1e6e3; --ink:#18201c; --muted:#66736c; --green:#2e7d4f; --green-soft:#e6f2ea; --gold:#a8861c; --red:#c62828; --red-soft:#fdecec; --amber:#b26a00; --amber-soft:#fff4e0; }
   * { box-sizing:border-box; }
@@ -105,14 +105,14 @@
     if (!me) {
       try {
         const r = await call('GET', '/api/me');
-        if (!r.principal.platformAdmin) { root.replaceChildren(el('div', { class: 'login' }, el('div', { class: 'card' }, el('h2', { text: 'Not an administrator' }), el('p', { class: 'muted', text: 'This account cannot open the CoGolfer Live admin panel.' }), el('button', { class: 'btn', onclick: logout, text: 'Sign out' })))); return; }
+        if (!r.principal.platformAdmin) { root.replaceChildren(el('div', { class: 'login' }, el('div', { class: 'card' }, el('h2', { text: 'Not an administrator' }), el('p', { class: 'muted', text: 'This account cannot open the Go Live admin panel.' }), el('button', { class: 'btn', onclick: logout, text: 'Sign out' })))); return; }
         me = r.principal;
       } catch { return; }
     }
     const tabs = [['overview', 'Overview'], ['live', 'Live now'], ['clubs', 'Clubs'], ['pricing', 'Pricing & packs'], ['payments', 'Payments'], ['admins', 'Admins']];
     const main = el('main');
     root.replaceChildren(
-      el('header', { class: 'top' }, el('div', {}, el('div', { class: 'brand', text: 'CoGolfer Live' }), el('h1', { text: 'Admin' })), el('div', { class: 'sp' }), el('span', { class: 'muted who', style: 'color:#b9c9be', text: me.email }), el('button', { onclick: logout, text: 'Sign out' })),
+      el('header', { class: 'top' }, el('div', {}, el('div', { class: 'brand', text: 'Go Live' }), el('h1', { text: 'Admin' })), el('div', { class: 'sp' }), el('span', { class: 'muted who', style: 'color:#b9c9be', text: me.email }), el('button', { onclick: logout, text: 'Sign out' })),
       el('nav', {}, tabs.map(([k, label]) => el('button', { class: tab === k ? 'on' : '', onclick: () => { tab = k; clubId = null; render(); }, text: label }))),
       main,
     );
@@ -131,7 +131,7 @@
       token = r.token; store.set('cg_admin_token', token); render();
     });
     root.replaceChildren(el('div', { class: 'login' }, el('form', { class: 'card', onsubmit: go },
-      el('div', { style: 'font-weight:800;letter-spacing:.06em;font-size:12px;color:var(--gold);text-transform:uppercase', text: 'CoGolfer Live' }),
+      el('div', { style: 'font-weight:800;letter-spacing:.06em;font-size:12px;color:var(--gold);text-transform:uppercase', text: 'Go Live' }),
       el('h2', { style: 'margin:0', text: 'Admin sign in' }), email, pass, el('button', { class: 'btn primary', type: 'submit', text: 'Sign in' }))));
   }
 

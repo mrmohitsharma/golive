@@ -34,7 +34,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
         return;
       }
     }
-    setState(() => _hint = 'That QR code is not a CoGolfer Live join code.');
+    setState(() => _hint = 'That QR code is not a Go Live join code.');
   }
 
   @override

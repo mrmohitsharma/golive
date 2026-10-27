@@ -187,7 +187,7 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
     const r = await youtube.createBroadcast(t, {
       title: body.title ?? `${t.name}${t.venue ? ` · ${t.venue}` : ''}`,
       privacy: body.privacy,
-      description: body.description ?? `Live from ${t.venue ?? t.name}. Produced with CoGolfer Live.`,
+      description: body.description ?? `Live from ${t.venue ?? t.name}. Produced with ${config.BRAND_NAME}.`,
     });
     await hub.engineConfigChanged(t.id);
     const fresh = (await repo.tournamentById(t.id))!;

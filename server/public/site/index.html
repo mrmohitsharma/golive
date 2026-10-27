@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{BRAND}}: multi-camera live streaming from phones</title>
-<meta name="description" content="{{BRAND}} turns the phones at your event into a multi-camera live broadcast. Switch shots, add scores and replays, and stream to YouTube, Facebook and Instagram at once. 2 cameras and 10 minutes free on every event.">
-<meta property="og:title" content="{{BRAND}}: your phones are the camera crew">
-<meta property="og:description" content="Multi-camera live production from phones, run in the cloud. Stream to YouTube, Facebook and Instagram at once.">
+<title>{{BRAND}}: broadcast any event live, from phones</title>
+<meta name="description" content="{{BRAND}} turns the phones at your event into a multi-camera live broadcast and streams it to YouTube, Facebook, Instagram and your own watch page at once. Sports, weddings, concerts, conferences. 2 cameras and 10 minutes free on every event.">
+<meta property="og:title" content="{{BRAND}}: every event, live, everywhere">
+<meta property="og:description" content="Broadcast as a service. Multi-camera live production from phones, mixed in the cloud, streamed everywhere at once.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{BASE_URL}}/">
-<meta name="theme-color" content="#0f1a28">
+<meta name="theme-color" content="#060b16">
 <link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,24 +21,70 @@
 <main id="main">
 
   <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-glow" aria-hidden="true"></div>
     <div class="wrap">
-      <div>
-        <h1 id="hero-title">Your phones are the camera crew.</h1>
-        <p class="lede">Turn the phones at your event into a multi-camera live broadcast. Switch shots, put scores and replays on screen, and stream to YouTube, Facebook and Instagram at once. No van, no crew, no laptop.</p>
-        <div class="hero-cta">
-          <a class="btn btn-live" href="/signup"><span class="dot" aria-hidden="true"></span>Start your first broadcast</a>
-          <a class="btn btn-ghost" href="#cost">See what you save</a>
+      <div class="hero-top">
+        <h1 id="hero-title"><span class="line"><span>Every event.</span></span><span class="line"><span>Live.</span></span><span class="line"><span>Everywhere.</span></span></h1>
+        <div class="hero-side">
+          <p class="lede">Golf days, cricket finals, weddings, concerts, conferences, marathons. {{BRAND}} turns the phones already there into a multi-camera show, mixes it in the cloud and streams it to YouTube, Facebook, Instagram and your own watch page at once.</p>
+          <div class="hero-cta">
+            <a class="btn btn-live" href="/signup"><span class="dot" aria-hidden="true"></span>Start broadcasting free</a>
+            <a class="btn btn-ghost" href="#director">See how it works</a>
+          </div>
+          <p class="hero-note">2 cameras and 10 live minutes free on every event. No card needed.</p>
         </div>
-        <p class="hero-note">2 cameras and 10 live minutes free on every event. No card needed to sign up.</p>
       </div>
 
-      <figure class="mixer" aria-label="A live control room: four phone cameras, the shot on air, and the TAKE button" id="mixer">
+      <div class="network" id="network" role="img" aria-label="Six live events, each filmed on phones, flow into Go Live, which streams each one to YouTube, Facebook, Instagram and a watch page.">
+        <span class="net-label l">Events on air</span>
+        <span class="net-label c">Mixed in the cloud</span>
+        <span class="net-label r">Streamed everywhere</span>
+        <div class="net-events" id="net-events"></div>
+        <div class="net-core" id="net-core">
+          <div class="core-pulse"></div>
+          <div class="core-ring"></div>
+          <div class="core-ring r2"></div>
+          <div class="core-disc">
+            <svg class="brand-mark" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="#ee3b2f"/><circle class="ring" cx="15" cy="15" r="10.5" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="46 20" stroke-linecap="round"/><path d="M12.6 10.4v9.2l7.4-4.6z" fill="#fff"/></svg>
+            <strong>{{BRAND}}</strong>
+            <span id="core-status">Mixing 6 shows</span>
+            <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="net-outs" id="net-outs"></div>
+        <svg class="net-wires" id="net-wires" aria-hidden="true"></svg>
+      </div>
+    </div>
+  </section>
+
+  <div class="marquee" aria-label="Made for">
+    <div class="marquee-track" id="marquee">
+      <ul>
+        <li>Golf tournaments</li><li>Cricket leagues</li><li>Weddings</li><li>Concerts</li><li>Conferences</li><li>Marathons</li>
+        <li>School sports days</li><li>Football finals</li><li>Award nights</li><li>College fests</li><li>Religious events</li><li>Product launches</li>
+      </ul>
+    </div>
+  </div>
+
+  <section class="section director" id="director" aria-labelledby="director-title">
+    <div class="wrap director-grid">
+      <div>
+        <div class="section-head" data-reveal>
+          <p class="kicker">The control room in your pocket</p>
+          <h2 id="director-title">Direct a broadcast from one phone.</h2>
+          <p>Every camera at your event appears on the director's phone or tablet. Pick the next shot, take it to air, add the score and replay the big moment. The heavy work runs on our servers.</p>
+        </div>
+        <ul class="director-points" data-reveal>
+          <li><div><strong>Preview, then take</strong><span>Line up the next shot in green, send it live in red. Or cut straight to any camera.</span></div></li>
+          <li><div><strong>Scores and captions on screen</strong><span>Leaderboards, score bugs and name captions update as scorers enter results.</span></div></li>
+          <li><div><strong>Instant replay</strong><span>Replay the last ten seconds in slow motion and save highlight clips.</span></div></li>
+        </ul>
+      </div>
+      <figure class="mixer" aria-label="Try it: tap a camera to preview it, then press TAKE" id="mixer" data-reveal>
         <div class="mixer-top">
           <span class="onair">LIVE</span>
           <span class="tc" id="tc" aria-hidden="true">00:42:10:00</span>
-          <span class="dests" aria-label="Streaming to">
-            <span class="dest">YouTube</span><span class="dest">Facebook</span><span class="dest">Instagram</span>
-          </span>
+          <span class="dests" aria-label="Streaming to"><span>YouTube</span><span>Facebook</span><span>Instagram</span></span>
         </div>
         <div class="pgm" id="pgm">
           <span class="pgm-label">On air</span>
@@ -53,21 +99,14 @@
     </div>
   </section>
 
-  <div class="strip">
-    <div class="wrap">
-      <strong>One show, everywhere at once:</strong>
-      <span>YouTube</span><span>Facebook Pages</span><span>Instagram, in vertical 9:16</span><span>Your own watch page with live scores and chat</span>
-    </div>
-  </div>
-
   <section class="section" id="cost" aria-labelledby="cost-title">
     <div class="wrap">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
+        <p class="kicker">The numbers</p>
         <h2 id="cost-title">A broadcast crew costs a day's budget. Your phones cost minutes.</h2>
         <p>Hiring a multi-camera crew means paying for operators, cameras, a vision mixer, a streaming setup and travel, for the whole day. With {{BRAND}} you pay only for the minutes you are live. Move the sliders to see your event.</p>
       </div>
-
-      <div class="calc" id="calc">
+      <div class="calc" id="calc" data-reveal>
         <div class="calc-controls">
           <div>
             <label for="cams">Cameras <output id="cams-out" for="cams">4</output></label>
@@ -78,7 +117,7 @@
             <input id="hours" type="range" min="1" max="10" value="3">
           </div>
         </div>
-        <div class="bill">
+        <div class="bill crew">
           <h3>Hiring a crew</h3>
           <dl id="crew"></dl>
           <div class="total"><span>About</span><strong id="crew-total">₹0</strong></div>
@@ -98,60 +137,56 @@
 
   <section class="section studio" aria-labelledby="kit-title">
     <div class="wrap">
-      <div class="section-head">
-        <h2 id="kit-title">Everything a broadcast truck does, in an app.</h2>
-        <p>The control room runs on one phone or tablet. The heavy lifting (mixing, graphics, encoding, restreaming) happens on our servers.</p>
+      <div class="section-head" data-reveal>
+        <p class="kicker">Everything included</p>
+        <h2 id="kit-title">Everything a broadcast truck does. None of the truck.</h2>
+        <p>Cameras, mixing, graphics, replays, commentary and streaming to every platform, in one app and one bill.</p>
       </div>
-      <dl class="specs">
-        <div class="spec">
+      <dl class="specs" id="specs">
+        <div class="spec wide" data-reveal>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
-          <dt>Up to 10 phone cameras</dt>
-          <dd>Any Android phone or iPhone becomes a camera. Volunteers scan a QR code, no account needed. Video holds up on 4G with as little as 1.5 Mbps.</dd>
+          <dt>Up to 10 phone cameras per event</dt>
+          <dd>Any Android phone or iPhone becomes a camera. Volunteers scan a QR code, with no account needed. Video holds up on 4G with as little as 1.5 Mbps upload.</dd>
         </div>
-        <div class="spec">
+        <div class="spec" data-reveal>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z"/></svg>
-          <dt>Production in the cloud</dt>
-          <dd>Mixing and encoding run on our servers, so the venue needs no laptop and no strong upload. Prefer your own laptop? That works too.</dd>
+          <dt>Mixed in the cloud</dt>
+          <dd>No laptop or strong venue internet. Prefer your own laptop? That works too.</dd>
         </div>
-        <div class="spec">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="5" width="9" height="7" rx="1"/><rect x="13" y="5" width="9" height="7" rx="1"/><path d="M6 16h12M15 13l3 3-3 3"/></svg>
-          <dt>Switch shots like a director</dt>
-          <dd>Preview the next shot, then take it to air. Or cut straight to any camera with one tap. A fallback screen covers any camera that drops.</dd>
-        </div>
-        <div class="spec">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 8v4l3 2"/></svg>
-          <dt>Instant replay and slow motion</dt>
-          <dd>Replay the last ten seconds of any camera on air. Save highlights as clips, ready to post in 16:9 or 9:16.</dd>
-        </div>
-        <div class="spec">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15h18M7 18h6"/></svg>
-          <dt>Scores and graphics on screen</dt>
-          <dd>Score bugs, leaderboards and name captions update the moment a scorer enters a result on their phone.</dd>
-        </div>
-        <div class="spec">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>
-          <dt>Commentary from anywhere</dt>
-          <dd>A commentator talks over the broadcast from their own phone, even away from the venue. Course sound dips under their voice.</dd>
-        </div>
-        <div class="spec">
+        <div class="spec" data-reveal>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></svg>
           <dt>Every platform at once</dt>
-          <dd>One show goes to YouTube, your Facebook Page and Instagram together. Instagram gets its own vertical version automatically.</dd>
+          <dd>YouTube, your Facebook Page and Instagram together. Instagram gets its own vertical version.</dd>
         </div>
-        <div class="spec">
+        <div class="spec" data-reveal>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 8v4l3 2"/></svg>
+          <dt>Replays and clips</dt>
+          <dd>Slow-motion replays on air, highlight clips in 16:9 and 9:16 ready to post.</dd>
+        </div>
+        <div class="spec" data-reveal>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>
+          <dt>Commentary from anywhere</dt>
+          <dd>A commentator talks over the show from their own phone. Event sound dips under their voice.</dd>
+        </div>
+        <div class="spec wide" data-reveal>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
           <dt>One chat for every viewer</dt>
-          <dd>YouTube comments, Facebook comments and your watch-page chat in one list. Put a viewer's question on screen for the commentator.</dd>
+          <dd>YouTube comments, Facebook comments and your watch-page chat in one list. Put a viewer's question on screen for the commentator to answer.</dd>
         </div>
-        <div class="spec">
+        <div class="spec" data-reveal>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg>
           <dt>Your own watch page</dt>
-          <dd>A shareable page with the live video, leaderboard, chat and highlight clips. Embed it on your website with one line of code.</dd>
+          <dd>Live video, leaderboard, chat and clips on one shareable page. Embed it on your website.</dd>
         </div>
-        <div class="spec">
+        <div class="spec" data-reveal>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6z"/></svg>
+          <dt>Never dead air</dt>
+          <dd>If the camera on air drops, a "back soon" screen covers it automatically.</dd>
+        </div>
+        <div class="spec wide" data-reveal>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           <dt>Pay per live minute</dt>
-          <dd>No subscription and no hardware. Buy credits when you need them; the app warns you before they run out.</dd>
+          <dd>No subscription, no hardware. The app warns you before credits run out.</dd>
         </div>
       </dl>
     </div>
@@ -159,52 +194,41 @@
 
   <section class="section" id="how" aria-labelledby="how-title">
     <div class="wrap">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
+        <p class="kicker">How it works</p>
         <h2 id="how-title">From sign-up to live in five steps.</h2>
         <p>Most organisers run their first test broadcast in under half an hour.</p>
       </div>
-      <ol class="steps">
-        <li><h3>Create your event</h3><p>Sign up, name the event and choose where it streams: your YouTube channel, Facebook Page or Instagram.</p></li>
-        <li><h3>Hand out camera codes</h3><p>Print or share the QR code. Each volunteer scans it, names their camera and taps Go live.</p></li>
+      <ol class="steps" id="steps">
+        <li><h3>Create your event</h3><p>Sign up, name the event and choose where it streams: YouTube, your Facebook Page or Instagram.</p></li>
+        <li><h3>Hand out camera codes</h3><p>Share the QR code. Each volunteer scans it, names their camera and taps Go live.</p></li>
         <li><h3>Direct from one device</h3><p>See every camera on your phone or tablet. Pick shots, add scores, play replays.</p></li>
         <li><h3>Go live everywhere</h3><p>One tap starts the show on every platform you chose, plus your watch page.</p></li>
-        <li><h3>Keep the highlights</h3><p>The full video stays on your channel. Clips are ready to share before the crowd gets home.</p></li>
+        <li><h3>Keep the highlights</h3><p>The full video stays on your channel. Clips are ready before the crowd gets home.</p></li>
       </ol>
     </div>
   </section>
 
-  <section class="section-tight" aria-labelledby="uses-title" style="background:var(--paper-2)">
+  <section class="section" id="pricing" aria-labelledby="pricing-title" style="background:var(--paper-2)">
     <div class="wrap">
-      <div class="section-head">
-        <h2 id="uses-title">Made for events that never had a broadcast budget.</h2>
-      </div>
-      <ul class="uses">
-        <li>Golf tournaments</li><li>Cricket leagues</li><li>School sports days</li><li>Football finals</li>
-        <li>Award nights</li><li>Conferences</li><li>Weddings</li><li>Concerts</li>
-        <li>Religious events</li><li>College fests</li><li>Marathons</li><li>Product launches</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="section" id="pricing" aria-labelledby="pricing-title">
-    <div class="wrap">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
+        <p class="kicker">Pricing</p>
         <h2 id="pricing-title">Pay only for the minutes you are live.</h2>
         <p>Setting up, testing cameras and rehearsing are free. The meter runs from Go live to End stream.</p>
       </div>
       <div class="price-grid">
-        <div class="free-box">
+        <div class="free-box" data-reveal>
           <h3>Free on every event</h3>
           <div class="big"><span data-p="freeCameras">2</span> cameras + <span data-p="freeMinutes">10</span> minutes</div>
           <p>Enough to test your setup or stream a short ceremony at no cost.</p>
           <ul class="rates">
             <li><span>Each extra camera, per event</span><strong><span data-p="cameraPrice">100</span> credits</strong></li>
             <li><span>Each live minute after the free ones</span><strong><span data-p="minutePrice">5</span> credits</strong></li>
-            <li><span>Cloud production, watch page, chat, replays</span><strong>Included</strong></li>
+            <li><span>Cloud mixing, watch page, chat, replays</span><strong>Included</strong></li>
           </ul>
           <p class="example" id="example"></p>
         </div>
-        <div>
+        <div data-reveal>
           <table class="packs">
             <caption>Credit packs</caption>
             <thead><tr><th scope="col">Pack</th><th scope="col">Price</th><th scope="col">Credits</th></tr></thead>
@@ -220,12 +244,13 @@
     </div>
   </section>
 
-  <section class="section" id="faq" aria-labelledby="faq-title" style="padding-top:0">
+  <section class="section" id="faq" aria-labelledby="faq-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="faq-title">Questions organisers ask.</h2></div>
+      <div class="section-head" data-reveal><p class="kicker">Questions</p><h2 id="faq-title">What organisers ask us.</h2></div>
       <div class="faq">
+        <details><summary>What kinds of events can I stream?</summary><p>Anything with people and phones: tournaments and league matches, weddings and family functions, concerts and fests, conferences and launches, religious events, school and college events. If you can film it on a phone, you can broadcast it.</p></details>
         <details><summary>Do I need special cameras or equipment?</summary><p>No. Any recent Android phone or iPhone works as a camera. A tripod or clamp helps keep the shot steady. The director needs one phone or tablet.</p></details>
-        <details><summary>What internet do the cameras need?</summary><p>About 2.5 Mbps upload per camera at 720p on 4G, or 1.5 Mbps on a weak signal. With cloud production nothing else at the venue needs a connection.</p></details>
+        <details><summary>What internet do the cameras need?</summary><p>About 2.5 Mbps upload per camera at 720p on 4G, or 1.5 Mbps on a weak signal. With cloud mixing nothing else at the venue needs a connection.</p></details>
         <details><summary>Do viewers need to install anything?</summary><p>No. They watch on YouTube, Facebook, Instagram or your watch page in any browser.</p></details>
         <details><summary>Is it really live?</summary><p>The director sees the cameras with under a second of delay. Viewers on YouTube and Facebook are usually 10 to 30 seconds behind, which is normal for those platforms.</p></details>
         <details><summary>Does the video go on my own YouTube channel?</summary><p>Yes. You connect your channel once and every broadcast appears there, so the views, subscribers and recording are yours.</p></details>
@@ -237,12 +262,14 @@
 
   <section class="closer" aria-labelledby="closer-title">
     <div class="wrap">
+      <div class="onair-sign" aria-hidden="true">ON AIR</div>
       <h2 id="closer-title">Your next event can be on air this week.</h2>
-      <a class="btn btn-live" href="/signup"><span class="dot" aria-hidden="true"></span>Start free</a>
+      <a class="btn btn-live" href="/signup"><span class="dot" aria-hidden="true"></span>Start broadcasting free</a>
     </div>
   </section>
 </main>
 {{> footer}}
+<script src="/site/scenes.js"></script>
 <script src="/site/site.js" defer></script>
 </body>
 </html>

@@ -192,7 +192,7 @@ export class YouTubeService {
       id: string;
       cdn?: { ingestionInfo?: { streamName?: string; ingestionAddress?: string; rtmpsIngestionAddress?: string } };
     }>(at, 'POST', 'liveStreams', { part: 'snippet,cdn,contentDetails,status' }, {
-      snippet: { title: `${opts.title.slice(0, 80)} (CoGolfer Live)` },
+      snippet: { title: `${opts.title.slice(0, 80)} (${this.config.BRAND_NAME})` },
       cdn: { ingestionType: 'rtmp', resolution: 'variable', frameRate: 'variable' },
       contentDetails: { isReusable: false },
     });

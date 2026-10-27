@@ -32,7 +32,7 @@ const schema = z.object({
 
   // Public website (/, /signup, /login, /account, /terms, /privacy, /delete-account).
   // The legal pages show these; Google and Meta app reviews check them, so fill them in.
-  BRAND_NAME: z.string().default('ICCA Live'),
+  BRAND_NAME: z.string().default('Go Live'),
   SUPPORT_EMAIL: optional,
   LEGAL_ENTITY: optional, // registered company name, e.g. "Example Media Pvt Ltd"
   LEGAL_ADDRESS: optional, // registered office address

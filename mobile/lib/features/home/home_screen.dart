@@ -190,11 +190,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     onSelected: s.selectOrg,
                     itemBuilder: (_) => [for (final o in s.orgs) PopupMenuItem(value: o.id, child: Text('${o.name} · ${o.role.label}'))],
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Flexible(child: Text(org?.name ?? 'CoGolfer Live', overflow: TextOverflow.ellipsis)),
+                      Flexible(child: Text(org?.name ?? 'Go Live', overflow: TextOverflow.ellipsis)),
                       const Icon(Icons.arrow_drop_down),
                     ]),
                   )
-                : Text(org?.name ?? 'CoGolfer Live'),
+                : Text(org?.name ?? 'Go Live'),
             actions: [
               if (org != null && org.canCreateTournaments)
                 IconButton(

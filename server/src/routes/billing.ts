@@ -18,6 +18,8 @@ const phone = z
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
+let brand = 'Go Live';
+
 function page(reply: FastifyReply, title: string, body: string, head = '') {
   reply.type('text/html; charset=utf-8').header('Cache-Control', 'no-store');
   return reply.send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -28,11 +30,12 @@ body{margin:0;background:#0b0e10;color:#f3f5f4;font:16px/1.5 system-ui,-apple-sy
 h1{font-size:22px;margin:6px 0 4px}.sub{color:#9aa5a0;font-size:14px}.amt{font-size:34px;font-weight:800;margin:16px 0 4px}
 button{margin-top:18px;width:100%;padding:14px;border:0;border-radius:10px;background:#2e7d4f;color:#fff;font:inherit;font-weight:700;cursor:pointer}
 .ok{color:#7ddc9e;font-weight:700}.bad{color:#ff6b6b;font-weight:700}
-</style></head><body><div class="card"><div class="brand">CoGolfer Live</div>${body}</div></body></html>`);
+</style></head><body><div class="card"><div class="brand">${esc(brand)}</div>${body}</div></body></html>`);
 }
 
 export function registerBillingRoutes(app: FastifyInstance, ctx: Ctx) {
   const { config, repo, billing, payments, hub } = ctx;
+  brand = config.BRAND_NAME;
   const user = requireAuth(config, 'user');
 
   // ---------------------------------------------------------------- club wallet
@@ -147,7 +150,7 @@ document.getElementById('pay').onclick = function () {
     });
     const balance = fromCc((await billing.orgBilling(p.org_id)).balance_cc);
     if (p.status === 'paid') {
-      return page(reply, 'Payment received', `<h1>Payment received</h1><p class="ok">${fromCc(p.credits_cc).toLocaleString('en-IN')} credits added.</p><p class="sub">Balance: ${balance.toLocaleString('en-IN')} credits. Go back to the CoGolfer Live app.</p>`);
+      return page(reply, 'Payment received', `<h1>Payment received</h1><p class="ok">${fromCc(p.credits_cc).toLocaleString('en-IN')} credits added.</p><p class="sub">Balance: ${balance.toLocaleString('en-IN')} credits. Go back to the ${esc(brand)} app.</p>`);
     }
     if (p.status === 'expired') return page(reply, 'Payment', '<h1>Payment not completed</h1><p class="bad">The payment expired. Start again from the app.</p>');
     return page(

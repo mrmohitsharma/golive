@@ -1,4 +1,4 @@
-# MediaMTX configuration for CoGolfer Live Director.
+# MediaMTX configuration for Go Live.
 # Runtime-tested with MediaMTX v1.14.0; keys checked against v1.21.x (pinned in docker-compose).
 # Secrets are NOT stored here: docker-compose injects them as MTX_* environment overrides.
 
