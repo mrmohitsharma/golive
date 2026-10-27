@@ -38,6 +38,17 @@ services:
       DATA_KEY: ${DATA_KEY:?set DATA_KEY}
       PUBLIC_BASE_URL: https://${PUBLIC_DOMAIN}
       SIGNUP_ENABLED: ${SIGNUP_ENABLED:-true}
+      # Public website and legal pages (/, /signup, /login, /account, /terms, /privacy, /delete-account)
+      BRAND_NAME: ${BRAND_NAME:-ICCA Live}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      LEGAL_ENTITY: ${LEGAL_ENTITY:-}
+      LEGAL_ADDRESS: ${LEGAL_ADDRESS:-}
+      LEGAL_JURISDICTION: ${LEGAL_JURISDICTION:-Gurugram, Haryana}
+      GRIEVANCE_OFFICER: ${GRIEVANCE_OFFICER:-}
+      LEGAL_UPDATED: ${LEGAL_UPDATED:-27 October 2026}
+      PLAY_STORE_URL: ${PLAY_STORE_URL:-}
+      APP_STORE_URL: ${APP_STORE_URL:-}
+      SITE_ENABLED: ${SITE_ENABLED:-true}
       MEDIAMTX_HOOK_SECRET: ${MEDIAMTX_HOOK_SECRET:?set MEDIAMTX_HOOK_SECRET}
       MEDIAMTX_API_URL: http://mediamtx:9997
       MEDIAMTX_RTSP_URL: rtsp://mediamtx:8554

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/api.dart';
 import '../../core/models.dart';
 import '../../core/session.dart';
+import '../../ui/legal.dart';
 import '../../ui/widgets.dart';
 import '../camera/camera_setup_screen.dart';
 import '../commentary/commentator_screen.dart';
@@ -212,10 +213,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 onSelected: (v) {
                   if (v == 'org') _newOrg();
                   if (v == 'refresh') _refresh();
+                  for (final p in LegalPage.values) {
+                    if (v == p.name) openLegal(context, s.serverUrl, p);
+                  }
                 },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'refresh', child: Text('Refresh')),
-                  PopupMenuItem(value: 'org', child: Text('New organisation')),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+                  const PopupMenuItem(value: 'org', child: Text('New organisation')),
+                  const PopupMenuDivider(),
+                  for (final p in LegalPage.values) PopupMenuItem(value: p.name, child: Text(p.label)),
                 ],
               ),
               SignOutButton(session: s),

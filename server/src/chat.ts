@@ -73,6 +73,19 @@ export class ChatService {
   /** Called after any change, so the hub can tell connected staff. */
   onChange: (tournamentId: string) => void = () => {};
 
+  /**
+   * YouTube and Facebook comments copied into the combined chat are deleted after 30 days
+   * (YouTube API Services policy: stored API data is refreshed or deleted within 30 days).
+   * Watch-page messages stay with the event until it is deleted.
+   */
+  async purgePlatformComments(days = 30): Promise<number> {
+    const r = await this.repo.db.query(
+      "DELETE FROM chat_messages WHERE source IN ('youtube', 'facebook') AND created_at < now() - make_interval(days => $1)",
+      [days],
+    );
+    return r.rowCount ?? 0;
+  }
+
   constructor(
     private readonly config: Config,
     private readonly repo: Repo,

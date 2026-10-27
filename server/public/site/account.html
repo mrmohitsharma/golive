@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your account | {{BRAND}}</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f1a28">
+<link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/site/site.css">
+</head>
+<body>
+{{> header}}
+<main id="main" class="account">
+  <div class="wrap" id="account" data-play="{{PLAY_STORE_URL}}" data-ios="{{APP_STORE_URL}}" data-email="{{EMAIL}}">
+    <div class="account-head">
+      <div>
+        <h1 id="hello" style="font-size:clamp(40px,5vw,60px)">Your account</h1>
+        <p class="lede" id="org-line" style="margin-top:8px">Loading…</p>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <label class="sr-only" for="org-pick">Organisation</label>
+        <select id="org-pick" hidden style="min-height:44px;padding:0 10px;font:inherit;border-radius:6px;border:1.5px solid #b9c3cf"></select>
+        <button class="btn btn-ghost" type="button" id="sign-out">Log out</button>
+      </div>
+    </div>
+    <div class="form-error" id="welcome" role="status" style="background:#e7f6ec;color:#11502b;border-color:#22a45a"></div>
+
+    <div class="account-grid">
+      <section class="panel" aria-labelledby="start-title">
+        <h2 id="start-title">Get your first event on air</h2>
+        <ol class="next-steps">
+          <li><strong>Install the app</strong> on the phone or tablet you will direct from, and log in with this account.
+            <div class="store-links" id="stores"></div></li>
+          <li><strong>Connect your channels.</strong> In the app, tap the people icon on the home screen, then Connect YouTube or Connect Facebook. For Instagram you paste a stream key per event.</li>
+          <li><strong>Create an event</strong> and choose Cloud production, so no laptop is needed.</li>
+          <li><strong>Share the camera QR code</strong> with the phones at the venue. Each one taps Go live.</li>
+          <li><strong>Go live</strong> from the control room. Your watch page link is on the event screen, ready to share.</li>
+        </ol>
+      </section>
+
+      <section class="panel" aria-labelledby="credits-title">
+        <h2 id="credits-title">Credits</h2>
+        <div id="credits-body"><p class="notice">Loading your balance…</p></div>
+      </section>
+    </div>
+    <p style="margin-top:28px;color:var(--muted);font-size:15px">Want to close your account? See <a href="/delete-account">how to delete your data</a>.</p>
+  </div>
+</main>
+{{> footer}}
+<script src="/site/account.js" defer></script>
+</body>
+</html>

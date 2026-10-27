@@ -30,6 +30,19 @@ const schema = z.object({
   // Self-serve sign-up. Turn off to run a closed instance.
   SIGNUP_ENABLED: bool('true'),
 
+  // Public website (/, /signup, /login, /account, /terms, /privacy, /delete-account).
+  // The legal pages show these; Google and Meta app reviews check them, so fill them in.
+  BRAND_NAME: z.string().default('ICCA Live'),
+  SUPPORT_EMAIL: optional,
+  LEGAL_ENTITY: optional, // registered company name, e.g. "Example Media Pvt Ltd"
+  LEGAL_ADDRESS: optional, // registered office address
+  LEGAL_JURISDICTION: z.string().default('Gurugram, Haryana'),
+  GRIEVANCE_OFFICER: optional, // name of the Grievance Officer (IT Rules 2021 / DPDP Act 2023)
+  LEGAL_UPDATED: z.string().default('27 October 2026'),
+  PLAY_STORE_URL: optional,
+  APP_STORE_URL: optional,
+  SITE_ENABLED: bool('true'),
+
   // MediaMTX
   MEDIAMTX_HOOK_SECRET: z.string().min(16),
   MEDIAMTX_API_URL: z.string().default('http://mediamtx:9997'),
@@ -70,6 +83,7 @@ const schema = z.object({
   GOOGLE_CLIENT_SECRET: optional,
   GOOGLE_AUTH_URL: z.string().default('https://accounts.google.com/o/oauth2/v2/auth'),
   GOOGLE_TOKEN_URL: z.string().default('https://oauth2.googleapis.com/token'),
+  GOOGLE_REVOKE_URL: z.string().default('https://oauth2.googleapis.com/revoke'),
   YOUTUBE_API_BASE: z.string().default('https://www.googleapis.com/youtube/v3'),
   YOUTUBE_POLL_MS: z.coerce.number().default(15000),
 

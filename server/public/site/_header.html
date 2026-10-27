@@ -1,0 +1,27 @@
+<a class="sr-only" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="{{BRAND}} home">
+      <svg class="brand-mark" viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M19 11l6-4v12l-6-4z" fill="currentColor"/><circle cx="6.5" cy="10.5" r="2.6" fill="#e3342b"/></svg>
+      {{BRAND}}
+    </a>
+    <nav class="site-nav" aria-label="Main">
+      <a class="hide-sm" href="/#how">How it works</a>
+      <a class="hide-sm" href="/#pricing">Pricing</a>
+      <a class="hide-sm" href="/#faq">Questions</a>
+      <a href="/login" data-auth="out">Log in</a>
+      <a href="/account" data-auth="in" hidden>Your account</a>
+      <a class="btn btn-live" href="/signup" data-auth="out"><span class="dot" aria-hidden="true"></span>Start free</a>
+    </nav>
+  </div>
+</header>
+<script>
+  // Swap Log in / Start free for the account link when signed in on this browser.
+  (function () {
+    var signedIn = false;
+    try { signedIn = !!localStorage.getItem('baas.token'); } catch (e) {}
+    if (!signedIn) return;
+    document.querySelectorAll('[data-auth="out"]').forEach(function (n) { n.hidden = true; });
+    document.querySelectorAll('[data-auth="in"]').forEach(function (n) { n.hidden = false; });
+  })();
+</script>

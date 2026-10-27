@@ -32,6 +32,7 @@ import { registerScoringRoutes } from './routes/scoring.js';
 import { registerGraphicsRoutes } from './routes/graphics.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerPublicRoutes } from './routes/public.js';
+import { registerSiteRoutes } from './routes/site.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -131,7 +132,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
 
   /** Public server capabilities, so the app can hide features this server does not offer. */
   fastify.get('/api/info', async () => ({
-    name: 'CoGolfer Live',
+    name: config.BRAND_NAME,
     signup: config.SIGNUP_ENABLED,
     youtube: youtube.enabled,
     facebook: facebook.enabled,
@@ -152,6 +153,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerBillingRoutes(fastify, ctx);
   registerAdminRoutes(fastify, ctx);
   registerChatRoutes(fastify, ctx);
+  registerSiteRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook
   fastify.post('/internal/mediamtx/auth', async (req, reply) => {
@@ -179,11 +181,16 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     hub.attach(socket, principal);
   });
 
+  let purgeTimer: NodeJS.Timeout | undefined;
   if (startBackground) {
     poller.start();
     cloud.start();
     hub.startYoutubePolling();
     billing.start();
+    const purge = () => void chat.purgePlatformComments().catch((err) => log.warn({ err }, 'chat purge failed'));
+    purge();
+    purgeTimer = setInterval(purge, 6 * 3600 * 1000);
+    purgeTimer.unref();
   }
   // Long-lived responses (graphics SSE, WebSockets) would otherwise keep close() waiting.
   fastify.addHook('preClose', async () => {
@@ -191,6 +198,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     relay.stopAll();
     chatReaders.stopAll();
     billing.close();
+    if (purgeTimer) clearInterval(purgeTimer);
     hub.close();
   });
   fastify.addHook('onClose', async () => {

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delete your account and data | {{BRAND}}</title>
+<meta name="description" content="How to delete your {{BRAND}} account and data, including data received from YouTube, Facebook and Instagram.">
+<meta name="theme-color" content="#0f1a28">
+<link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/site/site.css">
+</head>
+<body>
+{{> header}}
+<main id="main" class="legal">
+  <div class="wrap" style="display:block">
+    <article>
+      <h1>Delete your account and data</h1>
+      <p class="updated">For the {{BRAND}} app and website, operated by {{ENTITY}}. Last updated {{UPDATED}}.</p>
+
+      <h2 id="request">Ask us to delete your account</h2>
+      <ol>
+        <li>Email <a href="mailto:{{EMAIL}}?subject=Delete%20my%20{{BRAND}}%20account">{{EMAIL}}</a> from the email address on your account, with the subject "Delete my account".</li>
+        <li>Say whether you want to delete only your own login, or the whole organisation you own (its events, clips and credits).</li>
+        <li>We confirm the request by replying to that address, then delete the data within 30 days and email you when it is done.</li>
+      </ol>
+      <p>Before you ask, use or move any credits you want to keep: unused credits are lost when an organisation is deleted.</p>
+
+      <h2 id="what">What we delete and what we keep</h2>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Deleted</th><th>Kept, and why</th></tr></thead>
+        <tbody><tr>
+          <td>
+            <ul>
+              <li>Your name, email and password</li>
+              <li>Organisation details, members and join codes</li>
+              <li>Events, player lists, scores and graphics settings</li>
+              <li>Recordings, highlight clips and watch-page chat</li>
+              <li>YouTube and Facebook tokens, Instagram stream keys, and comments copied from those platforms</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Purchase and invoice records, for as long as Indian tax law requires (generally 8 years), then deleted</li>
+              <li>Videos already published on YouTube, Facebook or Instagram: they are on your accounts there, and you delete them on those platforms</li>
+            </ul>
+          </td>
+        </tr></tbody>
+      </table></div>
+
+      <h2 id="google">Remove access to your YouTube channel</h2>
+      <p>In the app, open Organisation and tap Disconnect next to YouTube. We delete the stored tokens and ask Google to revoke our access. You can also remove {{BRAND}} at any time from your Google Account at <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noopener">security.google.com/settings/security/permissions</a>.</p>
+
+      <h2 id="facebook">Facebook and Instagram data deletion</h2>
+      <p>In the app, open Organisation and tap Disconnect next to Facebook; we delete the stored Page tokens straight away. You can also remove {{BRAND}} from Facebook: go to Settings and privacy, then Settings, then Business Integrations, select {{BRAND}} and tap Remove. To ask us to delete everything we received from Facebook or Instagram, email <a href="mailto:{{EMAIL}}?subject=Facebook%20data%20deletion">{{EMAIL}}</a> with the subject "Facebook data deletion" and the name of your Page; we delete it within 30 days and confirm by email.</p>
+
+      <h2 id="volunteers">Volunteers and viewers</h2>
+      <p>Camera operators, scorers and commentators who joined with a code have no account. To remove your name from an event, ask the organiser, or email us with the event name and the name you used. Viewers can ask the organiser or us to remove their chat messages.</p>
+
+      <p style="margin-top:40px">More detail is in our <a href="/privacy">Privacy policy</a>.</p>
+    </article>
+  </div>
+</main>
+{{> footer}}
+</body>
+</html>

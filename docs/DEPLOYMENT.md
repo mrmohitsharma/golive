@@ -169,6 +169,45 @@ How a payment is trusted: the server credits a club **only after asking Cashfree
 
 Without Cashfree keys the app shows *Contact CoGolfers to add credits*, and staff add credits in /admin (e.g. after a bank transfer). To run with no limits at all: `BILLING_ENABLED=false`.
 
+## 3g. Public website, sign-up and legal pages
+
+The server also serves the public website at the domain root:
+
+| Page | What it is |
+|---|---|
+| `/` | Landing page: animated control room, cost calculator, live prices (from `/api/public/pricing`) |
+| `/signup`, `/login` | Create an account (same as **New club** in the app) and log in |
+| `/account` | Credit balance, buy a credit pack through Cashfree, next steps |
+| `/terms`, `/privacy` | Terms of service and privacy policy |
+| `/delete-account` | Account and data deletion instructions (Google Play and Meta ask for this URL) |
+
+Fill in the legal details in `.env`, then `docker compose up -d`:
+
+```
+BRAND_NAME=ICCA Live
+SUPPORT_EMAIL=support@icca.co.in
+LEGAL_ENTITY=<registered company name>
+LEGAL_ADDRESS=<registered office address>
+GRIEVANCE_OFFICER=<name of the person who answers complaints>
+LEGAL_UPDATED=27 October 2026
+PLAY_STORE_URL=<Play Store link, once published>
+```
+
+Anything left empty shows as a yellow **[set …]** marker on the legal pages, so nothing is invented. Have a lawyer read the terms and privacy policy before launch.
+
+**Use these URLs in the reviews:**
+- Google Cloud Console > OAuth consent screen: Application home page `https://<domain>/`, privacy policy `https://<domain>/privacy`, terms of service `https://<domain>/terms`. Authorised domain: your domain. Verify the domain in Google Search Console with the same Google account.
+- Meta app settings > Basic: Privacy policy URL `https://<domain>/privacy`, Terms `https://<domain>/terms`, User data deletion: "Data deletion instructions URL" `https://<domain>/delete-account`.
+- Google Play Console > App content: Privacy policy `https://<domain>/privacy`; Data safety > account deletion URL `https://<domain>/delete-account`.
+
+What the policy promises, and the code that keeps the promise:
+- Disconnecting YouTube deletes the stored token **and revokes it at Google** (`youtube.disconnect`).
+- YouTube and Facebook comments copied into the combined chat are **deleted after 30 days** (`chat.purgePlatformComments`, runs every 6 hours).
+- Replay recordings are deleted after `RECORDING_RETENTION` (72h). If you change it, update the privacy policy too.
+- Camera streams: set `SRT_PASSPHRASE` so camera video is encrypted in transit, as the policy says.
+
+To run a closed instance without the website, set `SITE_ENABLED=false`.
+
 ## 4. Cloud mode (OBS on the server)
 
 ```bash

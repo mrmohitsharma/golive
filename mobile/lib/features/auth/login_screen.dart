@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/api.dart';
 import '../../core/join_link.dart';
 import '../../core/session.dart';
+import '../../ui/legal.dart';
 import '../../ui/widgets.dart';
 import 'qr_scan_screen.dart';
 
@@ -193,6 +194,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         onSubmitted: (_) => _submit(),
                       ),
                     ],
+                    if (_mode == _Mode.signUp) ...[
+                      const SizedBox(height: 14),
+                      LegalConsent(serverUrl: () => _server.text),
+                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       InfoBanner(icon: Icons.error_outline, text: _error!, error: true),
@@ -209,6 +214,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               _Mode.signUp => 'Create account',
                             }),
                     ),
+                    const SizedBox(height: 12),
+                    LegalFooter(serverUrl: () => _server.text),
                   ],
                 ),
               ),

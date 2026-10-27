@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create your account | {{BRAND}}</title>
+<meta name="description" content="Create a free {{BRAND}} account. 2 cameras and 10 live minutes free on every event.">
+<meta name="theme-color" content="#0f1a28">
+<link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/site/site.css">
+</head>
+<body>
+{{> header}}
+<main id="main" class="auth">
+  <div class="auth-form">
+    <h1>Create your account</h1>
+    <p class="lede">Free to start. Every event includes 2 cameras and 10 live minutes.</p>
+    <form id="auth-form" data-mode="signup" data-signup="{{SIGNUP}}" novalidate>
+      <div class="form-error" id="form-error" role="alert"></div>
+      <div class="field">
+        <label for="name">Your name</label>
+        <input id="name" name="name" type="text" autocomplete="name" required maxlength="80">
+      </div>
+      <div class="field">
+        <label for="orgName">Organisation name</label>
+        <input id="orgName" name="orgName" type="text" autocomplete="organization" required minlength="2" maxlength="100">
+        <div class="hint">Your club, school, company or event brand. Viewers see it on the watch page.</div>
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required maxlength="200">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="pw">
+          <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="200" aria-describedby="pw-hint">
+          <button type="button" data-toggle-pw aria-controls="password">Show</button>
+        </div>
+        <div class="hint" id="pw-hint">At least 8 characters.</div>
+      </div>
+      <label class="check">
+        <input id="agree" name="agree" type="checkbox" required>
+        <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of service</a> and have read the <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>. I confirm I am 18 or older.</span>
+      </label>
+      <button class="btn btn-live" type="submit" id="submit"><span class="dot" aria-hidden="true"></span><span>Create account</span></button>
+    </form>
+    <p class="switch-link">Already have an account? <a href="/login">Log in</a></p>
+    <p class="switch-link">Camera operator, scorer or commentator? You don't need an account. Open the app and enter the code the organiser gave you.</p>
+  </div>
+  <aside class="auth-side" id="auth-side" aria-hidden="true">
+    <div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="tally-lamp"><i></i><span id="lamp-text">Standing by</span></div>
+    <blockquote>
+      <p>Four phones, one director, three platforms. That is the whole crew.</p>
+      <footer>What you need for your first broadcast</footer>
+    </blockquote>
+  </aside>
+</main>
+{{> footer}}
+<script src="/site/auth.js" defer></script>
+</body>
+</html>

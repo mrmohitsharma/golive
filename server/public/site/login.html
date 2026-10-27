@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in | {{BRAND}}</title>
+<meta name="theme-color" content="#0f1a28">
+<link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/site/site.css">
+</head>
+<body>
+{{> header}}
+<main id="main" class="auth">
+  <div class="auth-form">
+    <h1>Log in</h1>
+    <p class="lede">Use the email and password you use in the app.</p>
+    <form id="auth-form" data-mode="login" novalidate>
+      <div class="form-error" id="form-error" role="alert"></div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required maxlength="200">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="pw">
+          <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="200">
+          <button type="button" data-toggle-pw aria-controls="password">Show</button>
+        </div>
+      </div>
+      <button class="btn btn-live" type="submit" id="submit" style="margin-top:8px"><span class="dot" aria-hidden="true"></span><span>Log in</span></button>
+    </form>
+    <p class="switch-link">New here? <a href="/signup">Create a free account</a></p>
+    <p class="switch-link">Forgot your password? Email <a href="mailto:{{EMAIL}}?subject=Password%20reset">{{EMAIL}}</a> from your account email and we will reset it.</p>
+  </div>
+  <aside class="auth-side" id="auth-side" aria-hidden="true">
+    <div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="tally-lamp"><i></i><span id="lamp-text">Standing by</span></div>
+    <blockquote>
+      <p>Welcome back to the control room.</p>
+      <footer>Your events, credits and channels are where you left them.</footer>
+    </blockquote>
+  </aside>
+</main>
+{{> footer}}
+<script src="/site/auth.js" defer></script>
+</body>
+</html>

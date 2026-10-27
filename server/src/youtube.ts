@@ -106,9 +106,22 @@ export class YouTubeService {
     return { orgId, channelTitle: channel.title };
   }
 
+  /** Forgets the channel and revokes our access at Google (best effort), as Google's user-data policy asks. */
   async disconnect(orgId: string): Promise<void> {
     this.accessTokens.delete(orgId);
+    const row = await this.repo.orgYoutube(orgId).catch(() => null);
     await this.repo.deleteOrgYoutube(orgId);
+    if (!row) return;
+    try {
+      const token = this.sealer.open(row.refresh_token_enc);
+      await this.fetchImpl(this.config.GOOGLE_REVOKE_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token }).toString(),
+      });
+    } catch {
+      /* already revoked or Google unreachable: the token is deleted on our side either way */
+    }
   }
 
   private async accessToken(orgId: string): Promise<string> {
