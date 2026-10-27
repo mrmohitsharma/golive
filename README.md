@@ -1,6 +1,6 @@
-# CoGolfer Live
+# Go Live
 
-Live multi-camera golf tournament broadcasts with phones, run by volunteers, streamed to YouTube, Facebook and Instagram at once, and shown on the CoGolfers website.
+Broadcast as a service: live multi-camera broadcasts of any event (sports, weddings, concerts, conferences) with phones, run by volunteers, mixed in the cloud, and streamed to YouTube, Facebook, Instagram and a public watch page at once.
 
 - **Cameras:** any Android or iPhone becomes a course camera (SRT, 720p/1080p, hole and position tagged).
 - **Control room:** multiview, live preview/programme, TAKE / CUT, fallback, **instant replay** (incl. slow-mo), **graphics** (score bug, leaderboard, hole card, player lower third), **audio mixer** (commentary, ducking, per-camera levels, meters), **highlight clips** in 16:9 and 9:16.
