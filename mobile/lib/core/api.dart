@@ -123,6 +123,9 @@ class ApiClient {
     return (_account(r), r['newUser'] == true);
   }
 
+  /// Web-to-app handoff: the one-time code from the website's QR.
+  Future<AccountSession> redeemHandoff(String code) async => _account(await post('/api/auth/handoff/redeem', {'code': code}));
+
   /// Volunteer join: no account, a token scoped to one tournament and role.
   Future<(String, GuestPass)> join({required String code, required String deviceId, required String name}) async {
     final r = await post('/api/join', {'code': code, 'deviceId': deviceId, 'name': name});

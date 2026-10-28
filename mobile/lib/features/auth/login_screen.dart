@@ -43,14 +43,34 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _scan() async {
-    final link = await Navigator.of(context).push<JoinLink>(MaterialPageRoute(builder: (_) => const QrScanScreen()));
+  Future<void> _scan({bool login = false}) async {
+    final link = await Navigator.of(context).push<Object>(MaterialPageRoute(builder: (_) => QrScanScreen(acceptLogin: login)));
     if (link == null || !mounted) return;
+    if (link is LoginLink) return _redeem(link);
+    if (link is! JoinLink) return;
     setState(() {
+      _mode = _Mode.join;
       _code.text = link.code;
       if (link.server != null) _server.text = link.server!;
       _error = null;
     });
+  }
+
+  /// QR from the website's Account page: signs this phone in to the same account.
+  Future<void> _redeem(LoginLink link) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.session.redeemHandoff(link.server, link.code);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on Exception catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _google() async {
@@ -195,6 +215,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('or with email', style: theme.textTheme.bodySmall)),
                         const Expanded(child: Divider()),
                       ]),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_mode == _Mode.signIn) ...[
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : () => _scan(login: true),
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('Scan QR from website'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 52)),
+                      ),
+                      const SizedBox(height: 4),
+                      Text('Signed up on the website? Open your Account page there and scan its QR code.', style: theme.textTheme.bodySmall),
                       const SizedBox(height: 12),
                     ],
                     if (_showServer) ...[

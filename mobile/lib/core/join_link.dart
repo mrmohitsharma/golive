@@ -29,3 +29,16 @@ JoinLink? parseJoinLink(String raw) {
   }
   return null;
 }
+
+/// A "log in on the app" QR from the website's Account page: `https://<server>/app/login/<code>`.
+class LoginLink {
+  const LoginLink({required this.server, required this.code});
+  final String server;
+  final String code;
+}
+
+LoginLink? parseLoginLink(String raw) {
+  final m = RegExp(r'^(https?)://([^/\s]+(?:/[^\s]*?)?)/app/login/([A-Za-z0-9_-]{20,100})/?$').firstMatch(raw.trim());
+  if (m == null) return null;
+  return LoginLink(server: '${m.group(1)}://${m.group(2)}', code: m.group(3)!);
+}

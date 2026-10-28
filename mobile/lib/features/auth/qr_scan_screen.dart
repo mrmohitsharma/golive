@@ -3,9 +3,11 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../core/join_link.dart';
 
-/// Scans the organiser's QR poster and returns the join link (server + code).
+/// Scans a QR code and returns a [JoinLink] (the organiser's poster) or, when
+/// [acceptLogin] is set, a [LoginLink] (the website's "log in on the app" code).
 class QrScanScreen extends StatefulWidget {
-  const QrScanScreen({super.key});
+  const QrScanScreen({super.key, this.acceptLogin = false});
+  final bool acceptLogin;
 
   @override
   State<QrScanScreen> createState() => _QrScanScreenState();
@@ -27,21 +29,21 @@ class _QrScanScreenState extends State<QrScanScreen> {
     for (final b in capture.barcodes) {
       final raw = b.rawValue;
       if (raw == null) continue;
-      final link = parseJoinLink(raw);
+      final Object? link = (widget.acceptLogin ? parseLoginLink(raw) : null) ?? parseJoinLink(raw);
       if (link != null) {
         _done = true;
         Navigator.of(context).pop(link);
         return;
       }
     }
-    setState(() => _hint = 'That QR code is not a Go Live join code.');
+    setState(() => _hint = widget.acceptLogin ? 'That QR code is not from the Go Live website or a join poster.' : 'That QR code is not a Go Live join code.');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text('Scan the QR poster'), backgroundColor: Colors.black, foregroundColor: Colors.white),
+      appBar: AppBar(title: Text(widget.acceptLogin ? 'Scan the QR code' : 'Scan the QR poster'), backgroundColor: Colors.black, foregroundColor: Colors.white),
       body: Stack(
         fit: StackFit.expand,
         children: [

@@ -142,6 +142,19 @@ class Session extends ChangeNotifier {
     return created;
   }
 
+  /// Signed up on the website: scan its QR to sign in here without typing.
+  Future<void> redeemHandoff(String server, String code) async {
+    final url = normaliseServer(server);
+    final client = ApiClient(baseUrl: url);
+    try {
+      _adoptAccount(url, await client.redeemHandoff(code));
+    } finally {
+      client.close();
+    }
+    await _saveAccount();
+    notifyListeners();
+  }
+
   /// Volunteer: join one tournament with the code from the QR poster.
   Future<void> joinWithCode(String server, {required String code, required String name, required String deviceId}) async {
     final url = normaliseServer(server);

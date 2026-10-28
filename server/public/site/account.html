@@ -34,7 +34,14 @@
         <h2 id="start-title">Get your first event on air</h2>
         <ol class="next-steps">
           <li><strong>Install the app</strong> on the phone or tablet you will direct from, and log in with this account.
-            <div class="store-links" id="stores"></div></li>
+            <div class="store-links" id="stores"></div>
+            <div class="handoff">
+              <button class="btn btn-ghost" type="button" id="handoff-show">Log in on the app with a QR code</button>
+              <div id="handoff-box" hidden>
+                <div class="handoff-qr" id="handoff-qr" role="img" aria-label="QR code to log in on the app"></div>
+                <p class="hint">In the app: <b>Sign in</b> &rarr; <b>Scan QR from website</b>. Works once, for <span id="handoff-left">5:00</span>.</p>
+              </div>
+            </div></li>
           <li><strong>Connect your channels.</strong> In the app, tap the people icon on the home screen, then Connect YouTube or Connect Facebook. For Instagram you paste a stream key per event.</li>
           <li><strong>Create an event</strong> and choose Cloud production, so no laptop is needed.</li>
           <li><strong>Share the camera QR code</strong> with the phones at the venue. Each one taps Go live.</li>
