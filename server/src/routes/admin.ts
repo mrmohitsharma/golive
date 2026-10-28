@@ -1,3 +1,4 @@
+import { PLATFORM } from '../youtube.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -228,6 +229,27 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
     const p = await payments.byId(idParam(req));
     if (!p) throw new HttpError(404, 'payment_not_found', 'Payment not found.');
     return { payment: paymentDto(await payments.confirm(p)) };
+  });
+
+  // ---------------------------------------------------------------- the Go Live YouTube channel
+  /** The platform's own channel: organisers without YouTube go live on it (onboarding P1-6). */
+  app.get('/api/admin/golive-channel', { preHandler: admin }, async () => ({
+    youtubeConfigured: ctx.youtube.enabled,
+    channel: ctx.youtube.enabled ? await ctx.youtube.platformChannel() : null,
+  }));
+
+  app.post('/api/admin/golive-channel/connect', { preHandler: admin }, async (req) => ({ url: ctx.youtube.authUrl(PLATFORM, userOf(req).id) }));
+
+  app.patch('/api/admin/golive-channel', { preHandler: admin }, async (req) => {
+    const body = z.object({ enabled: z.boolean() }).parse(req.body);
+    await ctx.youtube.setPlatformEnabled(body.enabled);
+    return { channel: await ctx.youtube.platformChannel() };
+  });
+
+  app.delete('/api/admin/golive-channel', { preHandler: admin }, async (_req, reply) => {
+    await ctx.youtube.disconnectPlatform();
+    reply.status(204);
+    return null;
   });
 
   // ---------------------------------------------------------------- administrators

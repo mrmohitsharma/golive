@@ -1,3 +1,4 @@
+import { PLATFORM } from '../youtube.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../context.js';
@@ -135,6 +136,9 @@ export function registerOrgRoutes(app: FastifyInstance, ctx: Ctx) {
     try {
       const r = await youtube.completeConnect(q.code, q.state);
       const title = r.channelTitle.replace(/[<>&]/g, '');
+      if (r.orgId === PLATFORM) {
+        return page('Go Live channel connected', `Channel “${title}” is now the Go Live channel. New organisers can go live on it without connecting their own. Go back to /admin.`);
+      }
       if (r.extra) {
         return page('YouTube channel added', `Channel “${title}” is connected as an extra channel. In the ${config.BRAND_NAME} app, add it to an event under Streaming platforms, then Add destination.`);
       }

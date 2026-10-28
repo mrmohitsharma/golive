@@ -48,6 +48,7 @@ export interface TournamentRow {
   yt_stream_key_enc: string | null;
   yt_ingest_url: string | null;
   yt_privacy: string | null;
+  yt_source: 'org' | 'golive' | 'key';
   output_key: string | null;
   outputs: TournamentOutputs;
   public_watch: boolean;

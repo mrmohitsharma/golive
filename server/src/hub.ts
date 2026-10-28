@@ -101,6 +101,8 @@ export function mergeAudio(stored: unknown): AudioState {
 
 function emptyYoutube(): YoutubeState {
   return {
+    source: 'org',
+    goliveAvailable: false,
     connected: false,
     channelTitle: null,
     broadcastId: null,
@@ -213,11 +215,16 @@ export class Hub {
 
   async youtubeState(t: TournamentRow): Promise<YoutubeState> {
     const l = this.liveFor(t.id);
-    const org = this.services?.youtube.enabled ? await this.repo.orgYoutube(t.org_id) : null;
+    const yt = this.services?.youtube;
+    const org = yt?.enabled ? await this.repo.orgYoutube(t.org_id) : null;
+    const platform = yt?.enabled ? await yt.platformChannel() : null;
+    const source = t.yt_source ?? 'org';
     return {
       ...l.youtube,
-      connected: Boolean(org),
-      channelTitle: org?.channel_title ?? null,
+      source,
+      goliveAvailable: Boolean(platform?.enabled),
+      connected: source === 'golive' ? Boolean(platform?.enabled) : source === 'key' ? Boolean(t.yt_stream_key_enc) : Boolean(org),
+      channelTitle: source === 'golive' ? (platform?.channelTitle ?? null) : source === 'key' ? null : (org?.channel_title ?? null),
       broadcastId: t.yt_broadcast_id,
       watchUrl: watchUrl(t.yt_broadcast_id),
       privacy: t.yt_privacy,

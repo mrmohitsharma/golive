@@ -587,8 +587,28 @@ class ProductionState {
   }
 }
 
+/// Where an event's main YouTube stream goes.
+enum YoutubeSource {
+  /// The organisation's own connected channel.
+  org,
+
+  /// The platform's Go Live channel: nothing to connect (unlisted, "<event> by <organisation>").
+  golive,
+
+  /// A stream key pasted from YouTube Studio.
+  key;
+
+  static YoutubeSource parse(Object? v) => switch (v) {
+        'golive' => YoutubeSource.golive,
+        'key' => YoutubeSource.key,
+        _ => YoutubeSource.org,
+      };
+}
+
 class YoutubeState {
   const YoutubeState({
+    this.source = YoutubeSource.org,
+    this.goliveAvailable = false,
     this.connected = false,
     this.channelTitle,
     this.broadcastId,
@@ -601,6 +621,8 @@ class YoutubeState {
     this.error,
   });
 
+  final YoutubeSource source;
+  final bool goliveAvailable;
   final bool connected;
   final String? channelTitle;
   final String? broadcastId;
@@ -629,6 +651,8 @@ class YoutubeState {
   factory YoutubeState.fromJson(Map<String, dynamic>? j) => j == null
       ? const YoutubeState()
       : YoutubeState(
+          source: YoutubeSource.parse(j['source']),
+          goliveAvailable: (j['goliveAvailable'] as bool?) ?? false,
           connected: (j['connected'] as bool?) ?? false,
           channelTitle: j['channelTitle'] as String?,
           broadcastId: j['broadcastId'] as String?,

@@ -297,6 +297,19 @@ class ApiClient {
 
   Future<void> forgetBroadcast(String id) => delete('/api/tournaments/$id/youtube/broadcast');
 
+  /// A stream key pasted from YouTube Studio (and optionally the video link, for the watch page).
+  Future<YoutubeState> setYoutubeKey(String id, {String? streamKey, String? videoUrl}) async => YoutubeState.fromJson((await put('/api/tournaments/$id/youtube/key', {
+        if (streamKey != null) 'streamKey': streamKey,
+        if (videoUrl != null) 'videoUrl': videoUrl.isEmpty ? null : videoUrl,
+      }))['youtube'] as Map<String, dynamic>?);
+
+  Future<YoutubeState> clearYoutubeKey(String id) async =>
+      YoutubeState.fromJson((await _send('DELETE', '/api/tournaments/$id/youtube/key'))['youtube'] as Map<String, dynamic>?);
+
+  /// The organisation's channel or the Go Live channel (a pasted key: [setYoutubeKey]).
+  Future<YoutubeState> setYoutubeSource(String id, YoutubeSource source) async =>
+      YoutubeState.fromJson((await put('/api/tournaments/$id/youtube/source', {'source': source.name}))['youtube'] as Map<String, dynamic>?);
+
   Future<OutputsState> outputs(String id) async => OutputsState.fromJson((await get('/api/tournaments/$id/outputs'))['outputs'] as Map<String, dynamic>?);
 
   /// Turn platforms on/off; Instagram: paste the stream URL and key from instagram.com (they change every stream).

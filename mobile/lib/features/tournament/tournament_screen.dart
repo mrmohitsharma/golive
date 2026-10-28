@@ -287,7 +287,9 @@ class _TournamentScreenState extends State<TournamentScreen> {
 
   // ---------------------------------------------------------------- YouTube
   Future<void> _createBroadcast() async {
-    final title = TextEditingController(text: _t.title);
+    final onGolive = _youtube.source == YoutubeSource.golive;
+    final org = _t.orgName ?? widget.session.selectedOrg?.name;
+    final title = TextEditingController(text: onGolive && org != null ? '${_t.name} by $org' : _t.title);
     var privacy = 'unlisted';
     final ok = await showDialog<bool>(
       context: context,
@@ -938,20 +940,110 @@ class _TournamentScreenState extends State<TournamentScreen> {
         _ => Broadcast.preview,
       };
 
+  /// Where the main YouTube stream goes: Go Live channel (instant), my channel, or a pasted key.
+  Future<void> _setSource(YoutubeSource src) async {
+    if (src == _youtube.source) return;
+    if (src == YoutubeSource.key) return _pasteYoutubeKey();
+    await _run(() async {
+      if (_youtube.source == YoutubeSource.key) await _api.clearYoutubeKey(_t.id);
+      final y = await _api.setYoutubeSource(_t.id, src);
+      if (mounted) setState(() => _youtube = y);
+    });
+  }
+
+  Future<void> _pasteYoutubeKey({bool linkOnly = false}) async {
+    final key = TextEditingController();
+    final link = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(linkOnly ? 'YouTube video link' : 'Paste a YouTube stream key'),
+        content: SizedBox(
+          width: 420,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (!linkOnly) ...[
+              Text('In YouTube Studio: Create > Go live > Stream. Copy the Stream key.', style: Theme.of(c).textTheme.bodySmall),
+              const SizedBox(height: 8),
+              TextField(controller: key, autofocus: true, autocorrect: false, decoration: const InputDecoration(labelText: 'Stream key', hintText: 'abcd-efgh-ijkl-mnop-qrst')),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: link,
+              autofocus: linkOnly,
+              autocorrect: false,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(labelText: 'Video link (optional)', hintText: 'https://youtube.com/live/…', helperText: 'With the link, your watch page plays the video too.'),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    final k = key.text.trim(), l = link.text.trim();
+    key.dispose();
+    link.dispose();
+    if (ok != true || !mounted || (!linkOnly && k.isEmpty)) return;
+    await _run(() async {
+      final y = await _api.setYoutubeKey(_t.id, streamKey: linkOnly ? null : k, videoUrl: l.isEmpty && !linkOnly ? null : l);
+      if (mounted) setState(() => _youtube = y);
+    });
+  }
+
+  Widget _sourcePicker(BuildContext context) {
+    final y = _youtube;
+    return SegmentedButton<YoutubeSource>(
+      segments: [
+        ButtonSegment(value: YoutubeSource.golive, label: const Text('Go Live channel'), icon: const Icon(Icons.bolt), enabled: y.goliveAvailable || y.source == YoutubeSource.golive),
+        const ButtonSegment(value: YoutubeSource.org, label: Text('My YouTube'), icon: Icon(Icons.smart_display)),
+        const ButtonSegment(value: YoutubeSource.key, label: Text('Stream key'), icon: Icon(Icons.key)),
+      ],
+      selected: {y.source},
+      showSelectedIcon: false,
+      onSelectionChanged: _busy || _engine.streaming.active ? null : (s) => _setSource(s.first),
+    );
+  }
+
   List<Widget> _youtubeSection(BuildContext context) {
     final y = _youtube;
     final small = Theme.of(context).textTheme.bodySmall;
+    final picker = [_sourcePicker(context), const SizedBox(height: 8)];
+    if (y.source == YoutubeSource.key) {
+      final url = y.watchUrl;
+      return [
+        ...picker,
+        Text(y.connected ? 'Streams with your pasted stream key.' : 'Paste the stream key from YouTube Studio.'),
+        Text(url == null ? 'Add the video link so your watch page plays the video.' : 'Video: $url', style: small),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          OutlinedButton.icon(onPressed: _busy || _engine.streaming.active ? null : _pasteYoutubeKey, icon: const Icon(Icons.key), label: Text(y.connected ? 'Change key' : 'Paste key')),
+          OutlinedButton.icon(onPressed: _busy ? null : () => _pasteYoutubeKey(linkOnly: true), icon: const Icon(Icons.link), label: Text(url == null ? 'Add video link' : 'Change link')),
+          if (url != null) OutlinedButton.icon(onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication), icon: const Icon(Icons.open_in_new), label: const Text('Watch')),
+        ]),
+      ];
+    }
     if (!y.connected) {
       return [
-        const Text('Your organisation has not connected a YouTube channel.'),
-        const SizedBox(height: 4),
-        Text('The owner can connect it under Organisation (people icon on the home screen). '
-            'Until then, laptop mode can stream with a stream key set in OBS.', style: small),
+        ...picker,
+        if (y.source == YoutubeSource.golive)
+          const Text('The Go Live channel is switched off right now. Use your own channel or a stream key.')
+        else ...[
+          const Text('Your organisation has not connected a YouTube channel.'),
+          const SizedBox(height: 4),
+          Text(
+              y.goliveAvailable
+                  ? 'Choose “Go Live channel” to stream now with nothing to set up, paste a stream key, or have the owner connect your channel under Organisation (people icon on the home screen).'
+                  : 'Paste a stream key, or have the owner connect your channel under Organisation (people icon on the home screen).',
+              style: small),
+        ],
       ];
     }
     if (!y.hasBroadcast) {
       return [
-        Text('Channel: ${y.channelTitle ?? ''}'),
+        ...picker,
+        Text(y.source == YoutubeSource.golive ? 'On the Go Live channel (${y.channelTitle ?? ''}), unlisted: share your watch page link.' : 'Channel: ${y.channelTitle ?? ''}'),
         const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
@@ -961,6 +1053,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
     }
     final url = y.watchUrl;
     return [
+      ...picker,
       Text('Channel: ${y.channelTitle ?? ''} · ${y.privacy ?? ''}'),
       if (y.streamStatus != null) Text('Signal: ${y.streamStatus}${y.health != null ? ' · health ${y.health}' : ''}', style: small),
       for (final issue in y.issues.take(3)) Text('• $issue', style: small?.copyWith(color: Broadcast.warning)),

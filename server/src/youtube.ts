@@ -8,6 +8,16 @@ import type { YoutubeState } from './protocol.js';
 
 export const YOUTUBE_SCOPE = 'https://www.googleapis.com/auth/youtube';
 
+/** Stands for the platform's own "Go Live" channel where an organisation id is expected. */
+export const PLATFORM = 'platform';
+
+export interface PlatformChannel {
+  channelId: string;
+  channelTitle: string;
+  enabled: boolean;
+  connectedAt: string;
+}
+
 interface TokenResponse {
   access_token?: string;
   expires_in?: number;
@@ -96,6 +106,16 @@ export class YouTubeService {
       throw new HttpError(502, 'no_refresh_token', 'Google did not grant offline access. Remove the app from your Google account permissions and connect again.');
     }
     const channel = await this.myChannel(t.access_token);
+    if (orgId === PLATFORM) {
+      await this.repo.db.query(
+        `INSERT INTO platform_youtube (id, channel_id, channel_title, refresh_token_enc, connected_by) VALUES (true, $1, $2, $3, $4)
+         ON CONFLICT (id) DO UPDATE SET channel_id = EXCLUDED.channel_id, channel_title = EXCLUDED.channel_title,
+           refresh_token_enc = EXCLUDED.refresh_token_enc, connected_by = EXCLUDED.connected_by, connected_at = now()`,
+        [channel.id, channel.title, this.sealer.seal(t.refresh_token), userId],
+      );
+      this.accessTokens.set(PLATFORM, { token: t.access_token, exp: Date.now() + ((t.expires_in ?? 3600) - 60) * 1000 });
+      return { orgId, channelTitle: channel.title, extra: false };
+    }
     const main = await this.repo.orgYoutube(orgId);
     // "Connect another channel": kept as an extra channel, unless there is no main channel yet
     // or it is the main channel itself (then the main channel's sign-in is simply renewed).
@@ -168,11 +188,50 @@ export class YouTubeService {
     if (row) await this.revoke(row.refresh_token_enc);
   }
 
+  // ---------------------------------------------------------------- the platform's "Go Live" channel
+  async platformChannel(): Promise<PlatformChannel | null> {
+    const r = (
+      await this.repo.db.query<{ channel_id: string; channel_title: string; enabled: boolean; connected_at: Date }>(
+        'SELECT channel_id, channel_title, enabled, connected_at FROM platform_youtube WHERE id',
+      )
+    ).rows[0];
+    return r ? { channelId: r.channel_id, channelTitle: r.channel_title, enabled: r.enabled, connectedAt: r.connected_at.toISOString() } : null;
+  }
+
+  /** True when events can stream to the Go Live channel. */
+  async goliveAvailable(): Promise<boolean> {
+    return this.enabled && Boolean((await this.platformChannel())?.enabled);
+  }
+
+  async setPlatformEnabled(enabled: boolean): Promise<void> {
+    const r = await this.repo.db.query('UPDATE platform_youtube SET enabled = $1 WHERE id', [enabled]);
+    if (!r.rowCount) throw new HttpError(409, 'golive_channel_missing', 'Connect the Go Live channel first.');
+  }
+
+  async disconnectPlatform(): Promise<void> {
+    this.accessTokens.delete(PLATFORM);
+    const row = (await this.repo.db.query<{ refresh_token_enc: string }>('DELETE FROM platform_youtube WHERE id RETURNING refresh_token_enc')).rows[0];
+    if (row) await this.revoke(row.refresh_token_enc);
+  }
+
+  /** Which channel an event's main broadcast lives on. */
+  private tokenFor(t: TournamentRow): Promise<string> {
+    if (t.yt_source === 'key') throw new HttpError(409, 'youtube_key_mode', 'This event streams with a pasted YouTube stream key; there is no channel connection to use.');
+    return this.accessToken(t.yt_source === 'golive' ? PLATFORM : t.org_id);
+  }
+
   private async accessToken(orgId: string): Promise<string> {
     const cached = this.accessTokens.get(orgId);
     if (cached && cached.exp > Date.now()) return cached.token;
-    const row = await this.repo.orgYoutube(orgId);
-    if (!row) throw new HttpError(409, 'youtube_not_connected', 'Connect a YouTube channel for this organisation first.');
+    const row =
+      orgId === PLATFORM
+        ? (await this.repo.db.query<{ refresh_token_enc: string }>('SELECT refresh_token_enc FROM platform_youtube WHERE id AND enabled')).rows[0]
+        : await this.repo.orgYoutube(orgId);
+    if (!row) {
+      throw orgId === PLATFORM
+        ? new HttpError(409, 'golive_channel_off', 'The Go Live channel is not available right now. Connect your own YouTube channel or paste a stream key.')
+        : new HttpError(409, 'youtube_not_connected', 'Connect a YouTube channel for this organisation first.');
+    }
     const t = await this.token({ refresh_token: this.sealer.open(row.refresh_token_enc), grant_type: 'refresh_token' });
     if (!t.access_token) throw new HttpError(502, 'google_token_error', 'Google did not return an access token.');
     this.accessTokens.set(orgId, { token: t.access_token, exp: Date.now() + ((t.expires_in ?? 3600) - 60) * 1000 });
@@ -232,7 +291,7 @@ export class YouTubeService {
   /** Creates broadcast + stream, binds them, and stores the RTMPS ingest on the tournament. */
   async createBroadcast(t: TournamentRow, opts: { title: string; privacy: 'public' | 'unlisted' | 'private'; description?: string }) {
     this.ensureEnabled();
-    const at = await this.accessToken(t.org_id);
+    const at = await this.tokenFor(t);
     const b = await this.makeBroadcast(at, opts);
     await this.repo.setYoutubeBroadcast(t.id, {
       broadcastId: b.broadcastId,
@@ -302,15 +361,15 @@ export class YouTubeService {
 
   /** The broadcast's live chat id (exists once the broadcast is created; chat must be on). */
   async liveChatId(t: TournamentRow): Promise<string | null> {
-    if (!t.yt_broadcast_id) return null;
-    const at = await this.accessToken(t.org_id);
+    if (!t.yt_broadcast_id || t.yt_source === 'key') return null;
+    const at = await this.tokenFor(t);
     const r = await this.call<{ items?: { snippet?: { liveChatId?: string } }[] }>(at, 'GET', 'liveBroadcasts', { part: 'snippet', id: t.yt_broadcast_id });
     return r.items?.[0]?.snippet?.liveChatId ?? null;
   }
 
   /** One page of live chat (5 quota units). Follow `nextPageToken`; wait at least `pollingIntervalMillis`. */
   async chatPage(t: TournamentRow, liveChatId: string, pageToken?: string | null) {
-    const at = await this.accessToken(t.org_id);
+    const at = await this.tokenFor(t);
     return this.call<{ items?: YoutubeChatItem[]; nextPageToken?: string; pollingIntervalMillis?: number }>(at, 'GET', 'liveChat/messages', {
       liveChatId,
       part: 'snippet,authorDetails',
@@ -320,8 +379,8 @@ export class YouTubeService {
   }
 
   async status(t: TournamentRow): Promise<Partial<YoutubeState>> {
-    if (!t.yt_broadcast_id || !t.yt_stream_id) return {};
-    const at = await this.accessToken(t.org_id);
+    if (!t.yt_broadcast_id || !t.yt_stream_id || t.yt_source === 'key') return {};
+    const at = await this.tokenFor(t);
     const [b, s] = await Promise.all([
       this.call<{ items?: { status?: { lifeCycleStatus?: string } }[] }>(at, 'GET', 'liveBroadcasts', { part: 'status', id: t.yt_broadcast_id }),
       this.call<{
@@ -356,6 +415,17 @@ export interface YoutubeChatItem {
   snippet?: { type?: string; displayMessage?: string; publishedAt?: string };
   authorDetails?: { displayName?: string; channelId?: string };
 }
+
+/** The 11-character video id in a YouTube or YouTube Studio link (watch, youtu.be, live, studio). */
+export function youtubeVideoId(link: string): string | null {
+  const s = link.trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  const m =
+    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|live\/|embed\/|shorts\/)|youtu\.be\/|studio\.youtube\.com\/video\/)([A-Za-z0-9_-]{11})/.exec(s);
+  return m ? m[1] : null;
+}
+
+export const YOUTUBE_RTMPS_INGEST = 'rtmps://a.rtmps.youtube.com/live2';
 
 export function watchUrl(broadcastId: string | null): string | null {
   return broadcastId ? `https://www.youtube.com/watch?v=${broadcastId}` : null;

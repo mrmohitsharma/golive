@@ -133,6 +133,10 @@ export interface ProductionState {
 }
 
 export interface YoutubeState {
+  /** Where the main YouTube stream goes: the organisation's channel, the Go Live channel, or a pasted key. */
+  source: 'org' | 'golive' | 'key';
+  /** The Go Live channel can be used on this server. */
+  goliveAvailable: boolean;
   connected: boolean;
   channelTitle: string | null;
   broadcastId: string | null;

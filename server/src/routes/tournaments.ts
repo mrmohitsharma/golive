@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import QRCode from 'qrcode';
+import { YOUTUBE_RTMPS_INGEST, youtubeVideoId } from '../youtube.js';
 import { z } from 'zod';
 import type { Ctx } from '../context.js';
 import { HttpError } from '../errors.js';
@@ -31,7 +32,7 @@ export function tournamentDto(t: TournamentRow) {
 }
 
 export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
-  const { config, repo, hub, youtube, cloud, outputs } = ctx;
+  const { config, repo, hub, youtube, cloud, outputs, sealer } = ctx;
   const any = requireAuth(config);
   const user = requireAuth(config, 'user');
 
@@ -63,7 +64,12 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
     if (body.mode === 'cloud' && !cloud.available) throw new HttpError(409, 'cloud_unavailable', 'Cloud production is not enabled on this server.');
     // Cloud is the default when this server can run cloud engines: no laptop needed (onboarding P1-4).
     const mode = body.mode ?? (cloud.available ? 'cloud' : 'laptop');
-    const t = await repo.createTournament({ orgId, name: body.name, venue: body.venue, startsOn: body.startsOn, mode });
+    let t = await repo.createTournament({ orgId, name: body.name, venue: body.venue, startsOn: body.startsOn, mode });
+    // No YouTube of their own yet: start on the Go Live channel so the first show needs no setup (P1-6).
+    if (youtube.enabled && !(await repo.orgYoutube(orgId)) && (await youtube.goliveAvailable())) {
+      await repo.db.query("UPDATE tournaments SET yt_source = 'golive' WHERE id = $1", [t.id]);
+      t = (await repo.tournamentById(t.id))!;
+    }
     // One camera, scorer and commentator code per event, made now, so nobody has to tap "New code" (P1-8).
     await ensureInviteCodes(t.id, userOf(req).id);
     reply.status(201);
@@ -215,15 +221,89 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
       })
       .parse(req.body ?? {});
     if (hub.engineState(t.id).streaming.active) throw new HttpError(409, 'stream_live', 'End the current stream before creating a new broadcast.');
+    if (t.yt_source === 'key') throw new HttpError(409, 'youtube_key_mode', 'This event uses a pasted stream key: YouTube Studio makes the broadcast.');
+    // On the Go Live channel the title names the organiser, and broadcasts are unlisted unless asked otherwise.
+    const org = t.yt_source === 'golive' ? await repo.orgById(t.org_id) : null;
     const r = await youtube.createBroadcast(t, {
-      title: body.title ?? `${t.name}${t.venue ? ` · ${t.venue}` : ''}`,
+      title: body.title ?? (org ? `${t.name} by ${org.name}` : `${t.name}${t.venue ? ` · ${t.venue}` : ''}`),
       privacy: body.privacy,
-      description: body.description ?? `Live from ${t.venue ?? t.name}. Produced with ${config.BRAND_NAME}.`,
+      description: body.description ?? `Live from ${t.venue ?? t.name}${org ? `, by ${org.name}` : ''}. Produced with ${config.BRAND_NAME}.`,
     });
     await hub.engineConfigChanged(t.id);
     const fresh = (await repo.tournamentById(t.id))!;
     reply.status(201);
     return { broadcast: r, youtube: await hub.youtubeState(fresh) };
+  });
+
+  /**
+   * Where the main YouTube stream goes: "org" (the organisation's channel) or "golive" (the
+   * platform's Go Live channel, nothing to connect). Changing it drops the current broadcast,
+   * which belongs to the other channel. A pasted key is set with PUT /youtube/key.
+   */
+  app.put('/api/tournaments/:id/youtube/source', { preHandler: user }, async (req) => {
+    const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
+    const body = z.object({ source: z.enum(['org', 'golive']) }).parse(req.body);
+    if (body.source === t.yt_source) return { youtube: await hub.youtubeState(t) };
+    if (hub.engineState(t.id).streaming.active) throw new HttpError(409, 'stream_live', 'End the stream before changing where it goes.');
+    if (body.source === 'golive' && !(await youtube.goliveAvailable())) {
+      throw new HttpError(409, 'golive_channel_off', 'The Go Live channel is not available right now. Connect your own YouTube channel or paste a stream key.');
+    }
+    await youtube.forgetBroadcast(t);
+    await repo.db.query('UPDATE tournaments SET yt_source = $2 WHERE id = $1', [t.id, body.source]);
+    await hub.engineConfigChanged(t.id);
+    await hub.outputsUpdated(t.id);
+    return { youtube: await hub.youtubeState((await repo.tournamentById(t.id))!) };
+  });
+
+  /**
+   * Stream to YouTube with a key pasted from YouTube Studio (Go live > Stream > Stream key),
+   * no Google sign-in (P1-7). The video link is optional: with it, the watch page plays the video.
+   */
+  app.put('/api/tournaments/:id/youtube/key', { preHandler: user }, async (req) => {
+    const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
+    const body = z
+      .object({
+        streamKey: z.string().trim().min(8).max(200).optional(),
+        streamUrl: z.string().trim().max(300).optional(),
+        videoUrl: z.string().trim().max(500).nullable().optional(),
+      })
+      .parse(req.body);
+    if (!body.streamKey && t.yt_source !== 'key') throw new HttpError(400, 'stream_key_required', 'Paste the stream key from YouTube Studio.');
+    if (body.streamKey && hub.engineState(t.id).streaming.active) throw new HttpError(409, 'stream_live', 'End the stream before changing the stream key.');
+    if (body.streamKey && /\s/.test(body.streamKey)) throw new HttpError(400, 'bad_stream_key', 'The stream key has spaces in it. Copy it again from YouTube Studio.');
+    const server = body.streamUrl?.trim() || (t.yt_source === 'key' && t.yt_ingest_url) || YOUTUBE_RTMPS_INGEST;
+    if (!/^rtmps?:\/\/[^\s/]+/i.test(server)) throw new HttpError(400, 'bad_stream_url', 'The stream URL must start with rtmp:// or rtmps://.');
+    let videoId = t.yt_source === 'key' ? t.yt_broadcast_id : null;
+    if (body.videoUrl !== undefined) {
+      videoId = body.videoUrl ? youtubeVideoId(body.videoUrl) : null;
+      if (body.videoUrl && !videoId) throw new HttpError(400, 'bad_video_url', 'That is not a YouTube video link. Copy the link from YouTube Studio (Share).');
+    }
+    if (body.streamKey && t.yt_source !== 'key') await youtube.forgetBroadcast(t);
+    await repo.setYoutubeBroadcast(t.id, {
+      broadcastId: videoId,
+      streamId: null,
+      streamKeyEnc: body.streamKey ? sealer.seal(body.streamKey) : t.yt_stream_key_enc,
+      ingestUrl: server.replace(/\/+$/, ''),
+      privacy: null,
+    });
+    await repo.db.query("UPDATE tournaments SET yt_source = 'key' WHERE id = $1", [t.id]);
+    await hub.engineConfigChanged(t.id);
+    await hub.outputsUpdated(t.id);
+    return { youtube: await hub.youtubeState((await repo.tournamentById(t.id))!) };
+  });
+
+  /** Stops using the pasted key: back to the organisation's channel (or the Go Live channel). */
+  app.delete('/api/tournaments/:id/youtube/key', { preHandler: user }, async (req) => {
+    const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
+    if (hub.engineState(t.id).streaming.active) throw new HttpError(409, 'stream_live', 'End the stream first.');
+    if (t.yt_source === 'key') {
+      await youtube.forgetBroadcast(t);
+      const next = !(await repo.orgYoutube(t.org_id)) && (await youtube.goliveAvailable()) ? 'golive' : 'org';
+      await repo.db.query('UPDATE tournaments SET yt_source = $2 WHERE id = $1', [t.id, next]);
+      await hub.engineConfigChanged(t.id);
+      await hub.outputsUpdated(t.id);
+    }
+    return { youtube: await hub.youtubeState((await repo.tournamentById(t.id))!) };
   });
 
   app.delete('/api/tournaments/:id/youtube/broadcast', { preHandler: user }, async (req, reply) => {

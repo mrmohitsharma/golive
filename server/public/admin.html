@@ -155,7 +155,27 @@
         stat('Credits held by clubs', cr(o.creditsHeldByClubs)),
         stat('Online payments', o.paymentsEnabled ? 'On' : 'Off', o.paymentsEnabled ? `Cashfree ${o.cashfreeMode}` : 'Add Cashfree keys to the server'),
       ),
+      await goliveCard(),
       el('h2', { text: 'Live now' }), liveTable(lv.live));
+  }
+
+  // The platform's own YouTube channel: organisers without YouTube go live on it (unlisted).
+  async function goliveCard() {
+    const g = await call('GET', '/api/admin/golive-channel');
+    const c = g.channel;
+    const connect = guard(async () => { const r = await call('POST', '/api/admin/golive-channel/connect'); window.open(r.url, '_blank', 'noopener'); toast('Finish the Google sign-in in the new tab, then refresh.'); });
+    const toggle = guard(async () => { await call('PATCH', '/api/admin/golive-channel', { enabled: !c.enabled }); render(); });
+    const remove = guard(async () => { if (!confirm('Disconnect the Go Live channel? Events using it fall back to their own channel or a stream key.')) return; await call('DELETE', '/api/admin/golive-channel'); render(); });
+    return el('div', { class: 'card', style: 'margin:16px 0' },
+      el('h2', { style: 'margin-top:0', text: 'Go Live channel' }),
+      !g.youtubeConfigured ? el('p', { class: 'muted', text: 'YouTube is not configured on this server (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).' })
+      : !c ? el('div', {}, el('p', { class: 'muted', text: 'Not connected. Connect a YouTube channel you own: new organisers can then go live on it with nothing to set up (broadcasts are unlisted, titled "<event> by <organisation>").' }), el('button', { class: 'btn primary', onclick: connect, text: 'Connect the Go Live channel' }))
+      : el('div', {},
+          el('p', {}, el('strong', { text: c.channelTitle }), ' ', el('span', { class: 'pill' + (c.enabled ? '' : ' warn'), text: c.enabled ? 'On' : 'Off' }), el('span', { class: 'muted', text: ' · connected ' + day(c.connectedAt) })),
+          el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+            el('button', { class: 'btn', onclick: toggle, text: c.enabled ? 'Switch off for new events' : 'Switch on' }),
+            el('button', { class: 'btn', onclick: connect, text: 'Reconnect' }),
+            el('button', { class: 'btn', onclick: remove, text: 'Disconnect' }))));
   }
 
   // ------------------------------------------------------------------ live
