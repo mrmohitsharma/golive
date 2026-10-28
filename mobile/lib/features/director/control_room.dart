@@ -266,6 +266,21 @@ class ControlRoom extends ChangeNotifier {
         _notify();
       });
 
+  /// When "Start show" was pressed (for the "Starting mixer… 40 s" countdown).
+  DateTime? showStartedAt;
+
+  Future<String?> startShow() => _try(() async {
+        showStartedAt = DateTime.now();
+        _notify();
+        final (p, y, problems) = await api.startShow(tournament.id);
+        production = p;
+        youtube = y;
+        for (final m in problems) {
+          _alert('warning', m);
+        }
+        _notify();
+      });
+
   Future<String?> startCloudEngine() => _try(() async {
         production = await api.startCloudEngine(tournament.id);
         _notify();

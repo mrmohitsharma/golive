@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/models.dart';
@@ -539,7 +541,10 @@ class _StatusBar extends StatelessWidget {
     return Container(
       color: Broadcast.panel,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: SingleChildScrollView(
+      // The show button is pinned on the right; the status pills scroll beside it.
+      child: Row(children: [
+        Expanded(
+          child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(children: [
           if (!room.linkConnected) ...[
@@ -547,10 +552,6 @@ class _StatusBar extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           StatusPill(label: engineLabel, color: engineColor, icon: cloud ? Icons.cloud : Icons.memory),
-          if (cloud && !e.connected && (p.cloudStatus == CloudEngineStatus.stopped || p.cloudStatus == CloudEngineStatus.error)) ...[
-            const SizedBox(width: 6),
-            TextButton(onPressed: room.startCloudEngine, child: const Text('Start cloud engine')),
-          ],
           const SizedBox(width: 6),
           StatusPill(label: ytLabel, color: ytColor, icon: Icons.smart_display),
           for (final o in room.outputs.active)
@@ -612,20 +613,6 @@ class _StatusBar extends StatelessWidget {
             color: room.mediaServerReachable ? Broadcast.panelHigh : Broadcast.onAir,
             icon: Icons.sensors,
           ),
-          const SizedBox(width: 12),
-          if (e.canSwitch)
-            s.active
-                ? OutlinedButton(
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white, visualDensity: VisualDensity.compact),
-                    onPressed: room.isPending('stream.stop') ? null : () => _confirmStop(context),
-                    child: const Text('End stream'),
-                  )
-                : FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: Broadcast.onAir, visualDensity: VisualDensity.compact),
-                    onPressed: room.isPending('stream.start') ? null : onGoLive,
-                    icon: const Icon(Icons.play_arrow),
-                    label: Text(room.outputs.goLiveLabel),
-                  ),
           if (e.lastError != null) ...[
             const SizedBox(width: 8),
             Text(e.lastError!, style: const TextStyle(color: Broadcast.warning, fontSize: 12)),
@@ -635,7 +622,11 @@ class _StatusBar extends StatelessWidget {
             Text('⚠ $w', style: const TextStyle(color: Broadcast.warning, fontSize: 12)),
           ],
         ]),
-      ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _ShowButton(room: room, onGoLive: onGoLive, onStop: () => _confirmStop(context)),
+      ]),
     );
   }
 
@@ -652,6 +643,96 @@ class _StatusBar extends StatelessWidget {
       ),
     );
     if (ok == true) room.stopYouTube();
+  }
+}
+
+/// One button for the whole show (P1-11), always visible at the right of the status bar:
+/// Start show → "Starting mixer… 40 s" → "Checking cameras" → Go live → End stream.
+class _ShowButton extends StatefulWidget {
+  const _ShowButton({required this.room, required this.onGoLive, required this.onStop});
+  final ControlRoom room;
+  final VoidCallback onGoLive;
+  final VoidCallback onStop;
+
+  @override
+  State<_ShowButton> createState() => _ShowButtonState();
+}
+
+class _ShowButtonState extends State<_ShowButton> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // Redraws the countdown once a second while the mixer starts.
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _starting) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  ControlRoom get room => widget.room;
+
+  bool get _starting {
+    final p = room.production;
+    return p.mode == ProductionMode.cloud && !room.engine.canSwitch && (p.cloudBusy || (room.showStartedAt != null && p.cloudStatus != CloudEngineStatus.error && p.cloudStatus != CloudEngineStatus.stopped));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final e = room.engine;
+    final p = room.production;
+    final cloud = p.mode == ProductionMode.cloud;
+    const dense = VisualDensity.compact;
+    if (e.streaming.active) {
+      return OutlinedButton(
+        style: OutlinedButton.styleFrom(foregroundColor: Colors.white, visualDensity: dense),
+        onPressed: room.isPending('stream.stop') ? null : widget.onStop,
+        child: const Text('End stream'),
+      );
+    }
+    if (cloud && !e.canSwitch) {
+      if (_starting) {
+        final since = room.showStartedAt == null ? 0 : DateTime.now().difference(room.showStartedAt!).inSeconds;
+        // A cloud mixer usually takes 40–60 seconds to be ready.
+        final left = (50 - since).clamp(5, 50);
+        return FilledButton.icon(
+          style: FilledButton.styleFrom(visualDensity: dense),
+          onPressed: null,
+          icon: const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+          label: Text(e.connected ? 'Connecting mixer…' : 'Starting mixer… ${left}s'),
+        );
+      }
+      return FilledButton.icon(
+        style: FilledButton.styleFrom(backgroundColor: Broadcast.preview, visualDensity: dense),
+        onPressed: room.startShow,
+        icon: const Icon(Icons.rocket_launch),
+        label: const Text('Start show'),
+      );
+    }
+    if (!e.canSwitch) {
+      return FilledButton(style: FilledButton.styleFrom(visualDensity: dense), onPressed: null, child: const Text('Engine offline'));
+    }
+    final liveCams = room.cameras.where((c) => c.status == FeedStatus.live).length;
+    if (cloud && liveCams == 0) {
+      return FilledButton.icon(
+        style: FilledButton.styleFrom(visualDensity: dense),
+        onPressed: null,
+        icon: const Icon(Icons.videocam_off, size: 18),
+        label: const Text('Checking cameras…'),
+      );
+    }
+    return FilledButton.icon(
+      style: FilledButton.styleFrom(backgroundColor: Broadcast.onAir, visualDensity: dense),
+      onPressed: room.isPending('stream.start') ? null : widget.onGoLive,
+      icon: const Icon(Icons.play_arrow),
+      label: Text(room.outputs.goLiveLabel),
+    );
   }
 }
 

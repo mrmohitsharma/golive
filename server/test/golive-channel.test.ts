@@ -90,6 +90,16 @@ describe('the Go Live channel (no YouTube of your own needed)', () => {
     assert.equal(insert.body.status.privacyStatus, 'unlisted');
   });
 
+  it('Start show creates the missing broadcast in one tap, then has nothing left to do', async () => {
+    const o = await signup(h, 'show@club.test', 'Show Club');
+    const r = await expectOk(api(h, 'POST', `/api/orgs/${o.orgId}/tournaments`, { name: 'Show Day', mode: 'laptop' }, o.token));
+    const tid = r.tournament.id;
+    const first = await expectOk(api(h, 'POST', `/api/tournaments/${tid}/start-show`, {}, o.token));
+    assert.deepEqual([first.done, first.problems, first.youtube.broadcastId], [['broadcast_created'], [], 'bc-1']);
+    const again = await expectOk(api(h, 'POST', `/api/tournaments/${tid}/start-show`, {}, o.token));
+    assert.deepEqual([again.done, again.problems], [[], []]);
+  });
+
   it('an organiser with their own channel starts on it, and can switch either way', async () => {
     const o = await signup(h, 'club@club.test', 'Club');
     const { url } = await expectOk(api(h, 'POST', `/api/orgs/${o.orgId}/youtube/connect`, undefined, o.token));

@@ -364,6 +364,48 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
     return { production: await cloud.startEngine(t) };
   });
 
+  /**
+   * "Start show" (P1-11): one tap that starts the cloud mixer (if this is a cloud event and it
+   * is stopped) and creates the YouTube broadcast (if the event streams to a channel and has
+   * none). Each part is reported; one failing does not undo the other.
+   */
+  app.post('/api/tournaments/:id/start-show', { preHandler: user }, async (req) => {
+    const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
+    const body = z.object({ privacy: z.enum(['public', 'unlisted', 'private']).default('unlisted') }).parse(req.body ?? {});
+    const allowed = await ctx.billing.checkGoLive(t);
+    if (!allowed.ok) throw new HttpError(402, 'billing_blocked', allowed.error);
+    const problems: string[] = [];
+    const done: string[] = [];
+    if (t.production_mode === 'cloud') {
+      const status = cloud.state(t).cloud.status;
+      if (status === 'stopped' || status === 'error') {
+        try {
+          await cloud.startEngine(t);
+          done.push('mixer_starting');
+        } catch (err) {
+          problems.push(`Mixer: ${(err as Error).message}`);
+        }
+      }
+    }
+    const yt = await hub.youtubeState(t);
+    if (t.yt_source !== 'key' && yt.connected && !t.yt_broadcast_id && youtube.enabled) {
+      try {
+        const org = t.yt_source === 'golive' ? await repo.orgById(t.org_id) : null;
+        await youtube.createBroadcast(t, {
+          title: org ? `${t.name} by ${org.name}` : `${t.name}${t.venue ? ` · ${t.venue}` : ''}`,
+          privacy: body.privacy,
+          description: `Live from ${t.venue ?? t.name}${org ? `, by ${org.name}` : ''}. Produced with ${config.BRAND_NAME}.`,
+        });
+        await hub.engineConfigChanged(t.id);
+        done.push('broadcast_created');
+      } catch (err) {
+        problems.push(`YouTube: ${(err as Error).message}`);
+      }
+    }
+    const fresh = (await repo.tournamentById(t.id))!;
+    return { done, problems, production: cloud.state(fresh), youtube: await hub.youtubeState(fresh) };
+  });
+
   app.post('/api/tournaments/:id/cloud-engine/stop', { preHandler: user }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
     if (hub.engineState(t.id).streaming.active) {

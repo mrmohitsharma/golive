@@ -117,4 +117,12 @@ describe('cloud production mode', () => {
     const cfg = await h.app.hub.engineConfig((await h.app.repo.tournamentById(tournamentId))!);
     assert.ok(cfg.cameras[0].srtUrl.startsWith('srt://mediamtx:8890?'));
   });
+
+  it('Start show starts the cloud mixer of a cloud event', async () => {
+    const r = await expectOk(api(h, 'POST', `/api/orgs/${owner.orgId}/tournaments`, { name: 'Start show', mode: 'cloud' }, owner.token));
+    const s = await expectOk(api(h, 'POST', `/api/tournaments/${r.tournament.id}/start-show`, {}, owner.token));
+    assert.deepEqual(s.done, ['mixer_starting']);
+    assert.ok(['starting', 'running'].includes(s.production.cloud.status), s.production.cloud.status);
+    await expectOk(api(h, 'POST', `/api/tournaments/${r.tournament.id}/cloud-engine/stop?force=true`, undefined, owner.token));
+  });
 });

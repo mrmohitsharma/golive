@@ -328,6 +328,17 @@ class ApiClient {
   Future<OutputsState> setOutputs(String id, Map<String, Object?> patch_) async =>
       OutputsState.fromJson((await patch('/api/tournaments/$id/outputs', patch_))['outputs'] as Map<String, dynamic>?);
 
+  /// "Start show": starts the cloud mixer and creates the YouTube broadcast if needed.
+  /// Returns the new production and YouTube state, and any part that did not work.
+  Future<(ProductionState, YoutubeState, List<String>)> startShow(String id, {String privacy = 'unlisted'}) async {
+    final r = await post('/api/tournaments/$id/start-show', {'privacy': privacy});
+    return (
+      ProductionState.fromJson(r['production'] as Map<String, dynamic>?),
+      YoutubeState.fromJson(r['youtube'] as Map<String, dynamic>?),
+      ((r['problems'] as List?) ?? const []).map((e) => '$e').toList(),
+    );
+  }
+
   Future<ProductionState> startCloudEngine(String id) async =>
       ProductionState.fromJson((await post('/api/tournaments/$id/cloud-engine/start'))['production'] as Map<String, dynamic>?);
 
