@@ -16,6 +16,7 @@ import type { BillingService } from './billing.js';
 import type { PaymentsService } from './payments.js';
 import type { ChatService } from './chat.js';
 import type { ChatReaders } from './chat-readers.js';
+import type { DestinationsService } from './destinations.js';
 
 /** Everything route modules need. */
 export interface Ctx {
@@ -37,4 +38,5 @@ export interface Ctx {
   payments: PaymentsService;
   chat: ChatService;
   chatReaders: ChatReaders;
+  destinations: DestinationsService;
 }

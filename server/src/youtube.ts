@@ -48,9 +48,9 @@ export class YouTubeService {
   }
 
   /** Google consent URL. `state` is a signed, 15-minute token naming the org and user. */
-  authUrl(orgId: string, userId: string): string {
+  authUrl(orgId: string, userId: string, extra = false): string {
     this.ensureEnabled();
-    const state = jwt.sign({ o: orgId, u: userId, p: 'yt' }, this.config.JWT_SECRET, { expiresIn: '15m', issuer: 'cogolfer-live' });
+    const state = jwt.sign({ o: orgId, u: userId, p: 'yt', x: extra ? 1 : 0 }, this.config.JWT_SECRET, { expiresIn: '15m', issuer: 'cogolfer-live' });
     const q = new URLSearchParams({
       client_id: this.config.GOOGLE_CLIENT_ID!,
       redirect_uri: this.redirectUri,
@@ -64,11 +64,11 @@ export class YouTubeService {
     return `${this.config.GOOGLE_AUTH_URL}?${q}`;
   }
 
-  verifyState(state: string): { orgId: string; userId: string } {
+  verifyState(state: string): { orgId: string; userId: string; extra: boolean } {
     try {
-      const c = jwt.verify(state, this.config.JWT_SECRET, { issuer: 'cogolfer-live' }) as { o: string; u: string; p: string };
+      const c = jwt.verify(state, this.config.JWT_SECRET, { issuer: 'cogolfer-live' }) as { o: string; u: string; p: string; x?: number };
       if (c.p !== 'yt') throw new Error('wrong purpose');
-      return { orgId: c.o, userId: c.u };
+      return { orgId: c.o, userId: c.u, extra: c.x === 1 };
     } catch {
       throw new HttpError(400, 'bad_state', 'This YouTube sign-in link expired. Start again from the app.');
     }
@@ -88,14 +88,30 @@ export class YouTubeService {
   }
 
   /** OAuth callback: exchange the code, read the channel, store the refresh token. */
-  async completeConnect(code: string, state: string): Promise<{ orgId: string; channelTitle: string }> {
+  async completeConnect(code: string, state: string): Promise<{ orgId: string; channelTitle: string; extra: boolean }> {
     this.ensureEnabled();
-    const { orgId, userId } = this.verifyState(state);
+    const { orgId, userId, extra } = this.verifyState(state);
     const t = await this.token({ code, redirect_uri: this.redirectUri, grant_type: 'authorization_code' });
     if (!t.refresh_token || !t.access_token) {
       throw new HttpError(502, 'no_refresh_token', 'Google did not grant offline access. Remove the app from your Google account permissions and connect again.');
     }
     const channel = await this.myChannel(t.access_token);
+    const main = await this.repo.orgYoutube(orgId);
+    // "Connect another channel": kept as an extra channel, unless there is no main channel yet
+    // or it is the main channel itself (then the main channel's sign-in is simply renewed).
+    if (extra && main && main.channel_id !== channel.id) {
+      const row = (
+        await this.repo.db.query<{ id: string }>(
+          `INSERT INTO youtube_channels (org_id, channel_id, channel_title, refresh_token_enc, connected_by) VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (org_id, channel_id) DO UPDATE SET channel_title = EXCLUDED.channel_title, refresh_token_enc = EXCLUDED.refresh_token_enc,
+             connected_by = EXCLUDED.connected_by, connected_at = now()
+           RETURNING id`,
+          [orgId, channel.id, channel.title, this.sealer.seal(t.refresh_token), userId],
+        )
+      ).rows[0];
+      this.accessTokens.set(`ch:${row.id}`, { token: t.access_token, exp: Date.now() + ((t.expires_in ?? 3600) - 60) * 1000 });
+      return { orgId, channelTitle: channel.title, extra: true };
+    }
     await this.repo.saveOrgYoutube(orgId, {
       channelId: channel.id,
       channelTitle: channel.title,
@@ -103,17 +119,37 @@ export class YouTubeService {
       userId,
     });
     this.accessTokens.set(orgId, { token: t.access_token, exp: Date.now() + ((t.expires_in ?? 3600) - 60) * 1000 });
-    return { orgId, channelTitle: channel.title };
+    return { orgId, channelTitle: channel.title, extra: false };
   }
 
-  /** Forgets the channel and revokes our access at Google (best effort), as Google's user-data policy asks. */
-  async disconnect(orgId: string): Promise<void> {
-    this.accessTokens.delete(orgId);
-    const row = await this.repo.orgYoutube(orgId).catch(() => null);
-    await this.repo.deleteOrgYoutube(orgId);
-    if (!row) return;
+  /** The main channel and every extra channel of an organisation. */
+  async channels(orgId: string): Promise<YoutubeChannel[]> {
+    const main = await this.repo.orgYoutube(orgId);
+    const extra = (
+      await this.repo.db.query<{ id: string; channel_id: string; channel_title: string; connected_at: Date }>(
+        'SELECT id, channel_id, channel_title, connected_at FROM youtube_channels WHERE org_id = $1 ORDER BY connected_at',
+        [orgId],
+      )
+    ).rows;
+    return [
+      ...(main ? [{ id: 'main', channelId: main.channel_id, title: main.channel_title, main: true, connectedAt: main.connected_at.toISOString() }] : []),
+      ...extra.map((c) => ({ id: c.id, channelId: c.channel_id, title: c.channel_title, main: false, connectedAt: c.connected_at.toISOString() })),
+    ];
+  }
+
+  /** Removes an extra channel (its event destinations go with it) and revokes our access. */
+  async disconnectChannel(orgId: string, id: string): Promise<void> {
+    const row = (
+      await this.repo.db.query<{ refresh_token_enc: string }>('DELETE FROM youtube_channels WHERE id = $1 AND org_id = $2 RETURNING refresh_token_enc', [id, orgId])
+    ).rows[0];
+    this.accessTokens.delete(`ch:${id}`);
+    if (!row) throw new HttpError(404, 'channel_not_found', 'That YouTube channel is not connected.');
+    await this.revoke(row.refresh_token_enc);
+  }
+
+  private async revoke(refreshTokenEnc: string): Promise<void> {
     try {
-      const token = this.sealer.open(row.refresh_token_enc);
+      const token = this.sealer.open(refreshTokenEnc);
       await this.fetchImpl(this.config.GOOGLE_REVOKE_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -124,6 +160,14 @@ export class YouTubeService {
     }
   }
 
+  /** Forgets the channel and revokes our access at Google (best effort), as Google's user-data policy asks. */
+  async disconnect(orgId: string): Promise<void> {
+    this.accessTokens.delete(orgId);
+    const row = await this.repo.orgYoutube(orgId).catch(() => null);
+    await this.repo.deleteOrgYoutube(orgId);
+    if (row) await this.revoke(row.refresh_token_enc);
+  }
+
   private async accessToken(orgId: string): Promise<string> {
     const cached = this.accessTokens.get(orgId);
     if (cached && cached.exp > Date.now()) return cached.token;
@@ -132,6 +176,21 @@ export class YouTubeService {
     const t = await this.token({ refresh_token: this.sealer.open(row.refresh_token_enc), grant_type: 'refresh_token' });
     if (!t.access_token) throw new HttpError(502, 'google_token_error', 'Google did not return an access token.');
     this.accessTokens.set(orgId, { token: t.access_token, exp: Date.now() + ((t.expires_in ?? 3600) - 60) * 1000 });
+    return t.access_token;
+  }
+
+  /** Access token for an extra channel (youtube_channels.id). */
+  private async channelToken(orgId: string, channelRowId: string): Promise<string> {
+    const key = `ch:${channelRowId}`;
+    const cached = this.accessTokens.get(key);
+    if (cached && cached.exp > Date.now()) return cached.token;
+    const row = (
+      await this.repo.db.query<{ refresh_token_enc: string }>('SELECT refresh_token_enc FROM youtube_channels WHERE id = $1 AND org_id = $2', [channelRowId, orgId])
+    ).rows[0];
+    if (!row) throw new HttpError(409, 'youtube_not_connected', 'That YouTube channel is no longer connected. Connect it again.');
+    const t = await this.token({ refresh_token: this.sealer.open(row.refresh_token_enc), grant_type: 'refresh_token' });
+    if (!t.access_token) throw new HttpError(502, 'google_token_error', 'Google did not return an access token.');
+    this.accessTokens.set(key, { token: t.access_token, exp: Date.now() + ((t.expires_in ?? 3600) - 60) * 1000 });
     return t.access_token;
   }
 
@@ -174,6 +233,34 @@ export class YouTubeService {
   async createBroadcast(t: TournamentRow, opts: { title: string; privacy: 'public' | 'unlisted' | 'private'; description?: string }) {
     this.ensureEnabled();
     const at = await this.accessToken(t.org_id);
+    const b = await this.makeBroadcast(at, opts);
+    await this.repo.setYoutubeBroadcast(t.id, {
+      broadcastId: b.broadcastId,
+      streamId: b.streamId,
+      streamKeyEnc: this.sealer.seal(b.streamName),
+      ingestUrl: b.ingestUrl,
+      privacy: opts.privacy,
+    });
+    return { broadcastId: b.broadcastId, streamId: b.streamId, ingestUrl: b.ingestUrl, watchUrl: watchUrl(b.broadcastId) };
+  }
+
+  /** A broadcast on an extra channel, for one event destination. Returns the full ingest URL with key. */
+  async createChannelBroadcast(orgId: string, channelRowId: string, opts: { title: string; privacy: 'public' | 'unlisted' | 'private'; description?: string }) {
+    this.ensureEnabled();
+    const at = await this.channelToken(orgId, channelRowId);
+    const b = await this.makeBroadcast(at, opts);
+    const base = b.ingestUrl.endsWith('/') ? b.ingestUrl : `${b.ingestUrl}/`;
+    return { broadcastId: b.broadcastId, streamId: b.streamId, url: `${base}${b.streamName}` };
+  }
+
+  /** Lifecycle of a broadcast on an extra channel ('ready', 'live', 'complete'…), or null if it is gone. */
+  async channelBroadcastStatus(orgId: string, channelRowId: string, broadcastId: string): Promise<string | null> {
+    const at = await this.channelToken(orgId, channelRowId);
+    const r = await this.call<{ items?: { status?: { lifeCycleStatus?: string } }[] }>(at, 'GET', 'liveBroadcasts', { part: 'status', id: broadcastId });
+    return r.items?.[0]?.status?.lifeCycleStatus ?? null;
+  }
+
+  private async makeBroadcast(at: string, opts: { title: string; privacy: 'public' | 'unlisted' | 'private'; description?: string }) {
     const start = new Date(Date.now() + 5 * 60 * 1000).toISOString();
     const broadcast = await this.call<{ id: string }>(at, 'POST', 'liveBroadcasts', { part: 'snippet,status,contentDetails' }, {
       snippet: { title: opts.title.slice(0, 100), description: (opts.description ?? '').slice(0, 5000), scheduledStartTime: start },
@@ -200,14 +287,7 @@ export class YouTubeService {
     const info = stream.cdn?.ingestionInfo ?? {};
     const ingestUrl = info.rtmpsIngestionAddress ?? info.ingestionAddress;
     if (!ingestUrl || !info.streamName) throw new HttpError(502, 'youtube_api_error', 'YouTube did not return an ingest address.');
-    await this.repo.setYoutubeBroadcast(t.id, {
-      broadcastId: broadcast.id,
-      streamId: stream.id,
-      streamKeyEnc: this.sealer.seal(info.streamName),
-      ingestUrl,
-      privacy: opts.privacy,
-    });
-    return { broadcastId: broadcast.id, streamId: stream.id, ingestUrl, watchUrl: watchUrl(broadcast.id) };
+    return { broadcastId: broadcast.id, streamId: stream.id, ingestUrl, streamName: info.streamName };
   }
 
   async forgetBroadcast(t: TournamentRow) {
@@ -260,6 +340,15 @@ export class YouTubeService {
         .slice(0, 3),
     };
   }
+}
+
+export interface YoutubeChannel {
+  /** 'main' for the organisation's main channel, else the youtube_channels id. */
+  id: string;
+  channelId: string;
+  title: string;
+  main: boolean;
+  connectedAt: string;
 }
 
 export interface YoutubeChatItem {

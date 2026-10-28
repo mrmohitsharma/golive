@@ -600,6 +600,8 @@ export class Hub {
     if (l.engine.streaming.active) await this.services.outputs.reconcile(t, true);
     else this.toEngine(tournamentId, { type: 'engine.config', ...(await this.engineConfig(t)) });
     await this.outputsChanged(tournamentId);
+    // The number of destinations counts against the event's included destinations.
+    this.billingChanged(tournamentId, await this.services.billing.tournamentState(t));
   }
 
   /** Tournaments whose engine is connected and streaming: what billing meters. */

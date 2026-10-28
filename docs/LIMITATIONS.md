@@ -27,6 +27,7 @@ Streaming continues with the screen off (foreground service, "camera is live" no
 | Multiview | Tiles are 2-second thumbnails, not live video (keeps 9+ cameras affordable on a tablet). | Monitors are live. |
 | YouTube OAuth | Until the Google app is **verified**, only listed test users can connect and tokens expire after 7 days. | Submit for verification before onboarding many clubs (see DEPLOYMENT). |
 | YouTube quota | Default 10,000 units/day: ~3 five-hour events without viewer comments, 1 with comments (status checks ~480/h + chat ~1,200/h at 15 s). | Request more quota. |
+| Extra destinations | Each destination is one more stream out of the server (about the programme bitrate, 4–6 Mbps upload each), and each vertical (Instagram) destination re-encodes on about one CPU core. An event can have at most 10 extra destinations. Viewer comments are read only from the main YouTube channel and Facebook Page. Extra YouTube channels connected with Google sign-in are subject to the same Google verification limits as the main channel. | Size the server for the busiest event: e.g. 6 destinations ≈ 30 Mbps upload. |
 | One engine per tournament | A second agent replaces the first. | Intentional. |
 | Tokens on the phone | Stored in app preferences, not Keychain/Keystore. Volunteer tokens last 2 days and are scoped to one tournament. | Phase 2: secure storage. |
 | Scoring | Stroke play per hole only; no handicaps, Stableford or match play; ties shown as T2 but not resolved by countback. | Matches the current CoGolfers League format (no handicap). |

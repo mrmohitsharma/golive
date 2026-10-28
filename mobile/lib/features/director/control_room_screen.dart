@@ -571,6 +571,24 @@ class _StatusBar extends StatelessWidget {
                 },
               ),
             ),
+          for (final d in room.outputs.activeDestinations)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: StatusPill(
+                dense: true,
+                label: '${d.label.toUpperCase()} ${switch (d.state) {
+                  'live' => 'LIVE',
+                  'connecting' => '…',
+                  'retrying' => 'RETRYING',
+                  _ => 'READY',
+                }}',
+                color: switch (d.state) {
+                  'live' => Broadcast.onAir,
+                  'connecting' || 'retrying' => Broadcast.warning,
+                  _ => Broadcast.panelHigh,
+                },
+              ),
+            ),
           if (room.billing.enabled && (room.billing.remainingSeconds != null || room.billing.suspended)) ...[
             const SizedBox(width: 6),
             InkWell(onTap: onCredits, borderRadius: BorderRadius.circular(6), child: _CreditPill(billing: room.billing)),
@@ -606,9 +624,7 @@ class _StatusBar extends StatelessWidget {
                     style: FilledButton.styleFrom(backgroundColor: Broadcast.onAir, visualDensity: VisualDensity.compact),
                     onPressed: room.isPending('stream.start') ? null : onGoLive,
                     icon: const Icon(Icons.play_arrow),
-                    label: Text(room.outputs.active.isEmpty
-                        ? 'Go live on YouTube'
-                        : 'Go live: ${room.outputs.active.map((o) => o.platform.label).join(' + ')}'),
+                    label: Text(room.outputs.goLiveLabel),
                   ),
           if (e.lastError != null) ...[
             const SizedBox(width: 8),

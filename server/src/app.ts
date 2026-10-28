@@ -33,6 +33,8 @@ import { registerGraphicsRoutes } from './routes/graphics.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerPublicRoutes } from './routes/public.js';
 import { registerSiteRoutes } from './routes/site.js';
+import { registerDestinationRoutes } from './routes/destinations.js';
+import { DestinationsService } from './destinations.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -81,8 +83,10 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const cloud = new CloudEngineManager(config, repo, driver, log, (tid, s) => hub.productionChanged(tid, s), (tid) => hub.isBusy(tid));
   const facebook = new FacebookService(config, repo, sealer, metaFetch);
   const relay = new RelayManager(config, log, (tid) => void hub.outputsChanged(tid).catch(() => {}), relaySpawn);
-  const outputs = new OutputsService(config, repo, sealer, youtube, facebook, relay, log);
   const billing = new BillingService(config, repo, billingClock);
+  const destinations = new DestinationsService(config, repo, sealer, youtube);
+  const outputs = new OutputsService(config, repo, sealer, youtube, facebook, relay, log, destinations, billing);
+  billing.destinationCounter = (t) => outputs.destinationCount(t);
   const payments = new PaymentsService(config, repo, billing, cashfreeFetch);
   billing.hooks = {
     streaming: () => hub.streamingTournaments(),
@@ -120,7 +124,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   });
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -154,6 +158,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerAdminRoutes(fastify, ctx);
   registerChatRoutes(fastify, ctx);
   registerSiteRoutes(fastify, ctx);
+  registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook
   fastify.post('/internal/mediamtx/auth', async (req, reply) => {

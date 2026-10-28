@@ -5,6 +5,8 @@ import type { Sealer } from './crypto.js';
 import type { YouTubeService } from './youtube.js';
 import type { FacebookService } from './facebook.js';
 import { HttpError } from './errors.js';
+import type { BillingService } from './billing.js';
+import { joinStreamUrl, type DestinationPlatform, type DestinationRow, type DestinationsService, type NewDestination, type Privacy } from './destinations.js';
 import { engineOutputUrl, internalRtspUrl, programmePath } from './media.js';
 import { PLATFORMS, type Platform, type RelayManager, type RelayTarget, type RelayStatus } from './relay.js';
 import { watchUrl } from './youtube.js';
@@ -25,10 +27,30 @@ export interface PlatformState {
   hint: string | null;
 }
 
+export interface DestinationState {
+  id: string;
+  kind: 'channel' | 'key';
+  platform: DestinationPlatform;
+  label: string;
+  enabled: boolean;
+  /** Has a stream URL (a channel destination gets one when its broadcast is made). */
+  ready: boolean;
+  channelId: string | null;
+  privacy: Privacy | null;
+  vertical: boolean;
+  hint: string | null;
+  link: string | null;
+  state: 'off' | RelayStatus['state'];
+  since: string | null;
+  error: string | null;
+}
+
 export interface OutputsState {
   /** OBS sends one stream to this server and the server restreams it. */
   relay: boolean;
   platforms: PlatformState[];
+  /** Extra destinations of this event (more YouTube channels, Facebook or Instagram keys, other services). */
+  destinations: DestinationState[];
 }
 
 /**
@@ -46,7 +68,46 @@ export class OutputsService {
     private readonly facebook: FacebookService,
     private readonly relay: RelayManager,
     private readonly log: FastifyBaseLogger,
+    private readonly destinations: DestinationsService,
+    private readonly billing: BillingService,
   ) {}
+
+  /** Destinations the show goes to: main platforms switched on and set up, plus enabled extra destinations. */
+  async destinationCount(t: TournamentRow): Promise<number> {
+    return (await this.active(t)).length + (await this.destinations.enabledCount(t.id));
+  }
+
+  /** Refuses a change that would stream to more destinations than the event includes. */
+  private async checkLimit(t: TournamentRow, next: number): Promise<void> {
+    const lim = await this.billing.destinationLimit(t);
+    if (!lim || next <= lim.limit) return;
+    if (next <= (await this.destinationCount(t))) return; // not adding one: never block switching off or editing
+    throw new HttpError(
+      402,
+      'destination_limit',
+      `This event includes ${lim.limit} destination${lim.limit === 1 ? '' : 's'}. Add another for ${lim.price} credits, or switch one off.`,
+    );
+  }
+
+  async addDestination(t: TournamentRow, input: NewDestination): Promise<DestinationRow> {
+    await this.destinations.validate(t, input);
+    await this.checkLimit(t, (await this.destinationCount(t)) + 1);
+    return this.destinations.add(t, input);
+  }
+
+  async updateDestination(
+    t: TournamentRow,
+    id: string,
+    patch: { enabled?: boolean; label?: string; streamUrl?: string; streamKey?: string; vertical?: boolean; privacy?: Privacy },
+  ): Promise<DestinationRow> {
+    const d = await this.destinations.get(t.id, id);
+    if (patch.enabled === true && !d.enabled) await this.checkLimit(t, (await this.destinationCount(t)) + 1);
+    return this.destinations.update(t, id, patch);
+  }
+
+  async removeDestination(t: TournamentRow, id: string): Promise<void> {
+    await this.destinations.remove(t, id);
+  }
 
   private wants(t: TournamentRow, p: Platform): boolean {
     const o = t.outputs ?? {};
@@ -71,17 +132,37 @@ export class OutputsService {
 
   /** What OBS should stream to: this server when any platform is set up, else whatever OBS/agent has. */
   async engineOutput(t: TournamentRow): Promise<{ server: string; key: string } | null> {
-    if (!(await this.active(t)).length) return null;
+    if (!(await this.destinationCount(t))) return null;
     const key = await this.repo.ensureOutputKey(t);
     return { server: engineOutputUrl(this.config, t.id, key, t.production_mode), key: '' };
   }
 
   async state(t: TournamentRow): Promise<OutputsState> {
     const c = await this.configured(t);
-    const running = new Map(this.relay.status(t.id).map((s) => [s.platform, s]));
-    const relay = PLATFORMS.some((p) => c[p] && this.wants(t, p));
+    const running = new Map(this.relay.status(t.id).map((s) => [s.id, s]));
+    const dests = await this.destinations.list(t.id);
+    const relay = PLATFORMS.some((p) => c[p] && this.wants(t, p)) || dests.some((d) => d.enabled);
     return {
       relay,
+      destinations: dests.map((d) => {
+        const r = running.get(`d:${d.id}`);
+        return {
+          id: d.id,
+          kind: d.kind,
+          platform: d.platform,
+          label: d.label,
+          enabled: d.enabled,
+          ready: Boolean(d.url_enc),
+          channelId: d.channel_id,
+          privacy: d.privacy,
+          vertical: d.vertical,
+          hint: d.hint,
+          link: this.destinations.linkFor(d),
+          state: r?.state ?? 'off',
+          since: r?.since ?? null,
+          error: r?.error ?? null,
+        };
+      }),
       platforms: PLATFORMS.map((p) => {
         const r = running.get(p);
         return {
@@ -130,6 +211,9 @@ export class OutputsService {
       }
       o.instagram = next;
     }
+    const before = await this.destinationCount(t);
+    const after = (await this.active({ ...t, outputs: o })).length + (await this.destinations.enabledCount(t.id));
+    if (after > before) await this.checkLimit(t, after);
     return (await this.repo.setOutputs(t.id, o))!;
   }
 
@@ -147,6 +231,7 @@ export class OutputsService {
         problems.push((err as Error).message);
       }
     }
+    problems.push(...(await this.destinations.prepare(t)));
     return problems;
   }
 
@@ -157,12 +242,17 @@ export class OutputsService {
       return;
     }
     const active = await this.active(t);
-    if (!active.length) return this.relay.stop(t.id);
+    const extra = await this.destinations.active(t.id);
+    if (!active.length && !extra.length) return this.relay.stop(t.id);
     const fresh = (await this.repo.tournamentById(t.id)) ?? t;
     const targets: RelayTarget[] = [];
     for (const p of active) {
       const url = this.urlFor(fresh, p);
-      if (url) targets.push({ platform: p, url, vertical: p === 'instagram' });
+      if (url) targets.push({ id: p, platform: p, url, vertical: p === 'instagram' });
+    }
+    for (const d of extra) {
+      const url = this.destinations.urlFor(d);
+      if (url) targets.push({ id: `d:${d.id}`, platform: d.platform, url, vertical: d.vertical });
     }
     this.relay.setTargets(t.id, internalRtspUrl(this.config, programmePath(t.id)), targets);
   }
@@ -187,11 +277,4 @@ export class OutputsService {
   }
 }
 
-/** "rtmps://host/rtmp/" + "key" → one URL. Accepts a URL that already ends in the key. */
-export function joinStreamUrl(server: string, key: string): string {
-  const s = server.trim();
-  const k = key.trim();
-  if (!/^rtmps?:\/\/[^\s/]+/i.test(s)) throw new HttpError(400, 'bad_stream_url', 'The stream URL must start with rtmps:// (copy it from the platform).');
-  if (!k) return s;
-  return s.endsWith('/') ? `${s}${k}` : `${s}/${k}`;
-}
+export { joinStreamUrl };

@@ -118,10 +118,15 @@ class ControlRoom extends ChangeNotifier {
         youtube = YoutubeState.fromJson(m['youtube'] as Map<String, dynamic>?);
       case 'outputs':
         final prev = {for (final p in outputs.platforms) p.platform: p.state};
+        final prevDest = {for (final d in outputs.destinations) d.id: d.state};
         outputs = OutputsState.fromJson(m['outputs'] as Map<String, dynamic>?);
         for (final p in outputs.platforms) {
           if (prev[p.platform] == 'live' && p.state == 'retrying') _alert('warning', '${p.platform.label} dropped: ${p.error ?? 'retrying'}');
           if (prev[p.platform] != 'live' && prev[p.platform] != null && p.state == 'live') _alert('info', 'Live on ${p.platform.label}');
+        }
+        for (final d in outputs.destinations) {
+          if (prevDest[d.id] == 'live' && d.state == 'retrying') _alert('warning', '${d.label} dropped: ${d.error ?? 'retrying'}');
+          if (prevDest[d.id] != 'live' && prevDest[d.id] != null && d.state == 'live') _alert('info', 'Live on ${d.label}');
         }
       case 'billing':
         billing = TournamentBilling.fromJson(m['billing'] as Map<String, dynamic>?);

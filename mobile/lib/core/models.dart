@@ -714,24 +714,120 @@ class PlatformOutput {
       );
 }
 
+/// An extra place this event streams to: another connected YouTube channel, or a pasted
+/// stream key (YouTube, Facebook, Instagram or any RTMP service).
+class DestinationOutput {
+  const DestinationOutput({
+    required this.id,
+    required this.kind,
+    required this.platform,
+    required this.label,
+    this.enabled = true,
+    this.ready = false,
+    this.channelId,
+    this.privacy,
+    this.vertical = false,
+    this.hint,
+    this.link,
+    this.state = 'off',
+    this.error,
+  });
+
+  final String id;
+
+  /// channel | key
+  final String kind;
+
+  /// youtube | facebook | instagram | other
+  final String platform;
+  final String label;
+  final bool enabled;
+  final bool ready;
+  final String? channelId;
+  final String? privacy;
+  final bool vertical;
+  final String? hint;
+  final String? link;
+
+  /// off | connecting | live | retrying
+  final String state;
+  final String? error;
+
+  bool get active => enabled && ready;
+  bool get live => state == 'live';
+  bool get isChannel => kind == 'channel';
+
+  String get platformLabel => switch (platform) {
+        'youtube' => 'YouTube',
+        'facebook' => 'Facebook',
+        'instagram' => 'Instagram',
+        _ => 'Stream key',
+      };
+
+  factory DestinationOutput.fromJson(Map<String, dynamic> j) => DestinationOutput(
+        id: '${j['id']}',
+        kind: (j['kind'] as String?) ?? 'key',
+        platform: (j['platform'] as String?) ?? 'other',
+        label: (j['label'] as String?) ?? '',
+        enabled: (j['enabled'] as bool?) ?? true,
+        ready: (j['ready'] as bool?) ?? false,
+        channelId: j['channelId'] as String?,
+        privacy: j['privacy'] as String?,
+        vertical: (j['vertical'] as bool?) ?? false,
+        hint: j['hint'] as String?,
+        link: j['link'] as String?,
+        state: (j['state'] as String?) ?? 'off',
+        error: j['error'] as String?,
+      );
+}
+
 class OutputsState {
-  const OutputsState({this.relay = false, this.platforms = const []});
+  const OutputsState({this.relay = false, this.platforms = const [], this.destinations = const []});
 
   /// OBS sends one stream to the server, which restreams it to each platform.
   final bool relay;
   final List<PlatformOutput> platforms;
+  final List<DestinationOutput> destinations;
 
   PlatformOutput of(StreamPlatform p) =>
       platforms.firstWhere((x) => x.platform == p, orElse: () => PlatformOutput(platform: p));
 
   List<PlatformOutput> get active => platforms.where((p) => p.active).toList();
+  List<DestinationOutput> get activeDestinations => destinations.where((d) => d.active).toList();
+
+  /// Everywhere the show goes when the director goes live.
+  int get activeCount => active.length + activeDestinations.length;
+
+  /// "YouTube + Facebook + 2 more", for the Go live button.
+  String get goLiveLabel {
+    final names = active.map((o) => o.platform.label).toList();
+    final extra = activeDestinations.length;
+    if (names.isEmpty && extra == 0) return 'Go live on YouTube';
+    if (names.isEmpty) return 'Go live: $extra destination${extra == 1 ? '' : 's'}';
+    return 'Go live: ${names.join(' + ')}${extra > 0 ? ' + $extra more' : ''}';
+  }
 
   factory OutputsState.fromJson(Map<String, dynamic>? j) => j == null
       ? const OutputsState()
       : OutputsState(
           relay: (j['relay'] as bool?) ?? false,
           platforms: ((j['platforms'] as List?) ?? const []).map((p) => PlatformOutput.fromJson(p as Map<String, dynamic>)).toList(),
+          destinations:
+              ((j['destinations'] as List?) ?? const []).map((d) => DestinationOutput.fromJson(d as Map<String, dynamic>)).toList(),
         );
+}
+
+/// A YouTube channel of the organisation: the main one, or an extra one connected later.
+class YoutubeChannel {
+  const YoutubeChannel({required this.id, required this.title, this.main = false});
+
+  /// 'main' for the main channel, else the id used to add it to events.
+  final String id;
+  final String title;
+  final bool main;
+
+  factory YoutubeChannel.fromJson(Map<String, dynamic> j) =>
+      YoutubeChannel(id: '${j['id']}', title: (j['title'] as String?) ?? 'YouTube channel', main: (j['main'] as bool?) ?? false);
 }
 
 // ---------------------------------------------------------------- graphics
@@ -1044,12 +1140,22 @@ String formatAmount(double v) {
 }
 
 class BillingPricing {
-  const BillingPricing({this.freeCameras = 2, this.freeMinutes = 10, this.cameraPrice = 0, this.minutePrice = 0, this.graceMinutes = 5});
+  const BillingPricing({
+    this.freeCameras = 2,
+    this.freeMinutes = 10,
+    this.cameraPrice = 0,
+    this.minutePrice = 0,
+    this.graceMinutes = 5,
+    this.freeDestinations = 1,
+    this.destinationPrice = 0,
+  });
   final int freeCameras;
   final int freeMinutes;
   final double cameraPrice;
   final double minutePrice;
   final int graceMinutes;
+  final int freeDestinations;
+  final double destinationPrice;
 
   factory BillingPricing.fromJson(Map<String, dynamic>? j) => j == null
       ? const BillingPricing()
@@ -1059,6 +1165,8 @@ class BillingPricing {
           cameraPrice: _d(j['cameraPrice']),
           minutePrice: _d(j['minutePrice']),
           graceMinutes: (j['graceMinutes'] as num?)?.toInt() ?? 5,
+          freeDestinations: (j['freeDestinations'] as num?)?.toInt() ?? 1,
+          destinationPrice: _d(j['destinationPrice']),
         );
 }
 
@@ -1166,6 +1274,11 @@ class TournamentBilling {
     this.camerasExtra = 0,
     this.cameraLimit = 0,
     this.camerasUsed = 0,
+    this.destinationsFree = 1,
+    this.destinationsExtra = 0,
+    this.destinationLimit = 1,
+    this.destinationsUsed = 0,
+    this.destinationPrice = 0,
     this.liveSeconds = 0,
     this.freeSecondsLeft = 0,
     this.remainingSeconds,
@@ -1183,6 +1296,13 @@ class TournamentBilling {
   final int camerasExtra;
   final int cameraLimit;
   final int camerasUsed;
+
+  /// Destinations (YouTube channels, Facebook, Instagram, stream keys) included in this event.
+  final int destinationsFree;
+  final int destinationsExtra;
+  final int destinationLimit;
+  final int destinationsUsed;
+  final double destinationPrice;
   final int liveSeconds;
   final int freeSecondsLeft;
 
@@ -1197,11 +1317,15 @@ class TournamentBilling {
   bool get low => remainingSeconds != null && remainingSeconds! <= 600;
   int get freeCameraSlotsLeft => (cameraLimit - camerasUsed).clamp(0, 1000);
 
+  /// Room for one more destination without buying (always true when billing is off).
+  bool get destinationRoom => !enabled || destinationsUsed < destinationLimit;
+
   factory TournamentBilling.fromJson(Map<String, dynamic>? j) {
     if (j == null) return const TournamentBilling();
     final cams = (j['cameras'] as Map<String, dynamic>?) ?? const {};
     final mins = (j['minutes'] as Map<String, dynamic>?) ?? const {};
     final grace = (j['grace'] as Map<String, dynamic>?) ?? const {};
+    final dest = (j['destinations'] as Map<String, dynamic>?) ?? const {};
     return TournamentBilling(
       enabled: (j['enabled'] as bool?) ?? false,
       suspended: (j['suspended'] as bool?) ?? false,
@@ -1212,6 +1336,11 @@ class TournamentBilling {
       camerasExtra: (cams['extra'] as num?)?.toInt() ?? 0,
       cameraLimit: (cams['limit'] as num?)?.toInt() ?? 0,
       camerasUsed: (cams['used'] as num?)?.toInt() ?? 0,
+      destinationsFree: (dest['free'] as num?)?.toInt() ?? 1,
+      destinationsExtra: (dest['extra'] as num?)?.toInt() ?? 0,
+      destinationLimit: (dest['limit'] as num?)?.toInt() ?? 1,
+      destinationsUsed: (dest['used'] as num?)?.toInt() ?? 0,
+      destinationPrice: _d(dest['price']),
       liveSeconds: (mins['liveSeconds'] as num?)?.toInt() ?? 0,
       freeSecondsLeft: (mins['freeSecondsLeft'] as num?)?.toInt() ?? 0,
       remainingSeconds: (mins['remainingSeconds'] as num?)?.toInt(),

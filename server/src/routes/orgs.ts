@@ -134,7 +134,11 @@ export function registerOrgRoutes(app: FastifyInstance, ctx: Ctx) {
     }
     try {
       const r = await youtube.completeConnect(q.code, q.state);
-      return page('YouTube connected', `Channel “${r.channelTitle.replace(/[<>&]/g, '')}” is connected. Go back to the ${config.BRAND_NAME} app.`);
+      const title = r.channelTitle.replace(/[<>&]/g, '');
+      if (r.extra) {
+        return page('YouTube channel added', `Channel “${title}” is connected as an extra channel. In the ${config.BRAND_NAME} app, add it to an event under Streaming platforms, then Add destination.`);
+      }
+      return page('YouTube connected', `Channel “${title}” is connected. Go back to the ${config.BRAND_NAME} app.`);
     } catch (err) {
       reply.status(err instanceof HttpError ? err.status : 500);
       return page('YouTube was not connected', (err as Error).message.replace(/[<>&]/g, ''));

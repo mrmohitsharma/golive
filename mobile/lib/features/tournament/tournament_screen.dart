@@ -163,6 +163,13 @@ class _TournamentScreenState extends State<TournamentScreen> {
         action: TextButton(onPressed: b.suspended || _busy ? null : _buyCameras, child: const Text('Add camera')),
       ),
       _PlanRow(
+        icon: Icons.cell_tower,
+        title: 'Destinations: ${b.destinationsUsed} of ${b.destinationLimit} included',
+        subtitle: '${b.destinationsFree} free${b.destinationsExtra > 0 ? ' + ${b.destinationsExtra} bought' : ''}. '
+            'Each YouTube channel, Facebook or Instagram account counts as one. Extra destination ${formatAmount(b.destinationPrice)} credits.',
+        warn: b.destinationsUsed > b.destinationLimit,
+      ),
+      _PlanRow(
         icon: Icons.timer_outlined,
         title: rem == null ? 'Live time: no limit' : (b.graceActive ? 'Credits finished: grace period' : 'Live time left: about $rem min'),
         subtitle: [
@@ -312,8 +319,294 @@ class _TournamentScreenState extends State<TournamentScreen> {
 
   // ---------------------------------------------------------------- platforms
   Future<void> _setPlatform(StreamPlatform p, bool on) async {
-    final r = await guarded(context, () => _api.setOutputs(_t.id, {p.name: {'enabled': on}}));
+    final r = await _withRoom(() => _api.setOutputs(_t.id, {p.name: {'enabled': on}}));
     if (r != null && mounted) setState(() => _outputs = r);
+    if (r != null) await _load(quiet: true);
+  }
+
+  /// Runs a change that may add a destination. If the event has no room left, offers to buy
+  /// one more destination for this event and then tries the change again.
+  Future<T?> _withRoom<T>(Future<T> Function() call) async {
+    try {
+      return await call();
+    } on ApiException catch (e) {
+      if (!mounted) return null;
+      if (e.code != 'destination_limit') {
+        toast(context, e.message, error: true);
+        return null;
+      }
+      if (!await _buyDestination(e.message) || !mounted) return null;
+      return guarded(context, call);
+    }
+  }
+
+  Future<bool> _buyDestination(String why) async {
+    final b = _billing;
+    final price = b.destinationPrice;
+    final enough = price <= b.balance;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Add a destination'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(why),
+          const SizedBox(height: 12),
+          Text('One more destination for this event costs ${formatAmount(price)} credits. Club balance: ${formatAmount(b.balance)} credits.'),
+          if (!enough) ...[
+            const SizedBox(height: 12),
+            const InfoBanner(icon: Icons.account_balance_wallet_outlined, text: 'Not enough credits. Buy credits first.', error: true),
+          ],
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          if (enough)
+            FilledButton(onPressed: () => Navigator.pop(c, 'buy'), child: Text('Add for ${formatAmount(price)} credits'))
+          else
+            FilledButton(onPressed: () => Navigator.pop(c, 'credits'), child: const Text('Buy credits')),
+        ],
+      ),
+    );
+    if (!mounted) return false;
+    if (choice == 'credits') {
+      _openCredits();
+      return false;
+    }
+    if (choice != 'buy') return false;
+    final r = await guarded(context, () => _api.buyDestinations(_t.id, 1));
+    if (r == null || !mounted) return false;
+    setState(() => _billing = r);
+    return true;
+  }
+
+  // ---------------------------------------------------------------- extra destinations
+  void _applyDestinations((OutputsState, TournamentBilling)? r) {
+    if (r == null || !mounted) return;
+    setState(() {
+      _outputs = r.$1;
+      _billing = r.$2;
+    });
+  }
+
+  Future<void> _addDestination() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('Add a destination'), subtitle: Text('The same show also goes here when you go live.')),
+          ListTile(
+            leading: const Icon(Icons.smart_display),
+            title: const Text('Another YouTube channel'),
+            subtitle: const Text('Connected with Google sign-in; the broadcast is made for you'),
+            onTap: () => Navigator.pop(c, 'channel'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.key),
+            title: const Text('YouTube with a stream key'),
+            subtitle: const Text('Any channel: copy the key from YouTube Studio'),
+            onTap: () => Navigator.pop(c, 'youtube'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.facebook),
+            title: const Text('Facebook with a stream key'),
+            subtitle: const Text('A profile, Page or group: copy the key from Live Producer'),
+            onTap: () => Navigator.pop(c, 'facebook'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.camera_alt_outlined),
+            title: const Text('Instagram with a stream key'),
+            subtitle: const Text('Another account; sent in vertical 9:16'),
+            onTap: () => Navigator.pop(c, 'instagram'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings_input_antenna),
+            title: const Text('Other service'),
+            subtitle: const Text('Any RTMP stream URL and key'),
+            onTap: () => Navigator.pop(c, 'other'),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice == 'channel') return _addChannelDestination();
+    return _addKeyDestination(choice);
+  }
+
+  Future<void> _addChannelDestination() async {
+    final orgId = _t.orgId ?? widget.session.selectedOrg?.id;
+    if (orgId == null) return;
+    final channels = await guarded(context, () => _api.youtubeChannels(orgId));
+    if (channels == null || !mounted) return;
+    final extra = channels.where((c) => !c.main).toList();
+    final added = _outputs.destinations.map((d) => d.channelId).whereType<String>().toSet();
+    var privacy = 'unlisted';
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setLocal) => AlertDialog(
+          title: const Text('Another YouTube channel'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                if (extra.isEmpty)
+                  const Text('No other channel is connected yet. Connect one with Google sign-in; its owner signs in once.')
+                else ...[
+                  for (final ch in extra)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.smart_display),
+                      title: Text(ch.title),
+                      subtitle: added.contains(ch.id) ? const Text('Already a destination of this event') : null,
+                      enabled: !added.contains(ch.id),
+                      onTap: added.contains(ch.id) ? null : () => Navigator.pop(c, ch.id),
+                    ),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'public', label: Text('Public')),
+                      ButtonSegment(value: 'unlisted', label: Text('Unlisted')),
+                      ButtonSegment(value: 'private', label: Text('Private')),
+                    ],
+                    selected: {privacy},
+                    onSelectionChanged: (v) => setLocal(() => privacy = v.first),
+                  ),
+                ],
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+            TextButton.icon(onPressed: () => Navigator.pop(c, '+connect'), icon: const Icon(Icons.add_link), label: const Text('Connect a channel')),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    if (picked == '+connect') {
+      final url = await guarded(context, () => _api.youtubeChannelConnectUrl(orgId));
+      if (url == null || !mounted) return;
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      if (mounted) toast(context, 'Sign in with the channel’s Google account, then come back and tap Add destination.');
+      return;
+    }
+    setState(() => _busy = true);
+    final r = await _withRoom(() => _api.addDestination(_t.id, {'kind': 'channel', 'channelId': picked, 'privacy': privacy}));
+    if (mounted) setState(() => _busy = false);
+    _applyDestinations(r);
+    if (r != null && mounted) toast(context, 'Channel added. It goes live with the show.');
+  }
+
+  Future<void> _addKeyDestination(String platform) async {
+    final (title, help, defaultUrl, urlHint) = switch (platform) {
+      'youtube' => (
+          'YouTube stream key',
+          'In YouTube Studio for that channel: Create > Go live > Stream. Copy the stream key. The usual stream URL is filled in.',
+          'rtmps://a.rtmps.youtube.com/live2',
+          'rtmps://a.rtmps.youtube.com/live2',
+        ),
+      'facebook' => (
+          'Facebook stream key',
+          'On facebook.com: Live video > Streaming software. Copy the stream key (and the URL if it differs).',
+          'rtmps://live-api-s.facebook.com:443/rtmp/',
+          'rtmps://live-api-s.facebook.com:443/rtmp/',
+        ),
+      'instagram' => (
+          'Instagram stream key',
+          'On instagram.com with that professional account: Create (+) > Live video. Copy the stream URL and key. Instagram makes a new key every time.',
+          '',
+          'rtmps://edgetee-upload-…:443/rtmp/',
+        ),
+      _ => ('Other service', 'Paste the RTMP or RTMPS stream URL and key from the service.', '', 'rtmp://…'),
+    };
+    final label = TextEditingController();
+    final url = TextEditingController(text: defaultUrl);
+    final key = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text(help),
+              const SizedBox(height: 12),
+              TextField(controller: label, decoration: const InputDecoration(labelText: 'Name (optional)', hintText: 'Sponsor channel')),
+              const SizedBox(height: 12),
+              TextField(controller: url, autocorrect: false, decoration: InputDecoration(labelText: 'Stream URL', hintText: urlHint)),
+              const SizedBox(height: 12),
+              TextField(controller: key, autocorrect: false, decoration: const InputDecoration(labelText: 'Stream key')),
+              if (platform == 'instagram') ...[
+                const SizedBox(height: 8),
+                Text('Sent as a vertical 9:16 picture.', style: Theme.of(c).textTheme.bodySmall),
+              ],
+            ]),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Add')),
+        ],
+      ),
+    );
+    final l = label.text.trim(), u = url.text.trim(), k = key.text.trim();
+    label.dispose();
+    url.dispose();
+    key.dispose();
+    if (ok != true || !mounted) return;
+    if (k.isEmpty) {
+      toast(context, 'Paste the stream key.', error: true);
+      return;
+    }
+    setState(() => _busy = true);
+    final r = await _withRoom(() => _api.addDestination(_t.id, {
+          'kind': 'key',
+          'platform': platform,
+          if (u.isNotEmpty) 'streamUrl': u,
+          'streamKey': k,
+          if (l.isNotEmpty) 'label': l,
+        }));
+    if (mounted) setState(() => _busy = false);
+    _applyDestinations(r);
+  }
+
+  Future<void> _toggleDestination(DestinationOutput d, bool on) async {
+    _applyDestinations(await _withRoom(() => _api.updateDestination(_t.id, d.id, {'enabled': on})));
+  }
+
+  Future<void> _removeDestination(DestinationOutput d) async {
+    final ok = await confirm(
+      context,
+      title: 'Remove ${d.label}?',
+      message: 'The show stops going to this destination. Credits paid for extra destinations stay with this event.',
+      action: 'Remove',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    _applyDestinations(await guarded(context, () => _api.removeDestination(_t.id, d.id)));
+  }
+
+  Widget _destinationRow(DestinationOutput d) {
+    final (pill, color) = switch (d.state) {
+      'live' => ('LIVE', Broadcast.onAir),
+      'connecting' => ('CONNECTING', Broadcast.warning),
+      'retrying' => ('RETRYING', Broadcast.warning),
+      _ => (null, Broadcast.offline),
+    };
+    final what = d.isChannel ? 'YouTube channel${d.privacy != null ? ', ${d.privacy}' : ''}' : '${d.platformLabel} key …${d.hint ?? ''}';
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      secondary: IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline), onPressed: _busy ? null : () => _removeDestination(d)),
+      title: Row(children: [
+        Flexible(child: Text(d.label, overflow: TextOverflow.ellipsis)),
+        if (pill != null) ...[const SizedBox(width: 8), StatusPill(label: pill, color: color, dense: true)],
+      ]),
+      subtitle: Text(d.error ?? (d.ready ? (d.link ?? what) : '$what · broadcast is made when you go live')),
+      value: d.enabled,
+      onChanged: _busy ? null : (v) => _toggleDestination(d, v),
+    );
   }
 
   Future<void> _instagramKey() async {
@@ -350,8 +643,9 @@ class _TournamentScreenState extends State<TournamentScreen> {
     url.dispose();
     key.dispose();
     if (ok != true || u.isEmpty || !mounted) return;
-    final r = await guarded(context, () => _api.setOutputs(_t.id, {'instagram': {'streamUrl': u, 'streamKey': k}}));
+    final r = await _withRoom(() => _api.setOutputs(_t.id, {'instagram': {'streamUrl': u, 'streamKey': k}}));
     if (r != null && mounted) setState(() => _outputs = r);
+    if (r != null) await _load(quiet: true);
   }
 
   String get _watchUrl => '${widget.session.serverUrl}/watch/${_t.id}';
@@ -580,6 +874,18 @@ class _TournamentScreenState extends State<TournamentScreen> {
           icon: const Icon(Icons.key),
           label: Text(_outputs.of(StreamPlatform.instagram).configured ? 'New Instagram key' : 'Paste Instagram key'),
         ),
+      ),
+      const Divider(height: 28),
+      Row(children: [
+        Expanded(child: Text('More destinations', style: Theme.of(context).textTheme.titleSmall)),
+        if (_billing.enabled) Text('${_billing.destinationsUsed} of ${_billing.destinationLimit} included', style: small),
+      ]),
+      const SizedBox(height: 4),
+      Text('Send the same show to more YouTube channels, Facebook or Instagram accounts, or any service with a stream key.', style: small),
+      for (final d in _outputs.destinations) _destinationRow(d),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(onPressed: _busy ? null : _addDestination, icon: const Icon(Icons.add), label: const Text('Add destination')),
       ),
       if (!_outputs.relay)
         Padding(

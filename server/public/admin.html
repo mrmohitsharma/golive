@@ -200,7 +200,7 @@
     return el('div', { class: 'panel' }, el('div', { class: 'head' }, q), box);
   }
 
-  const kindText = { purchase: 'Bought credits', cameras: 'Extra cameras', minutes: 'Live minutes', admin: 'Adjusted by CoGolfers', refund: 'Refund' };
+  const kindText = { purchase: 'Bought credits', cameras: 'Extra cameras', minutes: 'Live minutes', admin: 'Adjusted by CoGolfers', refund: 'Refund', destinations: 'Extra destinations' };
 
   async function club(id) {
     const d = await call('GET', `/api/admin/orgs/${id}`);
@@ -225,7 +225,7 @@
     });
 
     // Custom pricing
-    const keys = [['freeCameras', 'Free cameras / tournament', '1'], ['freeMinutes', 'Free live minutes / tournament', '1'], ['cameraPrice', 'Credits per extra camera', '0.01'], ['minutePrice', 'Credits per live minute', '0.01'], ['graceMinutes', 'Grace minutes', '1']];
+    const keys = [['freeCameras', 'Free cameras / tournament', '1'], ['freeMinutes', 'Free live minutes / tournament', '1'], ['cameraPrice', 'Credits per extra camera', '0.01'], ['minutePrice', 'Credits per live minute', '0.01'], ['graceMinutes', 'Grace minutes', '1'], ['freeDestinations', 'Free destinations / event', '1'], ['destinationPrice', 'Credits per extra destination', '0.01']];
     const inputs = Object.fromEntries(keys.map(([k, , step]) => [k, el('input', { type: 'number', min: '0', step, value: d.overrides[k] ?? '', placeholder: `Default ${d.platformPricing[k]}` })]));
     const savePricing = guard(async () => {
       const overrides = {};
@@ -273,7 +273,7 @@
   // ------------------------------------------------------------------ pricing
   async function pricing() {
     const s = await call('GET', '/api/admin/settings');
-    const fields = [['freeCameras', 'Free cameras per tournament', '1', 'Each tournament can connect this many camera phones at no cost.'], ['cameraPrice', 'Credits per extra camera', '0.01', 'Bought per tournament by the club.'], ['freeMinutes', 'Free live minutes per tournament', '1', 'Counted from Go live to End stream.'], ['minutePrice', 'Credits per live minute', '0.01', 'Charged for each started minute after the free minutes. 0 = unlimited.'], ['graceMinutes', 'Grace minutes when credits run out', '1', 'The director is warned at 10 and 2 minutes left; after the grace period the stream ends.']];
+    const fields = [['freeCameras', 'Free cameras per tournament', '1', 'Each tournament can connect this many camera phones at no cost.'], ['cameraPrice', 'Credits per extra camera', '0.01', 'Bought per tournament by the club.'], ['freeMinutes', 'Free live minutes per tournament', '1', 'Counted from Go live to End stream.'], ['minutePrice', 'Credits per live minute', '0.01', 'Charged for each started minute after the free minutes. 0 = unlimited.'], ['graceMinutes', 'Grace minutes when credits run out', '1', 'The director is warned at 10 and 2 minutes left; after the grace period the stream ends.'], ['freeDestinations', 'Free destinations per event', '1', 'Places one event streams to at no cost: each YouTube channel, Facebook Page, Instagram account or other stream key counts as one.'], ['destinationPrice', 'Credits per extra destination', '0.01', 'Bought per event by the club, for each destination beyond the free ones.']];
     const inputs = Object.fromEntries(fields.map(([k, , step]) => [k, el('input', { type: 'number', min: '0', step, value: s.pricing[k] })]));
     let packs = s.packs.map((p) => ({ ...p }));
     const packBox = el('div');

@@ -8,7 +8,10 @@ export const PLATFORMS: Platform[] = ['youtube', 'facebook', 'instagram'];
 export type RelayState = 'connecting' | 'live' | 'retrying';
 
 export interface RelayTarget {
-  platform: Platform;
+  /** 'youtube' | 'facebook' | 'instagram' for the main platforms, 'd:<uuid>' for extra destinations. */
+  id: string;
+  /** For logs: the platform name or 'other'. */
+  platform: string;
   /** Full RTMP(S) URL including the stream key. */
   url: string;
   /** Re-encode to 720x1280 (Instagram); otherwise the programme is copied untouched. */
@@ -16,7 +19,8 @@ export interface RelayTarget {
 }
 
 export interface RelayStatus {
-  platform: Platform;
+  id: string;
+  platform: string;
   state: RelayState;
   since: string;
   restarts: number;
@@ -42,7 +46,7 @@ interface Running {
  * Instagram gets a 9:16 version: the full picture centred on a blurred, darkened fill.
  */
 export class RelayManager {
-  private byTournament = new Map<string, Map<Platform, Running>>();
+  private byTournament = new Map<string, Map<string, Running>>();
 
   constructor(
     private readonly config: Config,
@@ -75,27 +79,27 @@ export class RelayManager {
 
   /** Makes the running relays for a tournament match `targets` (start new, stop removed, restart changed). */
   setTargets(tournamentId: string, input: string, targets: RelayTarget[]): void {
-    const map = this.byTournament.get(tournamentId) ?? new Map<Platform, Running>();
+    const map = this.byTournament.get(tournamentId) ?? new Map<string, Running>();
     this.byTournament.set(tournamentId, map);
-    for (const [platform, r] of map) {
-      const next = targets.find((t) => t.platform === platform);
+    for (const [id, r] of map) {
+      const next = targets.find((t) => t.id === id);
       if (!next || next.url !== r.target.url || next.vertical !== r.target.vertical) {
         this.kill(r);
-        map.delete(platform);
+        map.delete(id);
       }
     }
     for (const t of targets) {
-      if (map.has(t.platform)) continue;
+      if (map.has(t.id)) continue;
       const r: Running = {
         target: t,
         proc: null,
-        status: { platform: t.platform, state: 'connecting', since: new Date().toISOString(), restarts: 0, error: null },
+        status: { id: t.id, platform: t.platform, state: 'connecting', since: new Date().toISOString(), restarts: 0, error: null },
         timer: null,
         lastOutUs: 0,
         wanted: true,
         stderr: '',
       };
-      map.set(t.platform, r);
+      map.set(t.id, r);
       this.run(tournamentId, input, r);
     }
     if (!map.size) this.byTournament.delete(tournamentId);
@@ -164,7 +168,7 @@ export class RelayManager {
       if (wasLive) r.status.restarts = 0;
       r.status.restarts++;
       const err = lastLine(r.stderr) ?? `stopped (exit ${code ?? 'signal'})`;
-      this.log.warn({ tournamentId, platform: r.target.platform, err }, 'relay stopped, retrying');
+      this.log.warn({ tournamentId, destination: r.target.id, platform: r.target.platform, err }, 'relay stopped, retrying');
       this.set(tournamentId, r, 'retrying', friendly(err));
       const delay = Math.min(this.config.RELAY_RETRY_MAX_SEC, 2 ** Math.min(r.status.restarts, 5)) * 1000;
       r.timer = setTimeout(() => {

@@ -157,6 +157,15 @@ class ApiClient {
   Future<String> youtubeConnectUrl(String orgId) async => (await post('/api/orgs/$orgId/youtube/connect'))['url'] as String;
   Future<void> disconnectYoutube(String orgId) => delete('/api/orgs/$orgId/youtube');
 
+  /// The main channel and any extra channels connected for more destinations.
+  Future<List<YoutubeChannel>> youtubeChannels(String orgId) async =>
+      (((await get('/api/orgs/$orgId/youtube/channels'))['channels'] as List?) ?? const [])
+          .map((c) => YoutubeChannel.fromJson(c as Map<String, dynamic>))
+          .toList();
+  Future<String> youtubeChannelConnectUrl(String orgId) async =>
+      (await post('/api/orgs/$orgId/youtube/channels/connect'))['url'] as String;
+  Future<void> disconnectYoutubeChannel(String orgId, String channelId) => delete('/api/orgs/$orgId/youtube/channels/$channelId');
+
   Future<OrgFacebook> orgFacebook(String orgId) async => OrgFacebook.fromJson(await get('/api/orgs/$orgId/facebook'));
   Future<String> facebookConnectUrl(String orgId) async => (await post('/api/orgs/$orgId/facebook/connect'))['url'] as String;
   Future<OrgFacebook> selectFacebookPage(String orgId, String pageId) async =>
@@ -187,6 +196,9 @@ class ApiClient {
 
   Future<TournamentBilling> tournamentBilling(String id) async =>
       TournamentBilling.fromJson((await get('/api/tournaments/$id/billing'))['billing'] as Map<String, dynamic>?);
+
+  Future<TournamentBilling> buyDestinations(String id, int count) async =>
+      TournamentBilling.fromJson((await post('/api/tournaments/$id/billing/destinations', {'count': count}))['billing'] as Map<String, dynamic>?);
 
   Future<TournamentBilling> buyCameras(String id, int count) async =>
       TournamentBilling.fromJson((await post('/api/tournaments/$id/billing/cameras', {'count': count}))['billing'] as Map<String, dynamic>?);
@@ -273,6 +285,17 @@ class ApiClient {
   Future<OutputsState> outputs(String id) async => OutputsState.fromJson((await get('/api/tournaments/$id/outputs'))['outputs'] as Map<String, dynamic>?);
 
   /// Turn platforms on/off; Instagram: paste the stream URL and key from instagram.com (they change every stream).
+  /// Extra destinations: {'kind': 'channel', 'channelId', 'privacy'} or {'kind': 'key', 'platform', 'streamUrl', 'streamKey', 'label'}.
+  Future<(OutputsState, TournamentBilling)> addDestination(String id, Map<String, Object?> body) async => _destinations(await post('/api/tournaments/$id/destinations', body));
+  Future<(OutputsState, TournamentBilling)> updateDestination(String id, String destId, Map<String, Object?> body) async =>
+      _destinations(await patch('/api/tournaments/$id/destinations/$destId', body));
+  Future<(OutputsState, TournamentBilling)> removeDestination(String id, String destId) async =>
+      _destinations(await _send('DELETE', '/api/tournaments/$id/destinations/$destId'));
+  (OutputsState, TournamentBilling) _destinations(Map<String, dynamic> r) => (
+        OutputsState.fromJson(r['outputs'] as Map<String, dynamic>?),
+        TournamentBilling.fromJson(r['billing'] as Map<String, dynamic>?),
+      );
+
   Future<OutputsState> setOutputs(String id, Map<String, Object?> patch_) async =>
       OutputsState.fromJson((await patch('/api/tournaments/$id/outputs', patch_))['outputs'] as Map<String, dynamic>?);
 

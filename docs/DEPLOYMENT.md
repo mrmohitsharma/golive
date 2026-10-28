@@ -117,6 +117,17 @@ Instagram has no API for going live, so the director pastes a key each time:
 
 Instagram receives a vertical 720×1280 version made on the server (full picture, blurred bars above and below). It needs about 1 vCPU while live (on a t3.large that is above its CPU baseline, billed as T3 Unlimited surplus).
 
+## 3c-2. Several YouTube channels, Facebook or Instagram accounts (extra destinations)
+
+One show can go to more places than the main YouTube channel, Facebook Page and Instagram key:
+
+- **Another YouTube channel, connected:** Organisation owner or admin, in the app: event screen → *Streaming platforms* → *Add destination* → *Another YouTube channel* → *Connect a channel*. The channel's owner signs in with Google once. After that, adding it to an event makes the broadcast on that channel automatically; it starts and ends with the show.
+- **Any channel or account by stream key:** *Add destination* → YouTube, Facebook, Instagram or *Other service*, then paste the stream key (and the URL for Instagram and other services). Nothing to connect.
+
+Pricing (in `/admin` → Pricing & packs): **Free destinations per event** (default 1) and **Credits per extra destination** (default 50). Every place the event streams to counts, including the main YouTube, Facebook and Instagram. When an organiser adds one more than the event includes, the app offers to buy it for this event. Set *Free destinations* to 3 to keep the old behaviour (YouTube + Facebook + Instagram free).
+
+Server sizing: each destination is one more outgoing stream (4–6 Mbps), and each Instagram-style vertical destination uses about one CPU core.
+
 ## 3d. Show it on the CoGolfers website
 
 The CoGolfers website can stay on its own server: viewers' browsers load the video from YouTube and the scores from this server.

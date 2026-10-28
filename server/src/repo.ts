@@ -54,6 +54,7 @@ export interface TournamentRow {
   fb_stream_url_enc: string | null;
   fb_permalink: string | null;
   extra_cameras: number;
+  extra_destinations: number;
   live_seconds: number;
   billed_minutes: number;
   grace_seconds: number;

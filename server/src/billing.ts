@@ -20,10 +20,14 @@ export const pricingSchema = z.object({
   cameraPrice: z.number().min(0).max(1_000_000),
   minutePrice: z.number().min(0).max(1_000_000),
   graceMinutes: z.number().int().min(0).max(120),
+  // Destinations (YouTube channels, Facebook, Instagram, other stream keys) included per event,
+  // and the price of each extra one, bought per event.
+  freeDestinations: z.number().int().min(0).max(100).default(1),
+  destinationPrice: z.number().min(0).max(1_000_000).default(50),
 });
 export type Pricing = z.infer<typeof pricingSchema>;
 
-export const DEFAULT_PRICING: Pricing = { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5, graceMinutes: 5 };
+export const DEFAULT_PRICING: Pricing = { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5, graceMinutes: 5, freeDestinations: 1, destinationPrice: 50 };
 
 export const packSchema = z.object({
   id: z.string().trim().regex(/^[a-z0-9_-]{1,32}$/i, 'pack id: letters, numbers, - or _'),
@@ -60,7 +64,7 @@ export interface OrgBillingRow {
 export interface WalletTxRow {
   id: string;
   org_id: string;
-  kind: 'purchase' | 'cameras' | 'minutes' | 'admin' | 'refund';
+  kind: 'purchase' | 'cameras' | 'minutes' | 'admin' | 'refund' | 'destinations';
   amount_cc: string;
   quantity: number | null;
   tournament_id: string | null;
@@ -94,6 +98,8 @@ export interface TournamentBilling {
   balance: number;
   pricing: Pricing;
   cameras: { free: number; extra: number; limit: number; used: number; price: number };
+  /** Places the show is streamed to (main platforms + extra destinations). */
+  destinations: { free: number; extra: number; limit: number; used: number; price: number };
   minutes: {
     free: number;
     liveSeconds: number;
@@ -131,6 +137,8 @@ export class BillingService {
   private meters = new Map<string, Meter>();
   private timer: NodeJS.Timeout | null = null;
   hooks: BillingHooks | null = null;
+  /** How many destinations an event streams to (set by the app wiring: OutputsService.destinationCount). */
+  destinationCounter: ((t: TournamentRow) => Promise<number>) | null = null;
 
   constructor(
     private readonly config: Config,
@@ -301,6 +309,41 @@ export class BillingService {
     return this.tournamentState(fresh);
   }
 
+  // ------------------------------------------------------------------ destinations
+  /** Destinations included in this event: null = no limit (billing off). */
+  async destinationLimit(t: TournamentRow): Promise<{ limit: number; price: number } | null> {
+    if (!this.enabled) return null;
+    const p = await this.pricingFor(t.org_id);
+    return { limit: p.freeDestinations + (t.extra_destinations ?? 0), price: p.destinationPrice };
+  }
+
+  /** Buys extra destinations for one event from the club's wallet. */
+  async buyDestinations(t: TournamentRow, count: number, by: string): Promise<TournamentBilling> {
+    if (!this.enabled) throw new HttpError(409, 'billing_off', 'Destination limits are not used on this server.');
+    const b = await this.orgBilling(t.org_id);
+    if (b.suspended) throw new HttpError(403, 'club_suspended', suspendedText(b));
+    const p = await this.pricingFor(t.org_id, b);
+    const cc = toCc(p.destinationPrice) * count;
+    await this.repo.tx(async (c) => {
+      if (cc > 0) {
+        const left = await this.debit(c, t.org_id, cc, {
+          kind: 'destinations',
+          quantity: count,
+          tournamentId: t.id,
+          note: `${count} extra destination${count > 1 ? 's' : ''}`,
+          by,
+        });
+        if (left === null) {
+          throw new HttpError(402, 'insufficient_credits', `${count} extra destination${count > 1 ? 's cost' : ' costs'} ${fromCc(cc)} credits; the club has ${fromCc(b.balance_cc)}. Buy credits first.`);
+        }
+      }
+      await c.query('UPDATE tournaments SET extra_destinations = extra_destinations + $2 WHERE id = $1', [t.id, count]);
+    });
+    await this.walletChanged(t.org_id);
+    const fresh = (await this.repo.tournamentById(t.id))!;
+    return this.tournamentState(fresh);
+  }
+
   // ------------------------------------------------------------------ live minutes
   async tournamentState(t: TournamentRow, row?: OrgBillingRow): Promise<TournamentBilling> {
     const b = row ?? (await this.orgBilling(t.org_id));
@@ -316,10 +359,15 @@ export class BillingService {
       const prepaid = Math.max(0, billed * 60 - Math.max(0, live - freeSec));
       remaining = freeLeft + prepaid + Math.floor(balanceCc / toCc(p.minutePrice)) * 60;
     }
+    const destUsed = this.destinationCounter ? await this.destinationCounter(t) : 0;
+    const destLimit = p.freeDestinations + (t.extra_destinations ?? 0);
     const graceLeft = this.meters.get(t.id)?.inGrace ? Math.max(0, p.graceMinutes * 60 - (t.grace_seconds ?? 0)) : null;
     let reason: string | null = null;
     if (this.enabled && b.suspended) reason = suspendedText(b);
-    else if (remaining !== null && remaining <= 0) reason = `No live minutes left: the free ${p.freeMinutes} minutes are used and the club has ${fromCc(balanceCc)} credits (${p.minutePrice} per minute). Buy credits to go live.`;
+    else if (destUsed > destLimit) {
+      const more = destUsed - destLimit;
+      reason = `This event streams to ${destUsed} destinations and includes ${destLimit}. Add ${more} more (${p.destinationPrice} credits each) or switch ${more === 1 ? 'one' : 'some'} off.`;
+    } else if (remaining !== null && remaining <= 0) reason = `No live minutes left: the free ${p.freeMinutes} minutes are used and the club has ${fromCc(balanceCc)} credits (${p.minutePrice} per minute). Buy credits to go live.`;
     return {
       enabled: this.enabled,
       suspended: b.suspended,
@@ -327,6 +375,7 @@ export class BillingService {
       balance: fromCc(balanceCc),
       pricing: p,
       cameras: { free: p.freeCameras, extra: t.extra_cameras ?? 0, limit: p.freeCameras + (t.extra_cameras ?? 0), used, price: p.cameraPrice },
+      destinations: { free: p.freeDestinations, extra: t.extra_destinations ?? 0, limit: destLimit, used: destUsed, price: p.destinationPrice },
       minutes: { free: p.freeMinutes, liveSeconds: live, billed, price: p.minutePrice, freeSecondsLeft: freeLeft, remainingSeconds: remaining },
       grace: { active: graceLeft !== null, secondsLeft: graceLeft },
       canGoLive: !this.enabled || reason === null,

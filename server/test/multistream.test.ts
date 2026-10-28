@@ -266,9 +266,9 @@ describe('multistream: one OBS stream → YouTube + Facebook + Instagram; public
 describe('relay helpers', () => {
   const config = testConfig();
   it('copy for 16:9 platforms, 9:16 re-encode for Instagram', () => {
-    const copy = RelayManager.args(config, 'rtsp://in', { platform: 'youtube', url: 'rtmps://yt/live2/k', vertical: false });
+    const copy = RelayManager.args(config, 'rtsp://in', { id: 'youtube', platform: 'youtube', url: 'rtmps://yt/live2/k', vertical: false });
     assert.deepEqual(copy.slice(copy.indexOf('-map')), ['-map', '0:v', '-map', '0:a?', '-c', 'copy', '-f', 'flv', '-flvflags', 'no_duration_filesize', 'rtmps://yt/live2/k']);
-    const ig = RelayManager.args(config, 'rtsp://in', { platform: 'instagram', url: 'rtmps://ig/rtmp/k', vertical: true });
+    const ig = RelayManager.args(config, 'rtsp://in', { id: 'instagram', platform: 'instagram', url: 'rtmps://ig/rtmp/k', vertical: true });
     assert.ok(ig.includes('libx264') && ig.join(' ').includes('720:1280') && ig.includes('-g'));
   });
   it('joins platform URL and key', () => {
