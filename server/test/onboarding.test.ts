@@ -143,3 +143,40 @@ describe('onboarding: join links open the app', () => {
     }
   });
 });
+
+describe('onboarding: one-tap camera setup', () => {
+  let h: Harness;
+  let owner: { token: string; orgId: string; userId: string };
+  let tid: string;
+
+  before(async () => {
+    h = await startHarness();
+    owner = await signup(h, 'cams@club.test', 'Cam Club');
+    tid = await createTournament(h, owner.token, owner.orgId, { name: 'Cam Cup', eventType: 'wedding' });
+  });
+  after(async () => h.close());
+
+  it('cameras without a name become Cam 1, Cam 2…; a phone that rejoins keeps its name', async () => {
+    const inv = await expectOk(api(h, 'GET', `/api/tournaments/${tid}/invites`, undefined, owner.token));
+    const join = async (device: string) =>
+      (await expectOk(api(h, 'POST', '/api/join', { code: inv.invites[0].code, deviceId: device, name: 'Volunteer' }))).token as string;
+    const reg = async (token: string, device: string, name?: string) =>
+      expectOk(api(h, 'POST', `/api/tournaments/${tid}/cameras/register`, { deviceId: device, platform: 'android', ...(name ? { name } : {}) }, token));
+    const a = await join('device-aaaaaaaa');
+    const b = await join('device-bbbbbbbb');
+    assert.equal((await reg(a, 'device-aaaaaaaa')).camera.name, 'Cam 1');
+    assert.equal((await reg(b, 'device-bbbbbbbb')).camera.name, 'Cam 2');
+    assert.equal((await reg(a, 'device-aaaaaaaa')).camera.name, 'Cam 1', 'rejoin keeps the name');
+    assert.equal((await reg(a, 'device-aaaaaaaa', 'Stage left')).camera.name, 'Stage left');
+    const c = await join('device-cccccccc');
+    assert.equal((await reg(c, 'device-cccccccc')).camera.name, 'Cam 3');
+  });
+
+  it('upload test accepts bytes from signed-in phones only', async () => {
+    const body = Buffer.alloc(300_000, 7);
+    const r = await fetch(`${h.baseUrl}/api/speedtest/upload`, { method: 'POST', headers: { 'content-type': 'application/octet-stream', authorization: `Bearer ${owner.token}` }, body });
+    assert.deepEqual(await r.json(), { bytes: 300_000 });
+    const anon = await fetch(`${h.baseUrl}/api/speedtest/upload`, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body });
+    assert.equal(anon.status, 401);
+  });
+});

@@ -15,12 +15,25 @@ export function registerCameraRoutes(app: FastifyInstance, ctx: Ctx) {
   const { config, repo, hub, thumbs } = ctx;
   const any = requireAuth(config);
 
+  /**
+   * Upload test for camera setup (P1-10): the phone posts a few hundred KB to a few MB and times
+   * it, then picks the quality preset. Only signed-in callers; the body is read and dropped.
+   */
+  app.register(async (scope) => {
+    scope.addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: 8 * 1024 * 1024 }, (_req, body, done) => done(null, body));
+    scope.post('/api/speedtest/upload', { preHandler: any, bodyLimit: 8 * 1024 * 1024 }, async (req) => {
+      const bytes = Buffer.isBuffer(req.body) ? req.body.length : 0;
+      return { bytes };
+    });
+  });
+
   app.post('/api/tournaments/:id/cameras/register', { preHandler: any }, async (req, reply) => {
     const { t } = await requireTournament(repo, req.principal!, uuid.parse((req.params as { id: string }).id), 'camera');
     if (t.archived) throw new HttpError(404, 'tournament_not_found', 'Tournament not found or archived.');
     const body = z
       .object({
-        name: z.string().trim().min(1).max(40),
+        // Optional: without a name the server names it "Cam 1", "Cam 2"… (one-tap setup).
+        name: z.string().trim().max(40).optional().transform((v) => v || null),
         hole: holeSchema.optional().default(null),
         position: z.string().trim().max(60).nullish(),
         deviceId: z.string().min(8).max(128),
@@ -33,7 +46,7 @@ export function registerCameraRoutes(app: FastifyInstance, ctx: Ctx) {
       .registerCamera({
         tournamentId: t.id,
         owner: principalKey(req.principal!),
-        name: body.name,
+        name: body.name ?? null,
         hole: body.hole ?? null,
         position: body.position ?? null,
         deviceId: body.deviceId,

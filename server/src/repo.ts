@@ -515,7 +515,8 @@ export class Repo {
   async registerCamera(input: {
     tournamentId: string;
     owner: string;
-    name: string;
+    /** null = keep this phone's earlier name, or the next "Cam N" (one-tap setup, P1-10). */
+    name: string | null;
     hole: number | null;
     position: string | null;
     deviceId: string;
@@ -536,7 +537,7 @@ export class Repo {
           await c.query<CameraRow>(
             `UPDATE cameras SET name = $2, hole = $3, position = $4, device_platform = $5, device_model = $6, owner = $7, updated_at = now()
              WHERE id = $1 RETURNING *`,
-            [existing.rows[0].id, input.name, input.hole, input.position, input.platform, input.deviceModel, input.owner],
+            [existing.rows[0].id, input.name ?? existing.rows[0].name, input.hole, input.position, input.platform, input.deviceModel, input.owner],
           )
         ).rows[0];
         return { camera, created: false };
@@ -548,13 +549,20 @@ export class Repo {
       const order = await c.query<{ n: number }>('SELECT COALESCE(max(sort_order), 0) + 1 AS n FROM cameras WHERE tournament_id = $1', [
         input.tournamentId,
       ]);
+      let name = input.name;
+      if (!name) {
+        // Next free "Cam N": one more than the highest number used so far in this event.
+        const used = (await c.query<{ name: string }>('SELECT name FROM cameras WHERE tournament_id = $1', [input.tournamentId])).rows;
+        const top = Math.max(0, ...used.map((r) => Number(/^Cam (\d+)$/.exec(r.name)?.[1] ?? 0)));
+        name = `Cam ${Math.max(top, used.length) + 1}`;
+      }
       const camera = (
         await c.query<CameraRow>(
           `INSERT INTO cameras (tournament_id, name, hole, position, stream_path, publish_key, device_id, device_platform, device_model, owner, sort_order)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
           [
             input.tournamentId,
-            input.name,
+            name,
             input.hole,
             input.position,
             `cam-${randomSecret(5)}`,

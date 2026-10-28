@@ -30,7 +30,16 @@ const qualityPresets = <QualityPreset>[
 
 const positions = ['Tee', 'Fairway', 'Green', 'Clubhouse', 'Roaming', 'Other'];
 
-/// Register this phone as a camera: tournament, name, hole and position, quality.
+/// Quality for a measured upload speed: leave about a third spare for the mobile network's ups and downs.
+String presetForKbps(int kbps) {
+  if (kbps >= 7000) return '1080p30';
+  if (kbps >= 3800) return '720p30';
+  return '720p25-low';
+}
+
+/// One-tap camera setup (P1-10): the server names the camera ("Cam 2"), the rear camera is
+/// used, and a quick upload test picks the quality. The volunteer sees one GO LIVE button;
+/// name, quality, lens and (golf only) hole sit under "Settings".
 class CameraSetupScreen extends StatefulWidget {
   const CameraSetupScreen({super.key, required this.session, required this.tournament});
   final Session session;
@@ -46,25 +55,50 @@ class _CameraSetupScreenState extends State<CameraSetupScreen> {
   int? _hole;
   String _position = 'Tee';
   String _preset = '720p30';
+  // The quality was chosen by hand in Settings: the upload test no longer changes it.
+  bool _presetManual = false;
+  int? _kbps;
+  bool _testing = false;
   CameraFacing _facing = CameraFacing.back;
   bool _busy = false;
   bool _restored = false;
   String? _error;
 
+  EventProfile get _profile => widget.tournament.profile;
+
   @override
   void initState() {
     super.initState();
     _restore();
+    _speedTest();
   }
 
   Future<void> _restore() async {
     final p = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
+      // A name typed earlier on this phone is kept; otherwise the server picks "Cam N".
       _name.text = p.getString('cam.name') ?? '';
       _hole = p.getInt('cam.hole');
       _position = p.getString('cam.position') ?? 'Tee';
-      _preset = p.getString('cam.preset') ?? '720p30';
+      final manual = p.getString('cam.presetManual');
+      if (manual != null) {
+        _preset = manual;
+        _presetManual = true;
+      }
       _restored = true;
+    });
+  }
+
+  /// About 1 MB to our server (3 seconds on weak 4G), then the matching quality.
+  Future<void> _speedTest() async {
+    setState(() => _testing = true);
+    final kbps = await _api.uploadSpeedKbps();
+    if (!mounted) return;
+    setState(() {
+      _testing = false;
+      _kbps = kbps;
+      if (kbps != null && !_presetManual) _preset = presetForKbps(kbps);
     });
   }
 
@@ -75,9 +109,7 @@ class _CameraSetupScreenState extends State<CameraSetupScreen> {
     super.dispose();
   }
 
-  Future<void> _continue() async {
-    final name = _name.text.trim();
-    if (name.isEmpty) return setState(() => _error = 'Give this camera a name, e.g. "Hole 7 Green".');
+  Future<void> _goLive() async {
     setState(() {
       _busy = true;
       _error = null;
@@ -90,24 +122,29 @@ class _CameraSetupScreenState extends State<CameraSetupScreen> {
       }
       final device = await CgStreamer.deviceStatus();
       final deviceId = await CgStreamer.deviceId();
+      final askPosition = _profile.positionLabel != null;
       final (camera, target) = await _api.registerCamera(
         tournamentId: widget.tournament.id,
-        name: name,
-        hole: _hole,
-        position: _position,
+        name: _name.text.trim().isEmpty ? null : _name.text.trim(),
+        hole: askPosition ? _hole : null,
+        position: askPosition ? _position : null,
         deviceId: deviceId,
         platform: defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
         deviceModel: device.model,
       );
       final p = await SharedPreferences.getInstance();
-      await p.setString('cam.name', name);
+      if (_name.text.trim().isNotEmpty) await p.setString('cam.name', _name.text.trim());
       if (_hole != null) {
         await p.setInt('cam.hole', _hole!);
       } else {
         await p.remove('cam.hole');
       }
       await p.setString('cam.position', _position);
-      await p.setString('cam.preset', _preset);
+      if (_presetManual) {
+        await p.setString('cam.presetManual', _preset);
+      } else {
+        await p.remove('cam.presetManual');
+      }
       final preset = qualityPresets.firstWhere((q) => q.id == _preset);
       final cfg = StreamConfig(
         width: preset.config.width,
@@ -129,14 +166,24 @@ class _CameraSetupScreenState extends State<CameraSetupScreen> {
     }
   }
 
+  String get _qualityLine {
+    final q = qualityPresets.firstWhere((x) => x.id == _preset);
+    if (_testing) return 'Checking your upload speed…';
+    if (_presetManual) return 'Quality: ${q.label} (chosen in Settings)';
+    if (_kbps == null) return 'Quality: ${q.label}. Upload test did not run; check your signal.';
+    return 'Upload ${(_kbps! / 1000).toStringAsFixed(1)} Mbps · quality ${q.label}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     if (!_restored) {
-      return Scaffold(appBar: AppBar(title: const Text('Camera setup')), body: const Center(child: CircularProgressIndicator()));
+      return Scaffold(appBar: AppBar(title: const Text('Camera')), body: const Center(child: CircularProgressIndicator()));
     }
+    final weak = _kbps != null && _kbps! < 1800;
     return Scaffold(
       appBar: AppBar(
-        title: Text('Camera · ${widget.tournament.name}', overflow: TextOverflow.ellipsis),
+        title: Text(widget.tournament.name, overflow: TextOverflow.ellipsis),
         actions: [if (widget.session.isGuest) SignOutButton(session: widget.session)],
       ),
       body: SafeArea(
@@ -146,81 +193,109 @@ class _CameraSetupScreenState extends State<CameraSetupScreen> {
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                Text(widget.tournament.title, style: Theme.of(context).textTheme.titleMedium),
+                Text('Ready to film', style: theme.textTheme.headlineSmall),
                 const SizedBox(height: 4),
-                Text('Name this camera and say where it is. The director sees it in the control room.',
-                    style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _name,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(labelText: 'Camera name', hintText: 'Hole 7 Green'),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<int?>(
-                        initialValue: _hole,
-                        decoration: const InputDecoration(labelText: 'Hole'),
-                        items: [
-                          const DropdownMenuItem<int?>(value: null, child: Text('None')),
-                          for (var h = 1; h <= 18; h++) DropdownMenuItem<int?>(value: h, child: Text('Hole $h')),
-                        ],
-                        onChanged: (v) => setState(() => _hole = v),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: positions.contains(_position) ? _position : 'Other',
-                        decoration: const InputDecoration(labelText: 'Position'),
-                        items: [for (final p in positions) DropdownMenuItem(value: p, child: Text(p))],
-                        onChanged: (v) => setState(() => _position = v ?? 'Tee'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Text('Quality', style: Theme.of(context).textTheme.titleSmall),
-                RadioGroup<String>(
-                  groupValue: _preset,
-                  onChanged: (v) => setState(() => _preset = v ?? '720p30'),
-                  child: Column(
-                    children: [
-                      for (final q in qualityPresets)
-                        RadioListTile<String>(
-                          value: q.id,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(q.label),
-                          subtitle: Text(q.hint),
-                        ),
-                    ],
+                Text('Hold the phone sideways. The director picks which camera goes on air.', style: theme.textTheme.bodyMedium),
+                const SizedBox(height: 24),
+                SizedBox(
+                  height: 96,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: Broadcast.onAir, foregroundColor: Colors.white, textStyle: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 2)),
+                    onPressed: _busy ? null : _goLive,
+                    icon: _busy ? const SizedBox(width: 26, height: 26, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white)) : const Icon(Icons.videocam, size: 34),
+                    label: const Text('GO LIVE'),
                   ),
                 ),
-                const SizedBox(height: 8),
-                SegmentedButton<CameraFacing>(
-                  segments: const [
-                    ButtonSegment(value: CameraFacing.back, label: Text('Rear camera'), icon: Icon(Icons.camera_rear)),
-                    ButtonSegment(value: CameraFacing.front, label: Text('Front camera'), icon: Icon(Icons.camera_front)),
-                  ],
-                  selected: {_facing},
-                  onSelectionChanged: (s) => setState(() => _facing = s.first),
-                ),
-                const SizedBox(height: 20),
-                PlatformNotice(),
+                const SizedBox(height: 12),
+                Row(children: [
+                  Icon(weak ? Icons.signal_cellular_connected_no_internet_4_bar : Icons.network_check, size: 18, color: weak ? Broadcast.warning : null),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_qualityLine, style: theme.textTheme.bodySmall)),
+                  if (!_testing) TextButton(onPressed: _speedTest, child: const Text('Test again')),
+                ]),
+                if (weak) Text('The signal is weak. Move to a better spot or use Wi-Fi if you can.', style: theme.textTheme.bodySmall?.copyWith(color: Broadcast.warning)),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   InfoBanner(icon: Icons.error_outline, text: _error!, error: true),
                 ],
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: _busy ? null : _continue,
-                  icon: _busy
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.videocam),
-                  label: const Text('Open camera'),
+                const SizedBox(height: 12),
+                Theme(
+                  data: theme.copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.tune),
+                    title: const Text('Settings'),
+                    subtitle: Text(_name.text.trim().isEmpty ? 'Name, quality, lens' : _name.text.trim(), style: theme.textTheme.bodySmall),
+                    children: [
+                      TextField(
+                        controller: _name,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(labelText: 'Camera name (optional)', hintText: 'Left empty: Cam 1, Cam 2…'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      if (_profile.positionLabel != null) ...[
+                        const SizedBox(height: 16),
+                        Row(children: [
+                          Expanded(
+                            child: DropdownButtonFormField<int?>(
+                              initialValue: _hole,
+                              decoration: InputDecoration(labelText: '${_profile.positionLabel} (optional)'),
+                              items: [
+                                const DropdownMenuItem<int?>(value: null, child: Text('None')),
+                                for (var h = 1; h <= 18; h++) DropdownMenuItem<int?>(value: h, child: Text('${_profile.positionLabel} $h')),
+                              ],
+                              onChanged: (v) => setState(() => _hole = v),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: positions.contains(_position) ? _position : 'Other',
+                              decoration: const InputDecoration(labelText: 'Position'),
+                              items: [for (final p in positions) DropdownMenuItem(value: p, child: Text(p))],
+                              onChanged: (v) => setState(() => _position = v ?? 'Tee'),
+                            ),
+                          ),
+                        ]),
+                      ],
+                      const SizedBox(height: 16),
+                      Align(alignment: Alignment.centerLeft, child: Text('Quality', style: theme.textTheme.titleSmall)),
+                      RadioGroup<String>(
+                        groupValue: _preset,
+                        onChanged: (v) => setState(() {
+                          _preset = v ?? '720p30';
+                          _presetManual = true;
+                        }),
+                        child: Column(children: [
+                          for (final q in qualityPresets) RadioListTile<String>(value: q.id, contentPadding: EdgeInsets.zero, title: Text(q.label), subtitle: Text(q.hint)),
+                        ]),
+                      ),
+                      if (_presetManual)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: () => setState(() {
+                              _presetManual = false;
+                              if (_kbps != null) _preset = presetForKbps(_kbps!);
+                            }),
+                            child: const Text('Pick quality from the upload test'),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      SegmentedButton<CameraFacing>(
+                        segments: const [
+                          ButtonSegment(value: CameraFacing.back, label: Text('Rear camera'), icon: Icon(Icons.camera_rear)),
+                          ButtonSegment(value: CameraFacing.front, label: Text('Front camera'), icon: Icon(Icons.camera_front)),
+                        ],
+                        selected: {_facing},
+                        onSelectionChanged: (s) => setState(() => _facing = s.first),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 8),
+                PlatformNotice(),
               ],
             ),
           ),

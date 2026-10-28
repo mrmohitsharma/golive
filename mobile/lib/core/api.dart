@@ -341,9 +341,29 @@ class ApiClient {
       GraphicsState.fromJson((await patch('/api/tournaments/$id/graphics', patch_))['graphics'] as Map<String, dynamic>?);
 
   // ---------------------------------------------------------------- cameras
+  /// Upload speed to our server in kbps: posts [bytes] (about 3 seconds on a weak 4G link)
+  /// and times it. Null if the test could not run.
+  Future<int?> uploadSpeedKbps({int bytes = 1024 * 1024}) async {
+    final body = Uint8List(bytes);
+    for (var i = 0; i < bytes; i += 997) {
+      body[i] = i & 0xff; // not all zeros, in case something on the way compresses
+    }
+    final sw = Stopwatch()..start();
+    try {
+      final res = await _http
+          .post(uri('/api/speedtest/upload'), headers: {...authHeaders, 'content-type': 'application/octet-stream'}, body: body)
+          .timeout(const Duration(seconds: 12));
+      sw.stop();
+      if (res.statusCode != 200 || sw.elapsedMilliseconds <= 0) return null;
+      return (bytes * 8 / sw.elapsedMilliseconds).round(); // bits per ms = kbps
+    } on Object {
+      return null;
+    }
+  }
+
   Future<(CameraInfo, PublishTarget)> registerCamera({
     required String tournamentId,
-    required String name,
+    String? name,
     int? hole,
     String? position,
     required String deviceId,
@@ -351,7 +371,8 @@ class ApiClient {
     String? deviceModel,
   }) async {
     final r = await post('/api/tournaments/$tournamentId/cameras/register', {
-      'name': name,
+      // Without a name the server names the camera "Cam 1", "Cam 2"…
+      if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
       'hole': hole,
       'position': position,
       'deviceId': deviceId,
