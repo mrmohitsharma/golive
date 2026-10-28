@@ -46,6 +46,26 @@ fi
 
 flutter config --enable-swift-package-manager >/dev/null 2>&1 || true
 
+# Universal Links: the Associated Domains capability is added in Xcode (Runner > Signing &
+# Capabilities > + Associated Domains > applinks:<host>); this writes the entitlements file it uses.
+ENT=ios/Runner/Runner.entitlements
+if [ -d ios/Runner ] && [ ! -f "$ENT" ]; then
+  host=$(printf '%s' "${SERVER_URL:-https://icca.co.in}" | sed -E 's#^https?://##; s#/.*$##')
+  cat > "$ENT" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:$host</string>
+	</array>
+</dict>
+</plist>
+PLIST
+  echo "! iOS: in Xcode add the Associated Domains capability (it uses $ENT) so join links open the app."
+fi
+
 # ---------------------------------------------------------------- Android
 # App name under the icon. The package id (com.cogolfers.cogolfer_live) stays the same so
 # installed apps keep updating.
@@ -53,6 +73,32 @@ MANIFEST=android/app/src/main/AndroidManifest.xml
 if [ -f "$MANIFEST" ]; then
   sed -i.bak -E 's/android:label="[^"]*"/android:label="Go Live"/' "$MANIFEST" && rm -f "$MANIFEST.bak"
   echo "✓ Android app name set to Go Live"
+fi
+# Join links open the app (Android App Links). The host comes from SERVER_URL (same as the
+# --dart-define), default icca.co.in. The server must serve /.well-known/assetlinks.json
+# (ANDROID_CERT_SHA256 in its .env) for Android to verify the link.
+LINK_HOST=$(printf '%s' "${SERVER_URL:-https://icca.co.in}" | sed -E 's#^https?://##; s#/.*$##')
+if [ -f "$MANIFEST" ] && ! grep -q 'android:pathPrefix="/join/"' "$MANIFEST"; then
+  python3 - "$MANIFEST" "$LINK_HOST" <<'PY'
+import sys
+path, host = sys.argv[1], sys.argv[2]
+s = open(path).read()
+block = f'''            <!-- Go Live join and website sign-in links open the app (App Links). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="{host}" android:pathPrefix="/join/"/>
+                <data android:scheme="https" android:host="{host}" android:pathPrefix="/app/login/"/>
+            </intent-filter>
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>
+'''
+i = s.find('</activity>')
+if i < 0:
+    sys.exit('no <activity> in manifest')
+open(path, 'w').write(s[:i] + block + '        ' + s[i:])
+PY
+  echo "✓ Android App Links for https://$LINK_HOST/join/ and /app/login/"
 fi
 # share_plus 13 needs Android Gradle Plugin >= 8.12.1 and Gradle >= 8.13.
 SETTINGS=android/settings.gradle.kts

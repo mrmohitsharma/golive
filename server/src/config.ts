@@ -41,6 +41,12 @@ const schema = z.object({
   LEGAL_UPDATED: z.string().default('27 October 2026'),
   PLAY_STORE_URL: optional,
   APP_STORE_URL: optional,
+  // Join links open the app (onboarding P1-9). Android App Links: the package and the SHA-256
+  // fingerprints of the signing certificates (upload key and Play app signing, comma-separated).
+  // iOS Universal Links: "<TEAM ID>.<bundle id>". Empty = that file is not served.
+  ANDROID_PACKAGE: z.string().default('com.cogolfers.cogolfer_live'),
+  ANDROID_CERT_SHA256: optional,
+  IOS_APP_ID: optional,
   SITE_ENABLED: bool('true'),
 
   // MediaMTX

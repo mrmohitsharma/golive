@@ -193,28 +193,62 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
     };
   });
 
-  /** What a phone's own camera app opens after scanning the QR poster. */
+  // ---------------------------------------------------------------- app links (P1-9)
+  /** Android App Links: lets /join/... and /app/login/... open the Go Live app directly. */
+  app.get('/.well-known/assetlinks.json', async (_req, reply) => {
+    const certs = (config.ANDROID_CERT_SHA256 ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+    if (!certs.length) throw new HttpError(404, 'not_found', 'Android app links are not set up (ANDROID_CERT_SHA256).');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    return [
+      {
+        relation: ['delegate_permission/common.handle_all_urls'],
+        target: { namespace: 'android_app', package_name: config.ANDROID_PACKAGE, sha256_cert_fingerprints: certs },
+      },
+    ];
+  });
+
+  /** iOS Universal Links for the same paths. Served as JSON with no redirect, as Apple requires. */
+  app.get('/.well-known/apple-app-site-association', async (_req, reply) => {
+    if (!config.IOS_APP_ID) throw new HttpError(404, 'not_found', 'iOS universal links are not set up (IOS_APP_ID).');
+    reply.type('application/json');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    return {
+      applinks: {
+        details: [{ appIDs: [config.IOS_APP_ID], components: [{ '/': '/join/*', comment: 'Volunteer join links' }, { '/': '/app/login/*', comment: 'Website to app sign-in' }] }],
+      },
+    };
+  });
+
+  /**
+   * What a phone opens from a WhatsApp link or the QR poster when the app is not installed
+   * (with the app, Android App Links and iOS Universal Links open the app instead).
+   */
   app.get('/join/:code', async (req, reply) => {
     const code = normaliseJoinCode((req.params as { code: string }).code);
     const jc = await repo.joinCode(code);
     const t = jc && !jc.revoked ? await repo.tournamentById(jc.tournament_id) : null;
-    const server = config.PUBLIC_BASE_URL.replace(/\/$/, '');
     const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
     const role = jc ? { camera: 'Camera operator', scorer: 'Scorer', commentator: 'Commentator' }[jc.role] : '';
+    const brand = esc(config.BRAND_NAME);
+    const stores = [
+      config.PLAY_STORE_URL ? `<a class="btn" href="${esc(config.PLAY_STORE_URL)}">Get it on Google Play</a>` : '',
+      config.APP_STORE_URL ? `<a class="btn" href="${esc(config.APP_STORE_URL)}">Download on the App Store</a>` : '',
+    ].join('');
     reply.type('text/html; charset=utf-8');
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Join ${t ? esc(t.name) : esc(config.BRAND_NAME)}</title>
+<title>Join ${t ? esc(t.name) : brand}</title>
 <style>body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:#0b0e10;color:#fff;margin:0;padding:24px;max-width:520px}
 h1{font-size:22px;margin:8px 0}.code{font:700 40px/1.2 ui-monospace,monospace;letter-spacing:6px;background:#1d3b2a;padding:16px;border-radius:12px;text-align:center;margin:20px 0}
-.muted{color:#aab4ad}ol{padding-left:20px;line-height:1.7}</style></head><body>
+.muted{color:#aab4ad}ol{padding-left:20px;line-height:1.7}.btn{display:block;text-align:center;background:#e5322d;color:#fff;font-weight:700;text-decoration:none;padding:14px;border-radius:10px;margin:10px 0}</style></head><body>
 ${
   t && jc
-    ? `<div class="muted">${esc(config.BRAND_NAME)} · ${esc(role)}</div><h1>${esc(t.name)}</h1>${t.venue ? `<div class="muted">${esc(t.venue)}</div>` : ''}
-<div class="code">${esc(code)}</div>
-<ol><li>Install <b>${esc(config.BRAND_NAME)}</b> (App Store / Google Play) and open it.</li>
-<li>Tap <b>Join with code</b>, then <b>Scan QR</b> on this poster, or type the server <b>${esc(server.replace(/^https?:\/\//, ''))}</b> and the code above.</li>
-<li>Enter your name and follow the steps on screen.</li></ol>`
-    : `<h1>This join code is not valid</h1><p class="muted">Ask the organiser for a new QR code.</p>`
+    ? `<div class="muted">${brand} · ${esc(role)}</div><h1>${esc(t.name)}</h1>${t.venue ? `<div class="muted">${esc(t.venue)}</div>` : ''}
+${stores || `<p class="muted">Install <b>${brand}</b> from Google Play or the App Store.</p>`}
+<ol><li>Install <b>${brand}</b> and open it.</li>
+<li>Come back here and tap the link again (it opens the app with this code), or tap <b>Join</b> in the app and type the code below.</li>
+<li>Enter your name and tap <b>Go live</b>.</li></ol>
+<div class="code">${esc(code)}</div>`
+    : `<h1>This join code is not valid</h1><p class="muted">Ask the organiser for a new link or QR code.</p>`
 }
 </body></html>`;
   });

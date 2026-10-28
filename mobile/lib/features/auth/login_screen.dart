@@ -36,11 +36,38 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _name.text = widget.session.lastVolunteerName;
+    widget.session.addListener(_takePendingJoin);
+    _takePendingJoin();
+  }
+
+  @override
   void dispose() {
+    widget.session.removeListener(_takePendingJoin);
     for (final c in [_server, _email, _password, _name, _org, _code]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// A join link opened the app (P1-9): fill in the code; join straight away when we know the name.
+  void _takePendingJoin() {
+    final link = widget.session.pendingJoin;
+    if (link == null || _busy) return;
+    widget.session.pendingJoin = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _mode = _Mode.join;
+        _code.text = link.code;
+        if (link.server != null) _server.text = link.server!;
+        if (_name.text.trim().isEmpty) _name.text = widget.session.lastVolunteerName;
+        _error = null;
+      });
+      if (_name.text.trim().isNotEmpty) _submit();
+    });
   }
 
   Future<void> _scan({bool login = false}) async {

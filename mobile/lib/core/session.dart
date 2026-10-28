@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'app_config.dart';
 import 'google_auth.dart';
+import 'join_link.dart';
 import 'models.dart';
 
 /// Who is using the app:
@@ -19,6 +20,7 @@ class Session extends ChangeNotifier {
   static const _kOrgs = 'cg.orgs';
   static const _kGuest = 'cg.guest';
   static const _kOrg = 'cg.org';
+  static const _kVolunteerName = 'cg.volunteerName';
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
@@ -32,6 +34,17 @@ class Session extends ChangeNotifier {
   GuestPass? guest;
   String? selectedOrgId;
   bool loaded = false;
+
+  /// A join link the phone opened (WhatsApp, QR poster) waiting for the join screen.
+  JoinLink? pendingJoin;
+
+  /// Name a volunteer typed last time, so the next join is one tap.
+  String lastVolunteerName = '';
+
+  void setPendingJoin(JoinLink? link) {
+    pendingJoin = link;
+    notifyListeners();
+  }
 
   bool get signedIn => token != null && (user != null || guest != null);
   bool get isGuest => guest != null;
@@ -54,6 +67,7 @@ class Session extends ChangeNotifier {
     serverUrl = (saved == null || saved.trim().isEmpty) ? kDefaultServer : saved;
     token = p.getString(_kToken);
     selectedOrgId = p.getString(_kOrg);
+    lastVolunteerName = p.getString(_kVolunteerName) ?? '';
     try {
       final u = p.getString(_kUser);
       user = u == null ? null : AppUser.fromJson(jsonDecode(u) as Map<String, dynamic>);
@@ -173,6 +187,9 @@ class Session extends ChangeNotifier {
     await p.setString(_kServer, serverUrl);
     await p.setString(_kToken, token!);
     await p.setString(_kGuest, jsonEncode(guest!.toJson()));
+    lastVolunteerName = name.trim();
+    await p.setString(_kVolunteerName, lastVolunteerName);
+    pendingJoin = null;
     await p.remove(_kUser);
     await p.remove(_kOrgs);
     notifyListeners();

@@ -47,6 +47,8 @@ The server address is built into the app, so nobody types it. Build settings (`-
 flutter build appbundle --dart-define=SERVER_URL=https://icca.co.in --dart-define=GOOGLE_WEB_CLIENT_ID=<id>.apps.googleusercontent.com
 ```
 
+**Links that open the app.** Run `SERVER_URL=https://<domain> ./tool/bootstrap.sh`: it adds the Android App Links intent filter for `/join/` and `/app/login/` on that host and writes `ios/Runner/Runner.entitlements` (`applinks:<host>`). In Xcode add the **Associated Domains** capability once. The server side is in DEPLOYMENT.md 3i.
+
 For testing against another server, long-press the logo on the first screen to show the server field. A join QR that names a server still overrides it. Everything else (SRT URLs, WebRTC URLs, keys) comes from the API per event.
 
 Camera quality presets: 720p30 2.5 Mbps (default, 4G) · 720p25 1.5 Mbps (weak signal) · 1080p30 4.5 Mbps (strong 4G/5G, Wi-Fi) · 720p60 4 Mbps (swings). Android adapts bitrate under congestion.

@@ -25,6 +25,8 @@ dependencies:
   share_plus: ^13.3.1
   # "Continue with Google" for organisers (ID token only: openid, email, profile).
   google_sign_in: ^7.2.0
+  # Join links (WhatsApp, QR poster) and website sign-in links open the app (App Links / Universal Links).
+  app_links: ^6.4.1
 
 dev_dependencies:
   flutter_test:

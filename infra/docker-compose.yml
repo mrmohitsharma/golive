@@ -66,6 +66,9 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_SIGNIN_CLIENT_IDS: ${GOOGLE_SIGNIN_CLIENT_IDS:-}
+      ANDROID_PACKAGE: ${ANDROID_PACKAGE:-com.cogolfers.cogolfer_live}
+      ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
+      IOS_APP_ID: ${IOS_APP_ID:-}
       # Facebook Page live (optional): Meta app with Facebook Login, redirect URI https://<domain>/api/facebook/callback
       META_APP_ID: ${META_APP_ID:-}
       META_APP_SECRET: ${META_APP_SECRET:-}

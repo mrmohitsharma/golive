@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/deep_links.dart';
 import 'core/session.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
@@ -8,19 +9,23 @@ import 'ui/widgets.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final session = Session();
-  runApp(CoGolferLiveApp(session: session));
+  final navigatorKey = GlobalKey<NavigatorState>();
+  runApp(CoGolferLiveApp(session: session, navigatorKey: navigatorKey));
   session.load();
+  DeepLinks(session, navigatorKey).start();
 }
 
 class CoGolferLiveApp extends StatelessWidget {
-  const CoGolferLiveApp({super.key, required this.session});
+  const CoGolferLiveApp({super.key, required this.session, required this.navigatorKey});
   final Session session;
+  final GlobalKey<NavigatorState> navigatorKey;
 
   @override
   Widget build(BuildContext context) {
     final scheme = ColorScheme.fromSeed(seedColor: Broadcast.course, brightness: Brightness.dark);
     return MaterialApp(
       title: 'Go Live',
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: scheme,

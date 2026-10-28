@@ -237,6 +237,22 @@ GOOGLE_SIGNIN_CLIENT_IDS=<web>.apps.googleusercontent.com,<android>.apps.googleu
 
 A Google sign-in with the email of an existing account links to that account. A new account has no organisation yet: the app home screen and the website `/account` page ask for its name.
 
+## 3i. Join links open the app
+
+A volunteer who taps a WhatsApp join link (or scans the poster with the phone camera) lands in the app with the code filled in. The server publishes the two files Android and iOS check:
+
+```
+ANDROID_PACKAGE=com.cogolfers.cogolfer_live
+# Play Console > Test and release > App integrity > App signing: both SHA-256 fingerprints
+ANDROID_CERT_SHA256=AA:BB:...,CC:DD:...
+# Apple Developer > Membership: Team ID, then the iOS bundle id
+IOS_APP_ID=ABCDE12345.com.cogolfers.cogolferLive
+PLAY_STORE_URL=https://play.google.com/store/apps/details?id=com.cogolfers.cogolfer_live
+APP_STORE_URL=https://apps.apple.com/app/id<number>
+```
+
+Check `https://<domain>/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association` after `docker compose up -d`. Without the app, `/join/<code>` shows the store buttons and the code.
+
 ## 4. Cloud mode (OBS on the server)
 
 ```bash

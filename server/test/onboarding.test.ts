@@ -113,3 +113,33 @@ describe('onboarding: event types', () => {
     assert.equal((await api(h, 'POST', `/api/orgs/${owner.orgId}/tournaments`, { name: 'X', eventType: 'polo' }, owner.token)).status, 400);
   });
 });
+
+describe('onboarding: join links open the app', () => {
+  it('serves Android App Links and iOS Universal Links only when configured', async () => {
+    const off = await startHarness();
+    try {
+      assert.equal((await fetch(`${off.baseUrl}/.well-known/assetlinks.json`)).status, 404);
+      assert.equal((await fetch(`${off.baseUrl}/.well-known/apple-app-site-association`)).status, 404);
+    } finally {
+      await off.close();
+    }
+    const h = await startHarness({ env: { ANDROID_CERT_SHA256: 'aa:bb:cc, DD:EE:FF', IOS_APP_ID: 'TEAM123.com.cogolfers.cogolferLive', PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=com.cogolfers.cogolfer_live' } });
+    try {
+      const a = await (await fetch(`${h.baseUrl}/.well-known/assetlinks.json`)).json();
+      assert.deepEqual(a[0].target, { namespace: 'android_app', package_name: 'com.cogolfers.cogolfer_live', sha256_cert_fingerprints: ['AA:BB:CC', 'DD:EE:FF'] });
+      const r = await fetch(`${h.baseUrl}/.well-known/apple-app-site-association`);
+      assert.match(r.headers.get('content-type') ?? '', /application\/json/);
+      const aasa = await r.json();
+      assert.deepEqual(aasa.applinks.details[0].appIDs, ['TEAM123.com.cogolfers.cogolferLive']);
+      assert.deepEqual(aasa.applinks.details[0].components.map((c: any) => c['/']), ['/join/*', '/app/login/*']);
+      const owner = await signup(h, 'links@club.test');
+      const tid = await createTournament(h, owner.token, owner.orgId, { name: 'Link Cup' });
+      const inv = await expectOk(api(h, 'GET', `/api/tournaments/${tid}/invites`, undefined, owner.token));
+      const page = await (await fetch(inv.invites[0].joinUrl.replace('https://live.example.com', h.baseUrl))).text();
+      assert.match(page, /Get it on Google Play/);
+      assert.match(page, /Link Cup/);
+    } finally {
+      await h.close();
+    }
+  });
+});
