@@ -17,6 +17,7 @@ import type { PaymentsService } from './payments.js';
 import type { ChatService } from './chat.js';
 import type { ChatReaders } from './chat-readers.js';
 import type { DestinationsService } from './destinations.js';
+import type { GoogleSignIn } from './google-signin.js';
 
 /** Everything route modules need. */
 export interface Ctx {
@@ -39,4 +40,5 @@ export interface Ctx {
   chat: ChatService;
   chatReaders: ChatReaders;
   destinations: DestinationsService;
+  googleSignIn: GoogleSignIn;
 }

@@ -219,6 +219,24 @@ What the policy promises, and the code that keeps the promise:
 
 To run a closed instance without the website, set `SITE_ENABLED=false`.
 
+## 3h. Sign in with Google (app and website)
+
+Organisers can sign up and log in with one tap. Only `openid email profile` are asked for, so this needs no extra Google review. In the same Google Cloud project as YouTube, **APIs & Services > Credentials > Create OAuth client ID**:
+
+| Client | Settings |
+|---|---|
+| Web application | Authorised JavaScript origins: `https://<domain>` (the website button). Its client ID is also the app's `GOOGLE_WEB_CLIENT_ID`. |
+| Android | Package name from `bootstrap.sh`, SHA-1 of the upload key **and** of the Play app-signing key (Play Console > App integrity). |
+| iOS | Bundle ID from `bootstrap.sh`. Add `GIDClientID` and the reversed client ID URL scheme to `ios/Runner/Info.plist` (see the google_sign_in iOS setup). |
+
+Then in `.env` (Web first), and build the app with the same Web ID:
+
+```
+GOOGLE_SIGNIN_CLIENT_IDS=<web>.apps.googleusercontent.com,<android>.apps.googleusercontent.com,<ios>.apps.googleusercontent.com
+```
+
+A Google sign-in with the email of an existing account links to that account. A new account has no organisation yet: the app home screen and the website `/account` page ask for its name.
+
 ## 4. Cloud mode (OBS on the server)
 
 ```bash

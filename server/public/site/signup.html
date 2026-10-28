@@ -18,6 +18,11 @@
   <div class="auth-form">
     <h1>Create your account</h1>
     <p class="lede">Free to start. Every event includes 2 cameras and 10 live minutes.</p>
+    <div class="google-row" id="google-row" hidden>
+      <div id="google-btn"></div>
+      <p class="google-note">By continuing with Google you agree to the <a href="/terms" target="_blank" rel="noopener">Terms of service</a> and have read the <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>.</p>
+      <div class="or" aria-hidden="true"><span>or with email</span></div>
+    </div>
     <form id="auth-form" data-mode="signup" data-signup="{{SIGNUP}}" novalidate>
       <div class="form-error" id="form-error" role="alert"></div>
       <div class="field">

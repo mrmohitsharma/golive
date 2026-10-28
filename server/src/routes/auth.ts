@@ -9,7 +9,7 @@ const email = z.string().trim().email().max(200);
 const password = z.string().min(8, 'Password must be at least 8 characters').max(200);
 
 export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
-  const { config, repo } = ctx;
+  const { config, repo, googleSignIn } = ctx;
 
   const sessionFor = async (u: { id: string; email: string; name: string; is_platform_admin: boolean }) => {
     const principal: Principal = { kind: 'user', id: u.id, email: u.email, name: u.name, platformAdmin: u.is_platform_admin };
@@ -42,10 +42,51 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/auth/login', async (req) => {
     const body = z.object({ email, password: z.string().min(1) }).parse(req.body);
     const u = await repo.userByEmail(body.email);
-    if (!u || u.disabled || !(await verifyPassword(body.password, u.password_hash))) {
+    if (u && !u.disabled && !u.password_hash) {
+      throw new HttpError(401, 'use_google', 'This account signs in with Google. Tap “Continue with Google”.');
+    }
+    if (!u || u.disabled || !u.password_hash || !(await verifyPassword(body.password, u.password_hash))) {
       throw new HttpError(401, 'invalid_credentials', 'Email or password is incorrect.');
     }
     return sessionFor(u);
+  });
+
+  /** What sign-in options this server offers (the website and app read it to show the Google button). */
+  app.get('/api/auth/config', async () => ({
+    signupEnabled: config.SIGNUP_ENABLED,
+    google: googleSignIn.enabled ? { clientId: googleSignIn.webClientId } : null,
+  }));
+
+  /**
+   * Sign in with Google (app and website), one step for new and returning organisers.
+   * Finds the account by Google identity, else links the account with the same (Google-verified)
+   * email, else creates one. A new account has no organisation yet unless `orgName` is given;
+   * the app and website ask for its name on the next screen (POST /api/orgs).
+   */
+  app.post('/api/auth/google', async (req, reply) => {
+    const body = z.object({ idToken: z.string().min(20).max(4096), orgName: z.string().trim().min(2).max(100).optional() }).parse(req.body);
+    const id = await googleSignIn.verify(body.idToken);
+    let newUser = false;
+    const user = await repo.tx(async (c) => {
+      let u = await repo.userByGoogleSub(id.sub, c);
+      if (!u) {
+        const byEmail = await repo.userByEmail(id.email, c);
+        if (byEmail) u = await repo.linkGoogle(byEmail.id, id.sub, c);
+      }
+      if (!u) {
+        if (!config.SIGNUP_ENABLED) throw new HttpError(403, 'signup_disabled', 'Sign-up is closed on this server. Ask an organiser to add you.');
+        u = await repo.createUser({ email: id.email, name: id.name, passwordHash: null, googleSub: id.sub }, c);
+        newUser = true;
+        if (body.orgName) {
+          const org = await repo.createOrg(body.orgName, c);
+          await repo.addMember(org.id, u.id, 'owner', c);
+        }
+      }
+      return u;
+    });
+    if (user.disabled) throw new HttpError(401, 'account_disabled', 'This account is disabled. Contact support.');
+    if (newUser) reply.status(201);
+    return { ...(await sessionFor(user)), newUser };
   });
 
   app.get('/api/me', { preHandler: requireAuth(config) }, async (req) => {

@@ -101,4 +101,43 @@
       });
   });
   armed();
+
+  // Sign in with Google: shown only when the server has a Google client ID (GET /api/auth/config).
+  var row = document.getElementById('google-row');
+  function finish(d, created) {
+    try {
+      localStorage.setItem('baas.token', d.token);
+      localStorage.setItem('baas.session', JSON.stringify({ user: d.user, orgs: d.orgs }));
+    } catch (err) {}
+    window.location.href = '/account' + (created || !(d.orgs || []).length ? '?welcome=1' : '');
+  }
+  function onGoogle(resp) {
+    errBox.classList.remove('show');
+    fetch('/api/auth/google', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken: resp.credential }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.d.token) throw new Error((res.d.error && res.d.error.message) || 'Google sign-in did not work. Try again.');
+        finish(res.d, res.d.newUser);
+      })
+      .catch(function (err) { showError(err.message || 'Could not reach the server. Try again.'); });
+  }
+  if (row && !(mode === 'signup' && form.getAttribute('data-signup') === 'false')) {
+    fetch('/api/auth/config').then(function (r) { return r.json(); }).then(function (c) {
+      if (!c.google || !c.google.clientId) return;
+      var s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true;
+      s.onload = function () {
+        if (!window.google || !google.accounts || !google.accounts.id) return;
+        google.accounts.id.initialize({ client_id: c.google.clientId, callback: onGoogle, ux_mode: 'popup', context: mode === 'signup' ? 'signup' : 'signin' });
+        var w = Math.min(400, document.getElementById('google-btn').parentNode.clientWidth || 360);
+        google.accounts.id.renderButton(document.getElementById('google-btn'), {
+          type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular', width: w,
+          text: mode === 'signup' ? 'signup_with' : 'continue_with'
+        });
+        row.hidden = false;
+      };
+      document.head.appendChild(s);
+    }).catch(function () {});
+  }
 })();

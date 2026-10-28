@@ -116,6 +116,13 @@ class ApiClient {
   Future<AccountSession> signup({required String name, required String email, required String password, required String orgName}) async =>
       _account(await post('/api/auth/signup', {'name': name, 'email': email, 'password': password, 'orgName': orgName}));
 
+  /// Sign in with Google: the ID token from google_sign_in. Returns the session and whether
+  /// the account is new (it then has no organisation yet; the app asks for its name).
+  Future<(AccountSession, bool)> googleSignIn(String idToken, {String? orgName}) async {
+    final r = await post('/api/auth/google', {'idToken': idToken, if (orgName != null && orgName.trim().length >= 2) 'orgName': orgName.trim()});
+    return (_account(r), r['newUser'] == true);
+  }
+
   /// Volunteer join: no account, a token scoped to one tournament and role.
   Future<(String, GuestPass)> join({required String code, required String deviceId, required String name}) async {
     final r = await post('/api/join', {'code': code, 'deviceId': deviceId, 'name': name});

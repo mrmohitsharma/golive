@@ -62,8 +62,25 @@
     $('hello').textContent = 'Hi ' + (p.name || '').split(' ')[0];
     orgs = me.orgs || [];
     if (!orgs.length) {
-      $('org-line').textContent = p.email + '. You are not part of an organisation yet: create one in the app.';
-      $('credits-body').replaceChildren(el('p', { class: 'notice', text: 'Credits belong to an organisation. Create one in the app first.' }));
+      // New Google sign-ups have no organisation yet: ask for its name here (one field).
+      $('org-line').textContent = p.email;
+      var input = el('input', { id: 'new-org', type: 'text', maxlength: '100', placeholder: 'Your club, school, company or event brand', 'aria-label': 'Organisation name' });
+      var btn = el('button', { class: 'btn btn-live', type: 'button', text: 'Create organisation' });
+      var box = el('div', {}, [
+        el('p', { text: 'Name your organisation. Viewers see it on the watch page, and credits belong to it.' }),
+        el('div', { class: 'name-org' }, [input, btn])
+      ]);
+      $('credits-body').replaceChildren(box);
+      btn.addEventListener('click', function () {
+        var name = input.value.trim();
+        if (name.length < 2) { input.setAttribute('aria-invalid', 'true'); input.focus(); return; }
+        btn.disabled = true;
+        api('POST', '/api/orgs', { name: name }).then(function () { location.reload(); }).catch(function (e) {
+          btn.disabled = false;
+          box.appendChild(el('p', { class: 'notice', text: (e && e.message) || 'Could not create it. Try again.' }));
+        });
+      });
+      input.focus();
       return;
     }
     var saved = null;

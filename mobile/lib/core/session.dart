@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'app_config.dart';
+import 'google_auth.dart';
 import 'models.dart';
 
 /// Who is using the app:
@@ -124,6 +125,23 @@ class Session extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Organiser with Google: one tap, no password. Returns true for a brand-new account.
+  Future<bool> signInWithGoogle(String server, String idToken, {String? orgName}) async {
+    final url = normaliseServer(server);
+    final client = ApiClient(baseUrl: url);
+    final bool created;
+    try {
+      final (s, isNew) = await client.googleSignIn(idToken, orgName: orgName);
+      _adoptAccount(url, s);
+      created = isNew;
+    } finally {
+      client.close();
+    }
+    await _saveAccount();
+    notifyListeners();
+    return created;
+  }
+
   /// Volunteer: join one tournament with the code from the QR poster.
   Future<void> joinWithCode(String server, {required String code, required String name, required String deviceId}) async {
     final url = normaliseServer(server);
@@ -183,6 +201,7 @@ class Session extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    await GoogleAuth.signOut();
     token = null;
     user = null;
     guest = null;

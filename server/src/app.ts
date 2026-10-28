@@ -35,6 +35,7 @@ import { registerPublicRoutes } from './routes/public.js';
 import { registerSiteRoutes } from './routes/site.js';
 import { registerDestinationRoutes } from './routes/destinations.js';
 import { DestinationsService } from './destinations.js';
+import { GoogleSignIn } from './google-signin.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -124,7 +125,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   });
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations };
+  const googleSignIn = new GoogleSignIn(config, googleFetch);
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn };
 
   fastify.get('/healthz', async () => ({
     ok: true,

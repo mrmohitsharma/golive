@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api.dart';
 import '../../core/app_config.dart';
+import '../../core/google_auth.dart';
 import '../../core/join_link.dart';
 import '../../core/session.dart';
 import '../../ui/legal.dart';
@@ -50,6 +51,25 @@ class _LoginScreenState extends State<LoginScreen> {
       if (link.server != null) _server.text = link.server!;
       _error = null;
     });
+  }
+
+  Future<void> _google() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final idToken = await GoogleAuth.idToken();
+      if (idToken == null) return; // cancelled
+      // On "New club" the organisation name typed so far is used; otherwise the home screen asks for it.
+      await widget.session.signInWithGoogle(_server.text, idToken, orgName: _mode == _Mode.signUp ? _org.text : null);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = 'Google sign-in did not work: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   String? _validate() {
@@ -156,6 +176,25 @@ class _LoginScreenState extends State<LoginScreen> {
                         autocorrect: false,
                         decoration: const InputDecoration(labelText: 'Join code', hintText: 'ABC-123'),
                       ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_mode != _Mode.join && googleSignInConfigured) ...[
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _google,
+                        icon: const Icon(Icons.account_circle_outlined),
+                        label: const Text('Continue with Google'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 52)),
+                      ),
+                      if (_mode == _Mode.signUp) ...[
+                        const SizedBox(height: 6),
+                        Text('Continuing with Google means you accept the Terms and Privacy policy below.', style: theme.textTheme.bodySmall),
+                      ],
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        const Expanded(child: Divider()),
+                        Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('or with email', style: theme.textTheme.bodySmall)),
+                        const Expanded(child: Divider()),
+                      ]),
                       const SizedBox(height: 12),
                     ],
                     if (_showServer) ...[

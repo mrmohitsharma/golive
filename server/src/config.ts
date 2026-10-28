@@ -85,6 +85,10 @@ const schema = z.object({
   GOOGLE_TOKEN_URL: z.string().default('https://oauth2.googleapis.com/token'),
   GOOGLE_REVOKE_URL: z.string().default('https://oauth2.googleapis.com/revoke'),
   YOUTUBE_API_BASE: z.string().default('https://www.googleapis.com/youtube/v3'),
+  // Sign in with Google: comma-separated OAuth client IDs whose ID tokens we accept
+  // (Web first, then Android/iOS). GOOGLE_CLIENT_ID is always accepted too. Empty = no Google button.
+  GOOGLE_SIGNIN_CLIENT_IDS: optional,
+  GOOGLE_CERTS_URL: z.string().default('https://www.googleapis.com/oauth2/v3/certs'),
   YOUTUBE_POLL_MS: z.coerce.number().default(15000),
 
   // Facebook Page live (Meta app with Facebook Login). Leave empty to hide "Connect Facebook".

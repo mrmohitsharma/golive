@@ -455,3 +455,12 @@ input[type='range'] { width: 100%; accent-color: var(--tally); height: 28px; }
   [data-reveal] { opacity: 1; transform: none; }
   .marquee-track { animation: none; }
 }
+
+/* Sign in with Google (P1-2) */
+.google-row{margin:8px 0 18px}
+.google-row #google-btn{min-height:44px;display:flex}
+.google-note{font-size:13px;color:#5b6573;margin:10px 0 0}
+.or{display:flex;align-items:center;gap:12px;margin:18px 0 4px;color:#5b6573;font-size:13px;text-transform:uppercase;letter-spacing:.08em}
+.or::before,.or::after{content:"";flex:1;height:1px;background:#d6dce4}
+.name-org{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.name-org input{flex:1 1 220px;min-height:44px;padding:0 12px;font:inherit;border-radius:6px;border:1.5px solid #b9c3cf}

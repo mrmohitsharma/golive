@@ -7,7 +7,8 @@ export interface UserRow {
   id: string;
   email: string;
   name: string;
-  password_hash: string;
+  password_hash: string | null;
+  google_sub: string | null;
   is_platform_admin: boolean;
   disabled: boolean;
   created_at: Date;
@@ -161,15 +162,23 @@ export class Repo {
   }
 
   async createUser(
-    u: { email: string; name: string; passwordHash: string; platformAdmin?: boolean },
+    u: { email: string; name: string; passwordHash: string | null; googleSub?: string | null; platformAdmin?: boolean },
     q: Queryable = this.db,
   ): Promise<UserRow> {
     return (
       await q.query<UserRow>(
-        'INSERT INTO users (email, name, password_hash, is_platform_admin) VALUES ($1, $2, $3, $4) RETURNING *',
-        [u.email.toLowerCase().trim(), u.name.trim(), u.passwordHash, u.platformAdmin ?? false],
+        'INSERT INTO users (email, name, password_hash, google_sub, is_platform_admin) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [u.email.toLowerCase().trim(), u.name.trim(), u.passwordHash, u.googleSub ?? null, u.platformAdmin ?? false],
       )
     ).rows[0];
+  }
+
+  async userByGoogleSub(sub: string, q: Queryable = this.db): Promise<UserRow | null> {
+    return (await q.query<UserRow>('SELECT * FROM users WHERE google_sub = $1', [sub])).rows[0] ?? null;
+  }
+
+  async linkGoogle(userId: string, sub: string, q: Queryable = this.db): Promise<UserRow> {
+    return (await q.query<UserRow>('UPDATE users SET google_sub = $2 WHERE id = $1 RETURNING *', [userId, sub])).rows[0];
   }
 
   async createOrg(name: string, q: Queryable = this.db): Promise<OrgRow> {
