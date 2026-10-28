@@ -685,26 +685,45 @@ class _TournamentScreenState extends State<TournamentScreen> {
             icon: Icons.settings_input_antenna,
             title: 'Production',
             children: [
-              SegmentedButton<ProductionMode>(
-                segments: [
-                  const ButtonSegment(value: ProductionMode.laptop, label: Text('Laptop OBS'), icon: Icon(Icons.laptop)),
-                  ButtonSegment(value: ProductionMode.cloud, label: const Text('Cloud'), icon: const Icon(Icons.cloud), enabled: _production.cloudAvailable || cloud),
-                ],
-                selected: {_t.mode},
-                onSelectionChanged: _busy ? null : (m) => _setMode(m.first),
-              ),
-              const SizedBox(height: 12),
+              // Cloud is the normal way (no laptop). Laptop OBS stays available under Advanced.
               _EngineLine(engine: _engine),
               const SizedBox(height: 8),
-              if (!cloud) ...[
-                Text('OBS on a laptop at the course runs the show. Set it up once per tournament.', style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(onPressed: _engineSetup, icon: const Icon(Icons.terminal), label: const Text('Engine setup (.env)')),
-                ),
-              ],
               if (cloud) _CloudControls(production: _production, busy: _busy, onStart: _startCloud, onStop: _stopCloud),
+              if (!cloud) ...[
+                Text('A laptop running OBS at the venue mixes this event. Set it up once per event.', style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  OutlinedButton.icon(onPressed: _engineSetup, icon: const Icon(Icons.terminal), label: const Text('Engine setup (.env)')),
+                  if (_production.cloudAvailable)
+                    FilledButton.tonalIcon(
+                      onPressed: _busy ? null : () => _setMode(ProductionMode.cloud),
+                      icon: const Icon(Icons.cloud),
+                      label: const Text('Use Cloud instead (no laptop)'),
+                    ),
+                ]),
+              ],
+              if (cloud)
+                Theme(
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: Text('Advanced', style: Theme.of(context).textTheme.titleSmall),
+                    subtitle: Text('Mix on a laptop with OBS instead', style: Theme.of(context).textTheme.bodySmall),
+                    children: [
+                      Text('Only for venues with a laptop and good upload. Most events should stay on Cloud.', style: Theme.of(context).textTheme.bodySmall),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : () => _setMode(ProductionMode.laptop),
+                          icon: const Icon(Icons.laptop),
+                          label: const Text('Switch to laptop OBS'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
             ],
           ),
           if (_billing.enabled)

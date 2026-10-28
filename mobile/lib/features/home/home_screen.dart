@@ -104,49 +104,59 @@ class _HomeScreenState extends State<HomeScreen> {
     final name = TextEditingController();
     final venue = TextEditingController();
     DateTime? date;
-    var mode = ProductionMode.laptop;
+    // Cloud by default (no laptop). Laptop OBS only under "More options".
+    var mode = _info.cloudProduction ? ProductionMode.cloud : ProductionMode.laptop;
+    var more = false;
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setLocal) => AlertDialog(
-          title: const Text('New tournament'),
+          title: const Text('New event'),
           content: SizedBox(
             width: 420,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                TextField(controller: name, autofocus: true, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Name')),
-                const SizedBox(height: 12),
-                TextField(controller: venue, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Course / venue')),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.event),
-                  label: Text(date == null ? 'Date (optional)' : _isoDate(date!)),
-                  onPressed: () async {
-                    final now = DateTime.now();
-                    final d = await showDatePicker(context: c, firstDate: now.subtract(const Duration(days: 30)), lastDate: now.add(const Duration(days: 730)), initialDate: now);
-                    if (d != null) setLocal(() => date = d);
-                  },
-                ),
-                const SizedBox(height: 16),
-                Text('Production', style: Theme.of(c).textTheme.titleSmall),
-                const SizedBox(height: 8),
-                SegmentedButton<ProductionMode>(
-                  segments: [
-                    const ButtonSegment(value: ProductionMode.laptop, label: Text('Laptop OBS'), icon: Icon(Icons.laptop)),
-                    ButtonSegment(value: ProductionMode.cloud, label: const Text('Cloud'), icon: const Icon(Icons.cloud), enabled: _info.cloudProduction),
-                  ],
-                  selected: {mode},
-                  onSelectionChanged: (m) => setLocal(() => mode = m.first),
+                TextField(
+                  controller: name,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Event name', hintText: 'Club Championship 2026'),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  mode == ProductionMode.laptop
-                      ? 'OBS runs on a laptop at the course. Best when the clubhouse has good upload.'
-                      : 'OBS runs on our server, started for the event and stopped after. No laptop needed'
-                          '${_info.cloudCostPerHour > 0 ? ' (about ${formatMoney(_info.cloudCostPerHour)} per hour).' : '.'}',
+                  mode == ProductionMode.cloud
+                      ? 'Mixed in the cloud: no laptop needed'
+                          '${_info.cloudCostPerHour > 0 ? ' (about ${formatMoney(_info.cloudCostPerHour)} per hour).' : '.'}'
+                      : 'Mixed by OBS on a laptop at the venue.',
                   style: Theme.of(c).textTheme.bodySmall,
                 ),
-                if (!_info.cloudProduction) Text('Cloud production is not enabled on this server.', style: Theme.of(c).textTheme.bodySmall),
+                if (!more)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(onPressed: () => setLocal(() => more = true), icon: const Icon(Icons.tune), label: const Text('More options')),
+                  ),
+                if (more) ...[
+                  const SizedBox(height: 12),
+                  TextField(controller: venue, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Venue (optional)')),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.event),
+                    label: Text(date == null ? 'Date (optional)' : _isoDate(date!)),
+                    onPressed: () async {
+                      final now = DateTime.now();
+                      final d = await showDatePicker(context: c, firstDate: now.subtract(const Duration(days: 30)), lastDate: now.add(const Duration(days: 730)), initialDate: now);
+                      if (d != null) setLocal(() => date = d);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Mix on a laptop with OBS instead'),
+                    subtitle: Text(_info.cloudProduction ? 'Only for venues with a laptop and good upload.' : 'Cloud production is not enabled on this server.'),
+                    value: mode == ProductionMode.laptop,
+                    onChanged: _info.cloudProduction ? (v) => setLocal(() => mode = v ? ProductionMode.laptop : ProductionMode.cloud) : null,
+                  ),
+                ],
               ]),
             ),
           ),
@@ -228,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           floatingActionButton: org != null && org.canCreateTournaments
-              ? FloatingActionButton.extended(onPressed: () => _newTournament(org), icon: const Icon(Icons.add), label: const Text('New tournament'))
+              ? FloatingActionButton.extended(onPressed: () => _newTournament(org), icon: const Icon(Icons.add), label: const Text('New event'))
               : null,
           body: PageBody(
             onRefresh: _refresh,
@@ -245,7 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
               if (org != null && _tournaments != null && list.isEmpty)
                 InfoBanner(
                   icon: Icons.info_outline,
-                  text: org.canCreateTournaments ? 'No tournaments yet. Tap “New tournament” to start.' : 'No tournaments in ${org.name} yet.',
+                  text: org.canCreateTournaments ? 'No events yet. Tap “New event” to start.' : 'No events in ${org.name} yet.',
                 ),
               for (final t in list)
                 Card(

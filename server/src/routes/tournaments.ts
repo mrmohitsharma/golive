@@ -61,7 +61,9 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
       })
       .parse(req.body);
     if (body.mode === 'cloud' && !cloud.available) throw new HttpError(409, 'cloud_unavailable', 'Cloud production is not enabled on this server.');
-    const t = await repo.createTournament({ orgId, name: body.name, venue: body.venue, startsOn: body.startsOn, mode: body.mode });
+    // Cloud is the default when this server can run cloud engines: no laptop needed (onboarding P1-4).
+    const mode = body.mode ?? (cloud.available ? 'cloud' : 'laptop');
+    const t = await repo.createTournament({ orgId, name: body.name, venue: body.venue, startsOn: body.startsOn, mode });
     reply.status(201);
     return { tournament: tournamentDto(t) };
   });

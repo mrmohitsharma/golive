@@ -40,7 +40,7 @@ describe('cloud production mode', () => {
     h = await startHarness({ cloudDriver: driver, env: { CLOUD_ENGINE_IDLE_STOP_MIN: '0', ENGINE_SRT_HOST: 'mediamtx', ENGINE_SRT_PORT: '8890' } });
     owner = await signup(h, 'owner@club.test');
     directorToken = await addStaff(h, owner.token, owner.orgId, 'd@club.test', 'director');
-    tournamentId = await createTournament(h, owner.token, owner.orgId);
+    tournamentId = await createTournament(h, owner.token, owner.orgId, { mode: 'laptop' });
     director = await TestSocket.open(h.wsUrl, directorToken);
     director.send({ type: 'subscribe', tournamentId });
     const snap = await director.type('snapshot');
@@ -49,6 +49,11 @@ describe('cloud production mode', () => {
   after(async () => {
     director.close();
     await h.close();
+  });
+
+  it('new events default to cloud when the server can run cloud engines', async () => {
+    const r = await expectOk(api(h, 'POST', `/api/orgs/${owner.orgId}/tournaments`, { name: 'Default mode' }, owner.token));
+    assert.equal(r.tournament.mode, 'cloud');
   });
 
   it('cannot start a cloud engine in laptop mode', async () => {
