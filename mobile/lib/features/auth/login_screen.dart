@@ -2,6 +2,7 @@ import 'package:cg_streamer/cg_streamer.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/api.dart';
+import '../../core/app_config.dart';
 import '../../core/join_link.dart';
 import '../../core/session.dart';
 import '../../ui/legal.dart';
@@ -28,6 +29,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _org = TextEditingController();
   final _code = TextEditingController();
   _Mode _mode = _Mode.join;
+  // The server is built in (kDefaultServer). Testers long-press the logo to pick another one.
+  late bool _showServer = widget.session.customServer;
   bool _busy = false;
   String? _error;
 
@@ -50,7 +53,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String? _validate() {
-    if (_server.text.trim().isEmpty) return 'Enter the server address (it is printed on the QR poster).';
     switch (_mode) {
       case _Mode.join:
         if (parseJoinLink(_code.text) == null) return 'Enter the code from the organiser, or scan the QR poster.';
@@ -108,7 +110,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.live_tv, size: 56, color: Broadcast.onAir),
+                    GestureDetector(
+                      onLongPress: () => setState(() => _showServer = !_showServer),
+                      child: const Icon(Icons.live_tv, size: 56, color: Broadcast.onAir),
+                    ),
                     const SizedBox(height: 8),
                     Text('Go Live', textAlign: TextAlign.center, style: theme.textTheme.headlineSmall),
                     const SizedBox(height: 4),
@@ -153,13 +158,24 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 12),
                     ],
-                    TextField(
-                      controller: _server,
-                      keyboardType: TextInputType.url,
-                      autocorrect: false,
-                      decoration: const InputDecoration(labelText: 'Server', hintText: 'live.yourclub.com'),
-                    ),
-                    const SizedBox(height: 12),
+                    if (_showServer) ...[
+                      TextField(
+                        controller: _server,
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: 'Server (testing only)',
+                          hintText: kDefaultServer,
+                          helperText: 'Leave empty to use $kDefaultServer',
+                          suffixIcon: IconButton(
+                            tooltip: 'Use the default server',
+                            icon: const Icon(Icons.restart_alt),
+                            onPressed: () => setState(() => _server.text = kDefaultServer),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     if (_mode != _Mode.signIn) ...[
                       TextField(
                         controller: _name,
@@ -196,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                     if (_mode == _Mode.signUp) ...[
                       const SizedBox(height: 14),
-                      LegalConsent(serverUrl: () => _server.text),
+                      LegalConsent(serverUrl: () => Session.normaliseServer(_server.text)),
                     ],
                     if (_error != null) ...[
                       const SizedBox(height: 16),
@@ -215,7 +231,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             }),
                     ),
                     const SizedBox(height: 12),
-                    LegalFooter(serverUrl: () => _server.text),
+                    LegalFooter(serverUrl: () => Session.normaliseServer(_server.text)),
                   ],
                 ),
               ),

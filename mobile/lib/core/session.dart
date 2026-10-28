@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'app_config.dart';
 import 'models.dart';
 
 /// Who is using the app:
@@ -20,7 +21,10 @@ class Session extends ChangeNotifier {
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
-  String serverUrl = '';
+  String serverUrl = kDefaultServer;
+
+  /// True when a tester chose a server other than the built-in one.
+  bool get customServer => normaliseServer(serverUrl) != normaliseServer(kDefaultServer);
   String? token;
   AppUser? user;
   List<OrgMembership> orgs = const [];
@@ -45,7 +49,8 @@ class Session extends ChangeNotifier {
 
   Future<void> load() async {
     final p = await _prefs;
-    serverUrl = p.getString(_kServer) ?? '';
+    final saved = p.getString(_kServer);
+    serverUrl = (saved == null || saved.trim().isEmpty) ? kDefaultServer : saved;
     token = p.getString(_kToken);
     selectedOrgId = p.getString(_kOrg);
     try {
@@ -89,7 +94,7 @@ class Session extends ChangeNotifier {
 
   static String normaliseServer(String input) {
     var s = input.trim();
-    if (s.isEmpty) return s;
+    if (s.isEmpty) s = kDefaultServer;
     if (!s.startsWith('http://') && !s.startsWith('https://')) s = 'https://$s';
     return s.replaceAll(RegExp(r'/+$'), '');
   }

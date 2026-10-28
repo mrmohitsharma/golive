@@ -35,7 +35,19 @@ flutter run -d <device>
 
 ## Configuration
 
-Nothing is baked into the app. The server address comes from the QR poster (or is typed once); everything else (SRT URLs, WebRTC URLs, keys) comes from the API per tournament.
+The server address is built into the app, so nobody types it. Build settings (`--dart-define`):
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `SERVER_URL` | `https://icca.co.in` | The Go Live server |
+| `GOOGLE_WEB_CLIENT_ID` | empty (Google button hidden) | Web OAuth client of the Go Live Google Cloud project; the server checks ID tokens against it |
+| `GOOGLE_IOS_CLIENT_ID` | empty | iOS OAuth client (iOS builds only) |
+
+```bash
+flutter build appbundle --dart-define=SERVER_URL=https://icca.co.in --dart-define=GOOGLE_WEB_CLIENT_ID=<id>.apps.googleusercontent.com
+```
+
+For testing against another server, long-press the logo on the first screen to show the server field. A join QR that names a server still overrides it. Everything else (SRT URLs, WebRTC URLs, keys) comes from the API per event.
 
 Camera quality presets: 720p30 2.5 Mbps (default, 4G) · 720p25 1.5 Mbps (weak signal) · 1080p30 4.5 Mbps (strong 4G/5G, Wi-Fi) · 720p60 4 Mbps (swings). Android adapts bitrate under congestion.
 
