@@ -247,6 +247,22 @@ class JoinCode {
       );
 }
 
+/// A standing invite of an event (made automatically, one per role) with ready-made share links.
+class Invite {
+  const Invite({required this.code, required this.shareText, required this.whatsapp});
+  final JoinCode code;
+  final String shareText;
+  final String whatsapp;
+
+  TournamentRole get role => code.role;
+
+  factory Invite.fromJson(Map<String, dynamic> j) => Invite(
+        code: JoinCode.fromJson(j),
+        shareText: (j['shareText'] as String?) ?? j['joinUrl'] as String,
+        whatsapp: (j['whatsapp'] as String?) ?? 'https://wa.me/?text=${Uri.encodeComponent(j['joinUrl'] as String)}',
+      );
+}
+
 class EngineSetup {
   const EngineSetup({required this.tournamentId, required this.engineKey, required this.serverUrl, required this.envFile});
   final String tournamentId;

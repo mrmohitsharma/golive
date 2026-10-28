@@ -15,6 +15,7 @@ import '../director/control_room_screen.dart';
 import '../org/billing_screen.dart';
 import '../scoring/scorer_screen.dart';
 import 'course_screen.dart';
+import 'invite_card.dart';
 import 'join_codes_screen.dart';
 
 /// Everything an organiser/director sets up for one tournament, and the way into the
@@ -36,6 +37,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
   EngineState _engine = const EngineState();
   OutputsState _outputs = const OutputsState();
   TournamentBilling _billing = const TournamentBilling();
+  List<Invite> _invites = const [];
   bool _loaded = false;
   bool _busy = false;
   String? _error;
@@ -45,6 +47,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadInvites();
     _poll = Timer.periodic(const Duration(seconds: 5), (_) => _load(quiet: true));
   }
 
@@ -82,6 +85,16 @@ class _TournamentScreenState extends State<TournamentScreen> {
     }
   }
 
+  Future<void> _loadInvites() async {
+    if (!(_t.role?.canDirect ?? true)) return;
+    try {
+      final list = await _api.invites(_t.id);
+      if (mounted) setState(() => _invites = list);
+    } on ApiException {
+      // Not allowed or offline: the card just stays hidden.
+    }
+  }
+
   Future<void> _run(Future<void> Function() action) async {
     setState(() => _busy = true);
     await guarded(context, action);
@@ -89,7 +102,10 @@ class _TournamentScreenState extends State<TournamentScreen> {
     await _load();
   }
 
-  void _push(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page)).then((_) => _load(quiet: true));
+  void _push(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page)).then((_) {
+        _load(quiet: true);
+        _loadInvites();
+      });
 
   // ---------------------------------------------------------------- plan & credits
   void _openCredits() => _push(BillingScreen(
@@ -673,6 +689,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
         children: [
           if (_error != null) ...[InfoBanner(icon: Icons.error_outline, text: _error!, error: true), const SizedBox(height: 12)],
           if (!_loaded && _error == null) const LinearProgressIndicator(),
+          InviteCard(api: _api, eventName: _t.name, invites: _invites, onManage: () => _push(JoinCodesScreen(session: s, tournament: _t))),
           _ActionGrid(children: [
             _Action(Icons.dashboard, 'Control room', 'Switch cameras, graphics, replays', () => _push(ControlRoomScreen(session: s, tournament: _t)), primary: true),
             _Action(Icons.scoreboard, 'Scoring', 'Enter scores, leaderboard', () => _push(ScorerScreen(session: s, tournament: _t))),

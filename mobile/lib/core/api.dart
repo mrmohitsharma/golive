@@ -269,6 +269,11 @@ class ApiClient {
   /// Same content as the WebSocket snapshot (managers get production, YouTube, audio…).
   Future<Map<String, dynamic>> tournamentState(String id) => get('/api/tournaments/$id/state');
 
+  /// The event's camera, scorer and commentator invites (created by the server if missing).
+  Future<List<Invite>> invites(String id) async => ((await get('/api/tournaments/$id/invites'))['invites'] as List)
+      .map((c) => Invite.fromJson(c as Map<String, dynamic>))
+      .toList();
+
   Future<List<JoinCode>> joinCodes(String id) async => ((await get('/api/tournaments/$id/join-codes'))['codes'] as List)
       .map((c) => JoinCode.fromJson(c as Map<String, dynamic>))
       .toList();

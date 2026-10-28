@@ -64,6 +64,8 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
     // Cloud is the default when this server can run cloud engines: no laptop needed (onboarding P1-4).
     const mode = body.mode ?? (cloud.available ? 'cloud' : 'laptop');
     const t = await repo.createTournament({ orgId, name: body.name, venue: body.venue, startsOn: body.startsOn, mode });
+    // One camera, scorer and commentator code per event, made now, so nobody has to tap "New code" (P1-8).
+    await ensureInviteCodes(t.id, userOf(req).id);
     reply.status(201);
     return { tournament: tournamentDto(t) };
   });
@@ -117,6 +119,33 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
     createdAt: c.created_at,
     joinUrl: joinUrl(c.code),
     qrUrl: `/api/tournaments/${tid}/join-codes/${c.code}/qr.png`,
+  });
+
+  /** The event's standing invite codes (valid until revoked), one per role; made if missing. */
+  const INVITE_LABELS: Record<(typeof GUEST_ROLES)[number], string> = { camera: 'Cameras', scorer: 'Scorers', commentator: 'Commentators' };
+  const ensureInviteCodes = async (tid: string, by: string | null) => {
+    const live = (await repo.joinCodes(tid)).filter((c) => !c.revoked && !c.expires_at);
+    const out: Partial<Record<(typeof GUEST_ROLES)[number], Awaited<ReturnType<typeof repo.joinCodes>>[number]>> = {};
+    for (const role of GUEST_ROLES) {
+      out[role] = live.find((c) => c.role === role && c.label === INVITE_LABELS[role]) ?? (await repo.createJoinCode(tid, role, INVITE_LABELS[role], by, null));
+    }
+    return out as Required<typeof out>;
+  };
+
+  /**
+   * What the event screen shows at the top: the camera QR and share links for each role.
+   * `whatsapp` opens WhatsApp with the invite text and the /join link.
+   */
+  app.get('/api/tournaments/:id/invites', { preHandler: user }, async (req) => {
+    const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
+    const codes = await ensureInviteCodes(t.id, req.principal!.kind === 'user' ? req.principal!.id : null);
+    const what = { camera: 'be a camera', scorer: 'keep score', commentator: 'commentate' } as const;
+    const invites = GUEST_ROLES.map((role) => {
+      const dto = codeDto(codes[role], t.id);
+      const text = `Join ${t.name} on ${config.BRAND_NAME} to ${what[role]}: ${dto.joinUrl}`;
+      return { ...dto, shareText: text, whatsapp: `https://wa.me/?text=${encodeURIComponent(text)}` };
+    });
+    return { invites };
   });
 
   app.get('/api/tournaments/:id/join-codes', { preHandler: user }, async (req) => {
