@@ -49,6 +49,7 @@ export interface TournamentRow {
   yt_ingest_url: string | null;
   yt_privacy: string | null;
   yt_source: 'org' | 'golive' | 'key';
+  event_type: string;
   output_key: string | null;
   outputs: TournamentOutputs;
   public_watch: boolean;
@@ -269,12 +270,18 @@ export class Repo {
     venue?: string | null;
     startsOn?: string | null;
     mode?: ProductionMode;
+    eventType?: string;
+    graphics?: object;
   }): Promise<TournamentRow> {
     return (
       await this.db.query<TournamentRow>(
-        `INSERT INTO tournaments (org_id, name, venue, starts_on, production_mode, read_key, engine_key, graphics_key, output_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-        [t.orgId, t.name, t.venue ?? null, t.startsOn ?? null, t.mode ?? 'laptop', randomSecret(16), randomSecret(24), randomSecret(16), randomSecret(16)],
+        `INSERT INTO tournaments (org_id, name, venue, starts_on, production_mode, read_key, engine_key, graphics_key, output_key, event_type, graphics)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [
+          t.orgId, t.name, t.venue ?? null, t.startsOn ?? null, t.mode ?? 'laptop',
+          randomSecret(16), randomSecret(24), randomSecret(16), randomSecret(16),
+          t.eventType ?? 'golf', JSON.stringify(t.graphics ?? {}),
+        ],
       )
     ).rows[0];
   }
@@ -305,6 +312,7 @@ export class Repo {
       publicWatch?: boolean;
       chatEnabled?: boolean;
       chatSlowSec?: number;
+      eventType?: string;
     },
   ): Promise<TournamentRow | null> {
     return (
@@ -318,7 +326,8 @@ export class Repo {
              production_mode = COALESCE($7, production_mode),
              public_watch = COALESCE($8, public_watch),
              chat_enabled = COALESCE($9, chat_enabled),
-             chat_slow_sec = COALESCE($10, chat_slow_sec)
+             chat_slow_sec = COALESCE($10, chat_slow_sec),
+             event_type = COALESCE($11, event_type)
            WHERE id = $1 RETURNING *`,
           [
             id,
@@ -331,6 +340,7 @@ export class Repo {
             patch.publicWatch ?? null,
             patch.chatEnabled ?? null,
             patch.chatSlowSec ?? null,
+            patch.eventType ?? null,
           ],
         )
       ).rows[0] ?? null

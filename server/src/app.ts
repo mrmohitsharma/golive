@@ -146,6 +146,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     cloudCostPerHour: config.CLOUD_ENGINE_COST_PER_HOUR,
     billing: billing.enabled,
     payments: payments.enabled,
+    goliveChannel: await youtube.goliveAvailable(),
+    googleSignIn: googleSignIn.enabled,
   }));
 
   registerAuthRoutes(fastify, ctx);

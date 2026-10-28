@@ -218,9 +218,10 @@ class ApiClient {
       .map((t) => Tournament.fromJson(t as Map<String, dynamic>))
       .toList();
 
-  Future<Tournament> createTournament(String orgId, {required String name, String? venue, String? startsOn, ProductionMode? mode}) async =>
+  Future<Tournament> createTournament(String orgId, {required String name, String? venue, String? startsOn, ProductionMode? mode, String? eventType}) async =>
       Tournament.fromJson((await post('/api/orgs/$orgId/tournaments', {
         'name': name,
+        if (eventType != null) 'eventType': eventType,
         if (venue != null && venue.isNotEmpty) 'venue': venue,
         if (startsOn != null) 'startsOn': startsOn,
         if (mode != null) 'mode': mode.name,

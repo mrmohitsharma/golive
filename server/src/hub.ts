@@ -1,3 +1,4 @@
+import { eventProfile } from './event-types.js';
 import crypto from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { Config } from './config.js';
@@ -243,6 +244,8 @@ export class Hub {
         venue: t.venue,
         autoFallback: t.auto_fallback,
         mode: t.production_mode,
+        eventType: t.event_type ?? 'golf',
+        profile: eventProfile(t.event_type),
         publicWatch: t.public_watch !== false,
         chatEnabled: t.chat_enabled !== false,
         chatSlowSec: t.chat_slow_sec ?? 3,

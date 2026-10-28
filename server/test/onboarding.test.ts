@@ -82,3 +82,34 @@ describe('onboarding: paste a YouTube stream key', () => {
     assert.deepEqual([r.youtube.source, r.youtube.connected, r.youtube.watchUrl], ['org', false, null]);
   });
 });
+
+describe('onboarding: event types', () => {
+  let h: Harness;
+  let owner: { token: string; orgId: string; userId: string };
+
+  before(async () => {
+    h = await startHarness();
+    owner = await signup(h, 'types@club.test', 'Many Events');
+  });
+  after(async () => h.close());
+
+  it('lists the kinds of event with their labels', async () => {
+    const r = await expectOk(api(h, 'GET', '/api/event-types'));
+    assert.deepEqual(r.eventTypes.map((e: any) => e.id), ['golf', 'cricket', 'football', 'wedding', 'concert', 'conference', 'other']);
+    const conf = r.eventTypes.find((e: any) => e.id === 'conference');
+    assert.deepEqual([conf.captionTitle, conf.captionSubtitle, conf.positionLabel, conf.scoring], ['Speaker', 'Title and company', null, false]);
+  });
+
+  it('a wedding starts without golf graphics; golf keeps them; existing events are golf', async () => {
+    const w = await expectOk(api(h, 'POST', `/api/orgs/${owner.orgId}/tournaments`, { name: 'Ananya & Rohan', eventType: 'wedding' }, owner.token));
+    assert.equal(w.tournament.eventType, 'wedding');
+    assert.equal(w.tournament.profile.captionTitle, 'Names');
+    const g = (await h.db.query('SELECT graphics FROM tournaments WHERE id = $1', [w.tournament.id])).rows[0].graphics;
+    assert.deepEqual([g.scoreBug.visible, g.holeCard.auto], [false, false]);
+    const golf = await expectOk(api(h, 'POST', `/api/orgs/${owner.orgId}/tournaments`, { name: 'Open' }, owner.token));
+    assert.deepEqual([golf.tournament.eventType, golf.tournament.profile.positionLabel], ['golf', 'Hole']);
+    const changed = await expectOk(api(h, 'PATCH', `/api/tournaments/${golf.tournament.id}`, { eventType: 'cricket' }, owner.token));
+    assert.equal(changed.tournament.eventType, 'cricket');
+    assert.equal((await api(h, 'POST', `/api/orgs/${owner.orgId}/tournaments`, { name: 'X', eventType: 'polo' }, owner.token)).status, 400);
+  });
+});

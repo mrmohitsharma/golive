@@ -10,6 +10,7 @@ import '../commentary/commentator_screen.dart';
 import '../org/billing_screen.dart';
 import '../org/org_screen.dart';
 import '../scoring/scorer_screen.dart';
+import '../onboarding/first_show_guide.dart';
 import '../tournament/tournament_screen.dart';
 
 /// The screen for a role in a tournament: directors get the tournament hub, everyone
@@ -46,6 +47,9 @@ class _HomeScreenState extends State<HomeScreen> {
   late final ApiClient _api = widget.session.api();
   List<Tournament>? _tournaments;
   ServerInfo _info = const ServerInfo();
+  bool _infoLoaded = false;
+  // The first-show guide opens by itself once, for an organisation with no events.
+  final Set<String> _guideShown = {};
   String? _error;
 
   Session get s => widget.session;
@@ -55,7 +59,12 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _load();
     _api.info().then((i) {
-      if (mounted) setState(() => _info = i);
+      if (!mounted) return;
+      setState(() {
+        _info = i;
+        _infoLoaded = true;
+      });
+      _maybeGuide();
     }).catchError((Object _) {});
   }
 
@@ -70,9 +79,26 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final list = await _api.tournaments();
       if (mounted) setState(() => _tournaments = list);
+      _maybeGuide();
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     }
+  }
+
+  void _maybeGuide() {
+    final org = s.selectedOrg;
+    final list = _tournaments;
+    if (!mounted || !_infoLoaded || org == null || list == null || !org.canCreateTournaments) return;
+    if (list.any((t) => t.orgId == org.id) || _guideShown.contains(org.id)) return;
+    _guideShown.add(org.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openGuide(org));
+  }
+
+  void _openGuide(OrgMembership org) {
+    if (!mounted) return;
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => FirstShowGuide(session: s, org: org, info: _info)))
+        .then((_) => _load());
   }
 
   Future<void> _refresh() async {
@@ -97,7 +123,10 @@ class _HomeScreenState extends State<HomeScreen> {
     name.dispose();
     if (ok != true || text.length < 2 || !mounted) return;
     final org = await guarded(context, () => _api.createOrg(text));
-    if (org != null) await s.addOrg(org);
+    if (org != null) {
+      await s.addOrg(org);
+      _maybeGuide();
+    }
   }
 
   Future<void> _newTournament(OrgMembership org) async {
@@ -107,6 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Cloud by default (no laptop). Laptop OBS only under "More options".
     var mode = _info.cloudProduction ? ProductionMode.cloud : ProductionMode.laptop;
     var more = false;
+    var type = 'golf';
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(
@@ -122,6 +152,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'Event name', hintText: 'Club Championship 2026'),
                 ),
+                const SizedBox(height: 12),
+                Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final (id, label, icon) in eventTypeChoices)
+                    ChoiceChip(avatar: Icon(icon, size: 16), label: Text(label), selected: type == id, onSelected: (_) => setLocal(() => type = id)),
+                ]),
                 const SizedBox(height: 8),
                 Text(
                   mode == ProductionMode.cloud
@@ -172,10 +207,17 @@ class _HomeScreenState extends State<HomeScreen> {
     name.dispose();
     venue.dispose();
     if (ok != true || n.isEmpty || !mounted) return;
-    final t = await guarded(context, () => _api.createTournament(org.id, name: n, venue: v, startsOn: date == null ? null : _isoDate(date!), mode: mode));
+    final t = await guarded(context, () => _api.createTournament(org.id, name: n, venue: v, startsOn: date == null ? null : _isoDate(date!), mode: mode, eventType: type));
     if (t == null || !mounted) return;
     await _load();
     if (mounted) _open(t.copyWith(role: org.role));
+  }
+
+  static IconData _typeIcon(String id) {
+    for (final (tid, _, icon) in eventTypeChoices) {
+      if (tid == id) return icon;
+    }
+    return Icons.live_tv;
   }
 
   static String _isoDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -247,20 +289,29 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
               if (_error != null) InfoBanner(icon: Icons.error_outline, text: _error!, error: true),
               if (org == null) ...[
-                const InfoBanner(icon: Icons.info_outline, text: 'You are not part of an organisation yet. Create one, or ask your club owner to add you.'),
+                const InfoBanner(icon: Icons.info_outline, text: 'Name your organisation to start: your club, school, company or event brand. Viewers see it on the watch page.'),
                 const SizedBox(height: 12),
-                FilledButton.icon(onPressed: _newOrg, icon: const Icon(Icons.add_business), label: const Text('Create organisation')),
+                FilledButton.icon(onPressed: _newOrg, icon: const Icon(Icons.add_business), label: const Text('Name your organisation')),
+                const SizedBox(height: 8),
+                Text('Joining someone else’s team? Ask its owner to add you.', style: Theme.of(context).textTheme.bodySmall),
               ],
               if (org != null && _tournaments == null && _error == null) const LinearProgressIndicator(),
               if (org != null && _tournaments != null && list.isEmpty)
-                InfoBanner(
-                  icon: Icons.info_outline,
-                  text: org.canCreateTournaments ? 'No events yet. Tap “New event” to start.' : 'No events in ${org.name} yet.',
-                ),
+                org.canCreateTournaments
+                    ? Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.rocket_launch, size: 32),
+                          title: const Text('Start your first show'),
+                          subtitle: const Text('Three steps: name it, choose where it goes live, add cameras.'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => _openGuide(org),
+                        ),
+                      )
+                    : InfoBanner(icon: Icons.info_outline, text: 'No events in ${org.name} yet.'),
               for (final t in list)
                 Card(
                   child: ListTile(
-                    leading: Icon(t.mode == ProductionMode.cloud ? Icons.cloud : Icons.golf_course),
+                    leading: Icon(_typeIcon(t.profile.id)),
                     title: Text(t.name),
                     subtitle: Text([t.venue, t.startsOn].whereType<String>().where((x) => x.isNotEmpty).join(' · ')),
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [

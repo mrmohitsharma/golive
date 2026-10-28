@@ -108,7 +108,7 @@ class GuestPass {
         'id': id,
         'name': name,
         'role': role.name,
-        'tournament': {'id': tournament.id, 'name': tournament.name, 'venue': tournament.venue, 'role': role.name},
+        'tournament': {'id': tournament.id, 'name': tournament.name, 'venue': tournament.venue, 'role': role.name, 'profile': tournament.profile.toJson()},
       };
 }
 
@@ -121,8 +121,12 @@ class ServerInfo {
     this.cloudCostPerHour = 0,
     this.billing = false,
     this.payments = false,
+    this.goliveChannel = false,
   });
   final bool signup;
+
+  /// Events can stream to the platform's Go Live YouTube channel (nothing to connect).
+  final bool goliveChannel;
   /// Camera and live-minute limits with a credit wallet.
   final bool billing;
   /// Credits can be bought online (Cashfree).
@@ -138,6 +142,7 @@ class ServerInfo {
         facebook: (j['facebook'] as bool?) ?? false,
         cloudProduction: (j['cloudProduction'] as bool?) ?? false,
         cloudCostPerHour: (j['cloudCostPerHour'] as num?)?.toDouble() ?? 0,
+        goliveChannel: (j['goliveChannel'] as bool?) ?? false,
         billing: (j['billing'] as bool?) ?? false,
         payments: (j['payments'] as bool?) ?? false,
       );
@@ -146,6 +151,55 @@ class ServerInfo {
 // ---------------------------------------------------------------- tournaments
 
 enum ProductionMode { laptop, cloud }
+
+/// The kind of event and what it changes in the app (labels, golf-only features).
+class EventProfile {
+  const EventProfile({
+    this.id = 'golf',
+    this.label = 'Golf',
+    this.positionLabel = 'Hole',
+    this.scoring = true,
+    this.captionTitle = 'Player',
+    this.captionSubtitle = 'Club or score',
+    this.captionExample = '',
+  });
+
+  final String id;
+  final String label;
+
+  /// Asked in camera setup (golf: the hole); null = not asked.
+  final String? positionLabel;
+
+  /// Golf scoring, hole cards, leaderboard.
+  final bool scoring;
+  final String captionTitle;
+  final String captionSubtitle;
+  final String captionExample;
+
+  bool get isGolf => id == 'golf';
+
+  factory EventProfile.fromJson(Map<String, dynamic>? j) => j == null
+      ? const EventProfile()
+      : EventProfile(
+          id: (j['id'] as String?) ?? 'golf',
+          label: (j['label'] as String?) ?? 'Golf',
+          positionLabel: j['positionLabel'] as String?,
+          scoring: (j['scoring'] as bool?) ?? false,
+          captionTitle: (j['captionTitle'] as String?) ?? 'Name',
+          captionSubtitle: (j['captionSubtitle'] as String?) ?? 'Details',
+          captionExample: (j['captionExample'] as String?) ?? '',
+        );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'positionLabel': positionLabel,
+        'scoring': scoring,
+        'captionTitle': captionTitle,
+        'captionSubtitle': captionSubtitle,
+        'captionExample': captionExample,
+      };
+}
 
 class Tournament {
   const Tournament({
@@ -163,10 +217,14 @@ class Tournament {
     this.chatEnabled = true,
     this.chatSlowSec = 3,
     this.role,
+    this.profile = const EventProfile(),
   });
 
   final String id;
   final String name;
+
+  /// Kind of event (golf, wedding, conference…) and its labels.
+  final EventProfile profile;
   final String? venue;
   final String? orgId;
   final String? orgName;
@@ -203,6 +261,7 @@ class Tournament {
         chatEnabled: (j['chatEnabled'] as bool?) ?? true,
         chatSlowSec: (j['chatSlowSec'] as num?)?.toInt() ?? 3,
         role: parseRole(j['role'] as String?),
+        profile: EventProfile.fromJson(j['profile'] as Map<String, dynamic>?),
       );
 
   Tournament copyWith({TournamentRole? role}) => Tournament(
@@ -220,6 +279,7 @@ class Tournament {
         chatEnabled: chatEnabled,
         chatSlowSec: chatSlowSec,
         role: role ?? this.role,
+        profile: profile,
       );
 }
 

@@ -5,6 +5,7 @@ import { HttpError } from '../errors.js';
 import { hashPassword, requireAuth, signPrincipal, verifyPassword, type Principal } from '../auth.js';
 import crypto from 'node:crypto';
 import QRCode from 'qrcode';
+import { eventProfile } from '../event-types.js';
 import { constantTimeEqual, guestId, normaliseJoinCode } from '../crypto.js';
 
 const email = z.string().trim().email().max(200);
@@ -149,7 +150,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
     if (!t || t.archived) throw new HttpError(401, 'unauthorized', 'This tournament has ended. Join again with a new code.');
     return {
       principal: { kind: p.kind, id: p.id, name: p.name, role: p.kind === 'guest' ? p.role : 'engine' },
-      tournament: { id: t.id, name: t.name, venue: t.venue },
+      tournament: { id: t.id, name: t.name, venue: t.venue, eventType: t.event_type ?? 'golf', profile: eventProfile(t.event_type) },
       orgs: [],
     };
   });
@@ -175,7 +176,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
       token: signPrincipal(config, principal),
       role: jc.role,
       guest: { id: principal.id, name: body.name },
-      tournament: { id: t.id, name: t.name, venue: t.venue },
+      tournament: { id: t.id, name: t.name, venue: t.venue, eventType: t.event_type ?? 'golf', profile: eventProfile(t.event_type) },
     };
   });
 

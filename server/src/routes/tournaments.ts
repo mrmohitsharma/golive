@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import QRCode from 'qrcode';
 import { YOUTUBE_RTMPS_INGEST, youtubeVideoId } from '../youtube.js';
+import { EVENT_TYPE_IDS, EVENT_TYPES, eventProfile, initialGraphics } from '../event-types.js';
 import { z } from 'zod';
 import type { Ctx } from '../context.js';
 import { HttpError } from '../errors.js';
@@ -25,6 +26,8 @@ export function tournamentDto(t: TournamentRow) {
     autoFallback: t.auto_fallback,
     archived: t.archived,
     hasYoutubeBroadcast: Boolean(t.yt_broadcast_id),
+    eventType: t.event_type ?? 'golf',
+    profile: eventProfile(t.event_type),
     publicWatch: t.public_watch !== false,
     chatEnabled: t.chat_enabled !== false,
     chatSlowSec: t.chat_slow_sec ?? 3,
@@ -35,6 +38,9 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
   const { config, repo, hub, youtube, cloud, outputs, sealer } = ctx;
   const any = requireAuth(config);
   const user = requireAuth(config, 'user');
+
+  /** The kinds of event and what each changes (labels, default graphics). */
+  app.get('/api/event-types', async () => ({ eventTypes: EVENT_TYPE_IDS.map((id) => EVENT_TYPES[id]) }));
 
   app.get('/api/tournaments', { preHandler: any }, async (req) => {
     const p = req.principal!;
@@ -59,12 +65,14 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
         venue: z.string().trim().max(120).nullish(),
         startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
         mode: z.enum(['laptop', 'cloud']).optional(),
+        eventType: z.enum(EVENT_TYPE_IDS).optional(),
       })
       .parse(req.body);
     if (body.mode === 'cloud' && !cloud.available) throw new HttpError(409, 'cloud_unavailable', 'Cloud production is not enabled on this server.');
     // Cloud is the default when this server can run cloud engines: no laptop needed (onboarding P1-4).
     const mode = body.mode ?? (cloud.available ? 'cloud' : 'laptop');
-    let t = await repo.createTournament({ orgId, name: body.name, venue: body.venue, startsOn: body.startsOn, mode });
+    const eventType = body.eventType ?? 'golf';
+    let t = await repo.createTournament({ orgId, name: body.name, venue: body.venue, startsOn: body.startsOn, mode, eventType, graphics: initialGraphics(eventType) });
     // No YouTube of their own yet: start on the Go Live channel so the first show needs no setup (P1-6).
     if (youtube.enabled && !(await repo.orgYoutube(orgId)) && (await youtube.goliveAvailable())) {
       await repo.db.query("UPDATE tournaments SET yt_source = 'golive' WHERE id = $1", [t.id]);
@@ -85,6 +93,7 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
         autoFallback: z.boolean().optional(),
         archived: z.boolean().optional(),
         mode: z.enum(['laptop', 'cloud']).optional(),
+        eventType: z.enum(EVENT_TYPE_IDS).optional(),
         publicWatch: z.boolean().optional(),
         chatEnabled: z.boolean().optional(),
         chatSlowSec: z.number().int().min(0).max(300).optional(),
