@@ -29,7 +29,7 @@ Director tablet ◀──WSS / WebRTC──▶ server ──JSON──▶ /watch
 | `agent/` | Runs next to OBS (laptop or cloud container): scenes, switching, commentary mix, graphics layer, replays, meters. Includes the end-to-end test |
 | `infra/` | `docker-compose.yml` (Postgres, server, MediaMTX, Caddy), `mediamtx.yml`, `Caddyfile`, `cloud-engine/` (OBS container) |
 | `tools/sim-camera.sh` | Fake phone camera (FFmpeg) that joins with a camera code |
-| `docs/` | [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Mobile](docs/MOBILE.md) · [Protocol & API](docs/PROTOCOL.md) · [Testing](docs/TESTING.md) · [Known limitations](docs/LIMITATIONS.md) |
+| `docs/` | [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Mobile](docs/MOBILE.md) · [Protocol & API](docs/PROTOCOL.md) · [Testing](docs/TESTING.md) · [Known limitations](docs/LIMITATIONS.md) · [Versions and branches](docs/VERSIONING.md) |
 
 ## Quick start
 
