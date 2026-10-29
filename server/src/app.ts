@@ -42,6 +42,8 @@ import { InfluencersService } from './influencers.js';
 import { registerInfluencerRoutes } from './routes/influencers.js';
 import { MomentsService } from './moments.js';
 import { registerMomentRoutes } from './routes/moments.js';
+import { PrizesService } from './prizes.js';
+import { registerPrizeRoutes } from './routes/prizes.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -110,6 +112,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const messenger = new Messenger(config, repo, msg91Fetch, log);
   const influencers = new InfluencersService(config, repo, sealer, messenger, (tid) => viewership.watchingByRef(tid));
   const moments = new MomentsService(repo, viewership);
+  const prizes = new PrizesService(config, repo, moments, viewership, messenger);
+  moments.prizes = prizes;
   hub.services = { graphics, media, youtube, cloud, outputs, billing, chatReaders, viewership, influencers };
   const poller = new HealthPoller(
     config,
@@ -138,7 +142,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
   const googleSignIn = new GoogleSignIn(config, googleFetch);
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -176,6 +180,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerSiteRoutes(fastify, ctx);
   registerInfluencerRoutes(fastify, ctx);
   registerMomentRoutes(fastify, ctx);
+  registerPrizeRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook
@@ -224,6 +229,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
         for (const tid of hub.streamingTournaments()) {
           const t = await repo.tournamentById(tid).catch(() => null);
           if (t) await moments.tick(t).catch((err) => log.warn({ err }, 'moments tick failed'));
+          if (t) await prizes.tick(t).catch((err) => log.warn({ err }, 'prizes tick failed'));
         }
       }, 5000),
     );
@@ -236,6 +242,9 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
           viewership.setYoutubeViewers(tid, v?.concurrentViewers ?? null);
         }
         await viewership.snapshotMinute().catch((err) => log.warn({ err }, 'viewership snapshot failed'));
+        // Unclaimed prizes pass to reserves even after the show has ended.
+        const due = await db.query<{ tournament_id: string }>("SELECT DISTINCT tournament_id FROM wins WHERE status = 'won' AND claim_expires_at < now()").catch(() => ({ rows: [] }));
+        for (const r of due.rows) await prizes.expire(r.tournament_id).catch(() => {});
       }, 60_000),
     );
     for (const tm of viewTimers) tm.unref();

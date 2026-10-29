@@ -49,6 +49,14 @@ class _GamesSheetState extends State<GamesSheet> {
     }
   }
 
+  Future<void> _draw(GameMoment m) async {
+    final sure = await confirm(context,
+        title: 'Run the draw?', message: m.type == 'draw' ? 'Only entrants watching right now can win ${m.prize ?? 'the prize'}.' : 'Winners are drawn from everyone who played.', action: 'Run draw');
+    if (!sure || !mounted) return;
+    final r = await guarded(context, () => widget.api.runDraw(widget.tournament.id, m.id));
+    if (r != null && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Draw done: $r')));
+  }
+
   Future<void> _settle(GameMoment m) async {
     final pick = await showDialog<String>(
       context: context,
@@ -89,11 +97,12 @@ class _GamesSheetState extends State<GamesSheet> {
                 for (final m in list.where((m) => m.enabled))
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(switch (m.type) { 'spin' => Icons.casino, 'poll' => Icons.bar_chart, 'prediction' => Icons.psychology, _ => Icons.quiz }),
+                    leading: Icon(switch (m.type) { 'spin' => Icons.casino, 'poll' => Icons.bar_chart, 'prediction' => Icons.psychology, 'draw' => Icons.confirmation_number, _ => Icons.quiz }),
                     title: Text(m.title),
-                    subtitle: Text('${m.typeLabel} · ${m.running ? 'running now' : m.clockLabel}'),
+                    subtitle: Text('${m.typeLabel} · ${m.running ? 'running now' : m.clockLabel}${m.prize != null ? ' · 🎁 ${m.prize}' : ''}'),
                     trailing: Wrap(spacing: 6, children: [
                       if (m.type == 'prediction') OutlinedButton(onPressed: () => _settle(m), child: const Text('Settle')),
+                      if (m.pick == 'draw') OutlinedButton(onPressed: () => _draw(m), child: const Text('Draw')),
                       FilledButton(
                         onPressed: m.running || _busy != null ? null : () => _fire(m),
                         child: _busy == m.id ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : Text(m.running ? 'Running' : 'Fire'),

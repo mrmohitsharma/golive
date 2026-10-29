@@ -344,6 +344,12 @@ class ApiClient {
   /// Games on the watch page (set up in the web Studio).
   Future<List<GameMoment>> moments(String id) async => GameMoment.listFromJson(await get('/api/tournaments/$id/moments'));
   Future<void> fireMoment(String id, String momentId) => post('/api/tournaments/$id/moments/$momentId/fire');
+  /// Runs a prize draw now (lucky draw: only entrants watching now can win). Returns "2 winners from 40".
+  Future<String> runDraw(String id, String momentId) async {
+    final d = (await post('/api/tournaments/$id/moments/$momentId/draw'))['draw'] as Map<String, dynamic>;
+    return '${d['winners']} winner(s), ${d['reserves']} reserve(s) from ${d['eligible']} eligible';
+  }
+
   Future<void> settleMoment(String id, String momentId, String correctOption) =>
       post('/api/tournaments/$id/moments/$momentId/resolve', {'correctOption': correctOption});
 

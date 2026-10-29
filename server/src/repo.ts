@@ -55,6 +55,8 @@ export interface TournamentRow {
   attribution_days: number;
   influencer_board: boolean;
   moment_gap_sec: number;
+  prize_terms: string | null;
+  prizes_per_viewer: number;
   output_key: string | null;
   outputs: TournamentOutputs;
   public_watch: boolean;

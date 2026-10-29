@@ -116,8 +116,8 @@ export class ViewershipService {
   // ---------------------------------------------------------------- a viewer opens the page
   async start(
     t: TournamentRow,
-    input: { viewerKey?: string | null; ip?: string; userAgent?: string; refId?: string | null },
-  ): Promise<{ token: string; viewerKey: string; watchedSec: number; viewer: ViewerRow }> {
+    input: { viewerKey?: string | null; ip?: string; userAgent?: string; refId?: string | null; sharedBy?: string | null },
+  ): Promise<{ token: string; viewerKey: string; watchedSec: number; viewer: ViewerRow; shareCode: string }> {
     const key = input.viewerKey && /^[A-Za-z0-9_-]{16,64}$/.test(input.viewerKey) ? input.viewerKey : crypto.randomBytes(18).toString('base64url');
     const agent = describeAgent(input.userAgent ?? '');
     const net = this.netHash(input.ip);
@@ -142,17 +142,28 @@ export class ViewershipService {
         const n = Number((await this.repo.db.query<{ n: string }>('SELECT count(*)::text AS n FROM viewers WHERE tournament_id = $1 AND net_hash = $2', [t.id, net])).rows[0].n);
         flagged = n >= (this.config.VIEW_NET_CAP ?? NET_CAP_DEFAULT);
       }
+      // Came through another viewer's share link (e.g. a winner's): credit that viewer.
+      const sharer = input.sharedBy && /^[A-Za-z0-9_-]{6,16}$/.test(input.sharedBy)
+        ? ((await this.repo.db.query<{ id: string }>('SELECT id FROM viewers WHERE tournament_id = $1 AND share_code = $2', [t.id, input.sharedBy])).rows[0]?.id ?? null)
+        : null;
       viewer = (
         await this.repo.db.query<ViewerRow>(
-          `INSERT INTO viewers (tournament_id, viewer_key, ref_id, device, app, net_hash, flagged) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `INSERT INTO viewers (tournament_id, viewer_key, ref_id, device, app, net_hash, flagged, shared_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (tournament_id, viewer_key) DO UPDATE SET last_seen_at = now() RETURNING *`,
-          [t.id, key, input.refId ?? null, agent.device, agent.app, net, flagged],
+          [t.id, key, input.refId ?? null, agent.device, agent.app, net, flagged, sharer],
         )
       ).rows[0];
     }
     this.refs.set(viewer.id, viewer.ref_id);
+    let shareCode = (viewer as ViewerRow & { share_code?: string | null }).share_code ?? null;
+    if (!shareCode) {
+      shareCode = crypto.randomBytes(6).toString('base64url');
+      await this.repo.db.query('UPDATE viewers SET share_code = $2 WHERE id = $1 AND share_code IS NULL', [viewer.id, shareCode]).catch(() => {
+        shareCode = null;
+      });
+    }
     if (this.refs.size > 200_000) this.refs.delete(this.refs.keys().next().value!);
-    return { token: this.sign(viewer.id, t.id, viewer.flagged), viewerKey: key, watchedSec: viewer.watched_sec, viewer };
+    return { token: this.sign(viewer.id, t.id, viewer.flagged), viewerKey: key, watchedSec: viewer.watched_sec, viewer, shareCode: shareCode ?? '' };
   }
 
   // ---------------------------------------------------------------- reports every 30 s
@@ -242,6 +253,12 @@ export class ViewershipService {
     return { watching, unmuted };
   }
 
+  /** Viewers who reported in the last 75 s (the lucky draw only picks people still watching). */
+  watchingViewers(tournamentId: string): Set<string> {
+    this.watchingNow(tournamentId);
+    return new Set(this.presence.get(tournamentId)?.keys() ?? []);
+  }
+
   /** Watching now, per influencer link (viewers with no link are left out). */
   watchingByRef(tournamentId: string): Map<string, number> {
     this.watchingNow(tournamentId); // drops viewers who stopped reporting
@@ -295,6 +312,7 @@ export class ViewershipService {
                 count(*) FILTER (WHERE device = 'mobile')::text AS mobile,
                 count(*) FILTER (WHERE app = 'instagram')::text AS instagram,
                 count(*) FILTER (WHERE app = 'whatsapp')::text AS whatsapp,
+                count(*) FILTER (WHERE shared_by IS NOT NULL AND watched_sec > 0)::text AS via_shares,
                 (SELECT count(*) FROM viewers f WHERE f.tournament_id = $1 AND f.flagged)::text AS flagged
            FROM viewers WHERE tournament_id = $1 AND NOT flagged`,
         [t.id, QUALIFIED_SEC],
@@ -335,6 +353,7 @@ export class ViewershipService {
       unmutedRate: played ? Math.round((100 * n('unmuted_viewers')) / played) : 0,
       unmutedShareOfTime: n('watched') ? Math.round((100 * n('unmuted')) / n('watched')) : 0,
       apps: { instagram: n('instagram'), whatsapp: n('whatsapp') },
+      viaViewerShares: n('via_shares'),
       mobileShare: played ? Math.round((100 * n('mobile')) / Math.max(1, n('opened'))) : 0,
       series: series.map((s) => ({ at: s.at.toISOString(), watching: s.watching, unmuted: s.unmuted, youtube: s.youtube })),
     };

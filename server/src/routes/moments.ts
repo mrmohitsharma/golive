@@ -30,6 +30,17 @@ const momentBody = z.object({
   lateJoin: z.boolean().optional(),
   enabled: z.boolean().optional(),
   sort: z.number().int().min(0).max(10_000).optional(),
+  pick: z.enum(['draw', 'first_correct', 'spin']).nullish(),
+  prize: z.string().trim().max(120).nullish(),
+  sponsor: z.string().trim().max(80).nullish(),
+  prizeStock: z.number().int().min(1).max(100_000).nullish(),
+  winnersPerRun: z.number().int().min(1).max(10_000).nullish(),
+  reserves: z.number().int().min(0).max(20).optional(),
+  claimHours: z.number().int().min(1).max(24 * 14).optional(),
+  minWatchSec: z.number().int().min(0).max(24 * 3600).optional(),
+  needUnmuted: z.boolean().optional(),
+  pacePerHour: z.number().int().min(1).max(100_000).nullish(),
+  drawAtSec: z.number().int().min(0).max(24 * 3600).nullish(),
 });
 
 /**

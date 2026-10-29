@@ -1583,7 +1583,7 @@ class OnboardingChecklist {
 
 /// A game on the watch page (quiz, poll, prediction, spin), as the director's list shows it.
 class GameMoment {
-  const GameMoment({required this.id, required this.type, required this.title, required this.clock, this.options = const [], this.enabled = true, this.running = false});
+  const GameMoment({required this.id, required this.type, required this.title, required this.clock, this.options = const [], this.enabled = true, this.running = false, this.pick, this.prize});
   final String id;
   final String type;
   final String title;
@@ -1592,7 +1592,11 @@ class GameMoment {
   final bool enabled;
   final bool running;
 
-  String get typeLabel => switch (type) { 'quiz' => 'Quiz', 'poll' => 'Poll', 'prediction' => 'Prediction', 'spin' => 'Spin the wheel', _ => 'Game' };
+  /// How winners are picked (draw, first_correct, spin), or null for no prize.
+  final String? pick;
+  final String? prize;
+
+  String get typeLabel => switch (type) { 'quiz' => 'Quiz', 'poll' => 'Poll', 'prediction' => 'Prediction', 'spin' => 'Spin the wheel', 'draw' => 'Lucky draw', _ => 'Game' };
   String get clockLabel => switch (clock) { 'director' => 'Fire when you like', 'stream' => 'On the stream clock', _ => 'On each viewer’s clock' };
 
   /// From GET /api/tournaments/:id/moments (moments + runs).
@@ -1612,6 +1616,8 @@ class GameMoment {
           options: [for (final o in (m['options'] as List? ?? const []).cast<Map<String, dynamic>>()) ('${o['id']}', '${o['text']}')],
           enabled: m['enabled'] != false,
           running: open.contains(m['id']),
+          pick: m['pick'] as String?,
+          prize: m['prize'] as String?,
         ),
     ];
   }

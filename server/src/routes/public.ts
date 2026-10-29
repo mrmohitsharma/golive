@@ -138,17 +138,20 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/public/tournaments/:id/view', async (req) => {
     const id = z.string().uuid().safeParse((req.params as { id: string }).id);
     if (!id.success) throw new HttpError(404, 'not_found', 'Tournament not found.');
-    const body = z.object({ viewerKey: z.string().max(64).nullish(), ref: z.string().max(40).nullish() }).parse(req.body ?? {});
+    const body = z.object({ viewerKey: z.string().max(64).nullish(), ref: z.string().max(40).nullish(), sharedBy: z.string().max(16).nullish() }).parse(req.body ?? {});
     const t = await publicEvent(id.data);
     const refId = await ctx.influencers.refIdFor(t.id, body.ref);
-    const v = await viewership.start(t, { viewerKey: body.viewerKey, ip: req.ip, userAgent: req.headers['user-agent'], refId });
+    const v = await viewership.start(t, { viewerKey: body.viewerKey, ip: req.ip, userAgent: req.headers['user-agent'], refId, sharedBy: body.sharedBy });
     return {
       token: v.token,
       viewerKey: v.viewerKey,
+      shareCode: v.shareCode,
       watchedSec: v.watchedSec,
       visits: v.viewer.visits,
       // Games this viewer already saw or played ("<moment>:<run>"), so they never repeat.
       done: await ctx.moments.doneFor(v.viewer.id),
+      // Prizes this viewer won and can still claim (a returning winner sees the claim link).
+      wins: await ctx.prizes.winsOf(v.viewer.id),
       ...clocks(t),
     };
   });
@@ -169,7 +172,8 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
       const body = z.object({ token: z.string().max(200), playingSec: z.number().min(0).max(3600), unmutedSec: z.number().min(0).max(3600) }).parse(req.body);
       const b = viewership.beat(body.token, body.playingSec, body.unmutedSec);
       const t = await publicEvent(b.tournamentId);
-      return { addedSec: b.addedSec, ...clocks(t) };
+      const wins = ctx.prizes.takeWins(b.viewerId);
+      return { addedSec: b.addedSec, ...clocks(t), ...(wins.length ? { wins } : {}) };
     });
   });
 

@@ -37,6 +37,17 @@ export interface MomentRow {
   enabled: boolean;
   sort: number;
   created_at: Date;
+  pick: 'draw' | 'first_correct' | 'spin' | null;
+  prize: string | null;
+  sponsor: string | null;
+  prize_stock: number | null;
+  winners_per_run: number | null;
+  reserves: number;
+  claim_hours: number;
+  min_watch_sec: number;
+  need_unmuted: boolean;
+  pace_per_hour: number | null;
+  draw_at_sec: number | null;
 }
 
 export interface RunRow {
@@ -66,6 +77,24 @@ export interface MomentInput {
   lateJoin?: boolean;
   enabled?: boolean;
   sort?: number;
+  /** Prize (step 4). */
+  pick?: MomentRow['pick'];
+  prize?: string | null;
+  sponsor?: string | null;
+  prizeStock?: number | null;
+  winnersPerRun?: number | null;
+  reserves?: number;
+  claimHours?: number;
+  minWatchSec?: number;
+  needUnmuted?: boolean;
+  pacePerHour?: number | null;
+  drawAtSec?: number | null;
+}
+
+/** What a play may hand to the prize engine. */
+export interface PrizeHooks {
+  afterPlay(m: MomentRow, viewerId: string, runKey: string, outcome: { answer: string | null; correct: boolean | null; segment?: MomentOption }): Promise<{ segment?: MomentOption; win?: unknown } | null>;
+  afterResolve(m: MomentRow, run: RunRow): Promise<void>;
 }
 
 /** Grace for a late answer (network delay) after a run closes. */
@@ -81,6 +110,9 @@ const VIEWER_CLOCK_SLACK_SEC = 45;
  * decides results itself (the spin is drawn here, never on the phone).
  */
 export class MomentsService {
+  /** The prize engine (step 4), set after construction. */
+  prizes?: PrizeHooks;
+
   constructor(
     private readonly repo: Repo,
     private readonly viewership: ViewershipService,
@@ -100,6 +132,29 @@ export class MomentsService {
     if (m.clock !== 'director' && (m.atSec == null || m.atSec < 0)) throw new HttpError(400, 'need_time', 'Say when it shows (seconds on the clock).');
     if ((m.repeatMax ?? 1) > 1 && !m.repeatEverySec) throw new HttpError(400, 'need_repeat', 'Say how often it repeats.');
     if (m.audience === 'ref' && !m.audienceRef) throw new HttpError(400, 'need_influencer', 'Pick the influencer whose viewers see it.');
+    if (m.type === 'draw' && m.pick !== 'draw') m.pick = 'draw';
+    if (m.pick) {
+      if (!m.prize?.trim()) throw new HttpError(400, 'need_prize', 'Describe the prize, e.g. “₹500 voucher from Sponsor X”.');
+      if (!m.prizeStock || m.prizeStock < 1) throw new HttpError(400, 'need_stock', 'How many prizes are there?');
+      if (m.pick === 'spin' && m.type !== 'spin') throw new HttpError(400, 'bad_pick', 'Wheel prizes are for spin-the-wheel games.');
+      if (m.pick === 'spin' && !opts.some((o) => o.win)) throw new HttpError(400, 'need_win_segment', 'Mark at least one wheel segment as a win.');
+      if (m.pick === 'first_correct' && m.type !== 'quiz' && m.type !== 'prediction') throw new HttpError(400, 'bad_pick', '“First right answers” is for quizzes and predictions.');
+      if (m.pick === 'spin' && !opts.some((o) => !o.win)) throw new HttpError(400, 'need_lose_segment', 'Keep at least one segment that does not win, for when prizes run out.');
+    } else if (m.type === 'spin' && opts.some((o) => o.win)) {
+      // A wheel can show "win" segments for fun without a prize.
+    }
+  }
+
+  /** Prize columns (step 4), saved next to the game. */
+  private async savePrize(id: string, m: MomentInput): Promise<void> {
+    await this.repo.db.query(
+      `UPDATE moments SET pick = $2, prize = $3, sponsor = $4, prize_stock = $5, winners_per_run = $6, reserves = $7, claim_hours = $8,
+         min_watch_sec = $9, need_unmuted = $10, pace_per_hour = $11, draw_at_sec = $12 WHERE id = $1`,
+      [
+        id, m.pick ?? null, m.pick ? m.prize?.trim() : null, m.pick ? (m.sponsor?.trim() || null) : null, m.pick ? m.prizeStock : null,
+        m.winnersPerRun ?? null, m.reserves ?? 2, m.claimHours ?? 24, m.minWatchSec ?? 120, m.needUnmuted ?? false, m.pacePerHour ?? null, m.drawAtSec ?? null,
+      ],
+    );
   }
 
   async list(tournamentId: string): Promise<MomentRow[]> {
@@ -114,7 +169,7 @@ export class MomentsService {
 
   async create(t: TournamentRow, m: MomentInput): Promise<MomentRow> {
     this.validate(m);
-    return (
+    const row = (
       await this.repo.db.query<MomentRow>(
         `INSERT INTO moments (tournament_id, type, title, question, options, correct_option, clock, at_sec, repeat_every_sec, repeat_max, open_sec, audience, audience_ref, late_join, enabled, sort)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
@@ -125,6 +180,8 @@ export class MomentsService {
         ],
       )
     ).rows[0];
+    await this.savePrize(row.id, m);
+    return this.get(t.id, row.id);
   }
 
   async update(t: TournamentRow, id: string, patch: Partial<MomentInput>): Promise<MomentRow> {
@@ -145,6 +202,17 @@ export class MomentsService {
       lateJoin: patch.lateJoin ?? cur.late_join,
       enabled: patch.enabled ?? cur.enabled,
       sort: patch.sort ?? cur.sort,
+      pick: patch.pick !== undefined ? patch.pick : cur.pick,
+      prize: patch.prize !== undefined ? patch.prize : cur.prize,
+      sponsor: patch.sponsor !== undefined ? patch.sponsor : cur.sponsor,
+      prizeStock: patch.prizeStock !== undefined ? patch.prizeStock : cur.prize_stock,
+      winnersPerRun: patch.winnersPerRun !== undefined ? patch.winnersPerRun : cur.winners_per_run,
+      reserves: patch.reserves ?? cur.reserves,
+      claimHours: patch.claimHours ?? cur.claim_hours,
+      minWatchSec: patch.minWatchSec ?? cur.min_watch_sec,
+      needUnmuted: patch.needUnmuted ?? cur.need_unmuted,
+      pacePerHour: patch.pacePerHour !== undefined ? patch.pacePerHour : cur.pace_per_hour,
+      drawAtSec: patch.drawAtSec !== undefined ? patch.drawAtSec : cur.draw_at_sec,
     };
     this.validate(merged);
     await this.repo.db.query(
@@ -156,6 +224,7 @@ export class MomentsService {
         merged.audience ?? 'all', merged.audienceRef ?? null, merged.lateJoin ?? false, merged.enabled ?? true, merged.sort ?? 0,
       ],
     );
+    await this.savePrize(id, merged);
     return this.get(t.id, id);
   }
 
@@ -238,7 +307,9 @@ export class MomentsService {
     if (!run) throw new HttpError(409, 'no_run', 'This prediction has not run yet.');
     await this.repo.db.query('UPDATE moment_runs SET correct_option = $2 WHERE id = $1', [run.id, correct]);
     await this.repo.db.query('UPDATE moment_plays SET correct = (answer = $2) WHERE moment_id = $1 AND run_key = $3 AND played_at IS NOT NULL', [m.id, correct, run.id]);
-    return { ...run, correct_option: correct };
+    const settled = { ...run, correct_option: correct };
+    if (m.pick === 'first_correct') await this.prizes?.afterResolve(m, settled);
+    return settled;
   }
 
   // ---------------------------------------------------------------- what the watch page gets
@@ -262,6 +333,7 @@ export class MomentsService {
         audience: m.audience,
         audienceRef: m.audience_ref ? (refSlugs.get(m.audience_ref) ?? null) : null,
         lateJoin: m.late_join,
+        prize: m.pick ? { text: m.prize, sponsor: m.sponsor } : null,
       })),
       runs: runs.map((r) => ({
         runKey: r.id,
@@ -363,13 +435,16 @@ export class MomentsService {
 
     let correct: boolean | null = null;
     let result: Record<string, unknown>;
+    let segment: MomentOption | undefined;
     if (m.type === 'quiz') {
       correct = answer === m.correct_option;
       result = { correct, correctOption: m.correct_option };
     } else if (m.type === 'spin') {
-      const seg = this.spin(m.options);
-      answer = seg.id;
-      result = { segment: seg.id, text: seg.text, win: Boolean(seg.win) };
+      segment = this.spin(m.options);
+      // With a prize: a winning segment only stands while prizes (and the pace) allow it.
+      if (m.pick === 'spin') segment = await this.landing(m, viewerId, segment);
+      answer = segment.id;
+      result = { segment: segment.id, text: segment.text, win: Boolean(segment.win) };
     } else if (m.type === 'prediction') {
       result = { saved: true, settled: run?.correct_option ?? null };
       if (run?.correct_option) correct = answer === run.correct_option;
@@ -385,7 +460,20 @@ export class MomentsService {
     );
     if (!r.rowCount) throw new HttpError(409, 'already_played', 'You already played this one.');
     if (m.type === 'poll' || m.type === 'prediction') result = { ...result, results: await this.tally(m, runKey) };
+    if (m.pick && this.prizes && m.pick !== 'draw') {
+      const p = await this.prizes.afterPlay(m, viewerId, runKey, { answer, correct, segment });
+      if (p?.win) result = { ...result, prize: p.win };
+    }
     return { type: m.type, answer, ...result };
+  }
+
+  /** Can this landing win? If not (no prize left, too fast, not eligible), land on a losing segment. */
+  private async landing(m: MomentRow, viewerId: string, seg: MomentOption): Promise<MomentOption> {
+    if (!seg.win) return seg;
+    const can = await (this.prizes as unknown as { canWin?: (m: MomentRow, viewerId: string, runKey: string | null) => Promise<boolean> })?.canWin?.(m, viewerId, null);
+    if (can) return seg;
+    const losers = m.options.filter((o) => !o.win);
+    return losers.length ? this.spin(losers.map((o) => ({ ...o, weight: o.weight ?? 1 }))) : seg;
   }
 
   /** Weighted draw of a wheel segment, with a cryptographic random number. */
@@ -497,6 +585,17 @@ export class MomentsService {
       lateJoin: m.late_join,
       enabled: m.enabled,
       sort: m.sort,
+      pick: m.pick,
+      prize: m.prize,
+      sponsor: m.sponsor,
+      prizeStock: m.prize_stock,
+      winnersPerRun: m.winners_per_run,
+      reserves: m.reserves,
+      claimHours: m.claim_hours,
+      minWatchSec: m.min_watch_sec,
+      needUnmuted: m.need_unmuted,
+      pacePerHour: m.pace_per_hour,
+      drawAtSec: m.draw_at_sec,
     };
   }
 }

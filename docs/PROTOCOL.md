@@ -85,6 +85,15 @@ Errors are `{"error":{"code","message"}}` with a human-readable message the apps
 | `GET /api/public/tournaments/:id/moments` | watch page | Games (no right answers) and shared runs; cached 2 s |
 | `POST /api/public/moments/:mid/seen {token, runKey, kind}`, `…/play {token, runKey, answer?}` | watch page | Shown/closed; play: server checks the run is open, the viewer clock got there, the audience, one play each, and decides the result (spin drawn server-side) |
 
+| Game prize fields | manage | `pick` (draw / first_correct / spin), `prize`, `sponsor`, `prizeStock`, `winnersPerRun`, `reserves`, `claimHours`, `minWatchSec`, `needUnmuted`, `pacePerHour` (spin), `drawAtSec` (lucky draw, stream clock). Type `draw` = lucky draw (phone entry) |
+| `POST /api/public/moments/:mid/enter {token, runKey, phone, consent: true}` | watch page | Lucky draw entry: one per number and per viewer; SMS confirmation |
+| `POST /api/tournaments/:id/moments/:mid/draw {runKey?}` | director | Runs a draw now (also automatic when a shared run closes, or at `drawAtSec`). Lucky draw: only entrants still watching. Winners + reserves, logged |
+| `GET /api/tournaments/:id/winners`, `GET …/winners.csv`, `POST …/winners/:wid/sent`, `PUT …/prize-terms` | director / manage | Winners (contacts for managers), stock left, draw log; export; mark sent; prize terms and prizes per viewer |
+| `GET /claim/:code`, `GET /api/public/claims/:code`, `POST …/otp {phone?}`, `POST …/verify {otp, email, consent: true}` | winner | Claim page: one-time code (6 digits, 10 min, 5 tries, 3 sends), email, consent; one prize per phone per event |
+| `GET /prize-terms/:id` | anyone | The organiser's prize terms, or terms written from the event's prize games |
+
+Winners are told on the watch page through the next 30 s report (`wins` in the beat response), and by SMS when the phone is known (lucky draw). Unclaimed prizes go to the next reserve when the claim window ends. Sharing is optional (the winner card carries the winner's own share link, `?s=<code>`, so viewers they bring in are credited); it is never needed to win or claim.
+
 Watch page order: one card at a time, director first, then stream, then viewer clock, with `moment_gap_sec` (default 60) between cards (director games skip the gap). Cards sit under the video, never over it. `runKey` = shared run id, or `v<n>` for a viewer's own n-th run.
 
 Clocks: **viewer clock** = seconds this viewer actually watched (video playing, tab visible; continues on return). **Stream clock** = seconds since `tournaments.first_live_at` (first Go live; never reset). Viewers are anonymous (random browser id; only a salted hash of the /24 network is stored, to cap one network at `VIEW_NET_CAP` = 25).
