@@ -142,7 +142,15 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
     const t = await publicEvent(id.data);
     const refId = await ctx.influencers.refIdFor(t.id, body.ref);
     const v = await viewership.start(t, { viewerKey: body.viewerKey, ip: req.ip, userAgent: req.headers['user-agent'], refId });
-    return { token: v.token, viewerKey: v.viewerKey, watchedSec: v.watchedSec, ...clocks(t) };
+    return {
+      token: v.token,
+      viewerKey: v.viewerKey,
+      watchedSec: v.watchedSec,
+      visits: v.viewer.visits,
+      // Games this viewer already saw or played ("<moment>:<run>"), so they never repeat.
+      done: await ctx.moments.doneFor(v.viewer.id),
+      ...clocks(t),
+    };
   });
 
   /**

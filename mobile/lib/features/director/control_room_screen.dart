@@ -12,6 +12,7 @@ import '../clips/clips_screen.dart';
 import '../org/billing_screen.dart';
 import 'camera_tile.dart';
 import 'control_room.dart';
+import 'games_sheet.dart';
 import 'production_sheets.dart';
 import 'whep_view.dart';
 
@@ -109,6 +110,7 @@ class _ControlRoomScreenState extends State<ControlRoomScreen> {
                       MaterialPageRoute<void>(builder: (_) => ClipsScreen(session: widget.session, tournament: _room.tournament))),
                   onComments: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(builder: (_) => ChatScreen(session: widget.session, tournament: _room.tournament))),
+                  onGames: () => _sheet((_) => GamesSheet(api: _room.api, tournament: _room.tournament, serverUrl: widget.session.serverUrl)),
                 ),
                 Expanded(child: wide ? _wideLayout(c) : _narrowLayout(c)),
               ]);
@@ -745,8 +747,10 @@ class _ToolsRow extends StatelessWidget {
     required this.onClip,
     required this.onClips,
     required this.onComments,
+    required this.onGames,
   });
   final ControlRoom room;
+  final VoidCallback onGames;
   final VoidCallback onGraphics;
   final VoidCallback onAudio;
   final VoidCallback onClip;
@@ -782,6 +786,7 @@ class _ToolsRow extends StatelessWidget {
           tool(Icons.content_cut, 'Save clip', room.cameras.isEmpty ? null : onClip),
           tool(Icons.video_library, working > 0 ? 'Clips ($working making)' : 'Clips', onClips),
           tool(Icons.forum, 'Comments', onComments, active: g.questionVisible),
+          tool(Icons.casino, 'Games', onGames),
           if (room.commentators.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 6),

@@ -341,6 +341,12 @@ class ApiClient {
     );
   }
 
+  /// Games on the watch page (set up in the web Studio).
+  Future<List<GameMoment>> moments(String id) async => GameMoment.listFromJson(await get('/api/tournaments/$id/moments'));
+  Future<void> fireMoment(String id, String momentId) => post('/api/tournaments/$id/moments/$momentId/fire');
+  Future<void> settleMoment(String id, String momentId, String correctOption) =>
+      post('/api/tournaments/$id/moments/$momentId/resolve', {'correctOption': correctOption});
+
   Future<ProductionState> startCloudEngine(String id) async =>
       ProductionState.fromJson((await post('/api/tournaments/$id/cloud-engine/start'))['production'] as Map<String, dynamic>?);
 

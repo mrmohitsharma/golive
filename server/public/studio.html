@@ -263,7 +263,131 @@
     document.body.append(dlg); dlg.showModal();
   }
 
-  const VIEWS = { influencers: influencersView };
+
+  // ------------------------------------------------------------------ games (moments)
+  const mmss = (sec) => sec == null ? '' : Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  const parseTime = (v) => { v = String(v || '').trim(); if (!v) return null; const p = v.split(':').map(Number); if (p.some(isNaN)) return NaN; return p.length === 1 ? p[0] : p.length === 2 ? p[0] * 60 + p[1] : p[0] * 3600 + p[1] * 60 + p[2]; };
+  const TYPES = { quiz: 'Quiz', poll: 'Poll', prediction: 'Prediction', spin: 'Spin the wheel' };
+  const CLOCKS = { viewer: 'Viewer clock (from each viewer’s start)', stream: 'Stream clock (from Go live)', director: 'Director fires it live' };
+  const AUD = { all: 'Everyone', unmuted: 'Unmuted viewers', ref: 'One influencer’s viewers', new: 'New viewers', returning: 'Returning viewers' };
+
+  async function gamesView() {
+    const [d, rep, infs] = await Promise.all([
+      call('GET', `/api/tournaments/${ev.id}/moments`),
+      call('GET', `/api/tournaments/${ev.id}/moments/report`),
+      call('GET', `/api/tournaments/${ev.id}/influencers`),
+    ]);
+    const canManage = ev.role === 'owner' || ev.role === 'director';
+    const repById = new Map(rep.moments.map((r) => [r.id, r]));
+    const openRun = (m) => d.runs.find((r) => r.momentId === m.id && Date.parse(r.closesAt) > Date.now());
+    const box = el('div');
+    box.append(
+      el('p', { class: 'muted small', text: 'Games show under the video on the watch page, one at a time: director games first, then stream-clock, then viewer-clock games, with a gap between them. The server marks answers and spins.' }),
+      d.streamClockSec != null ? el('p', { class: 'small', text: 'Stream clock now: ' + mmss(d.streamClockSec) }) : el('p', { class: 'small muted', text: 'Stream clock starts at the first Go live.' }),
+      canManage ? el('div', { class: 'row', style: 'margin:8px 0 16px' }, el('button', { class: 'btn primary', onclick: () => editMoment(null, infs.influencers), text: 'Add a game' })) : null,
+      el('div', { class: 'card scroll', style: 'padding:0' }, d.moments.length ? el('table', {},
+        el('thead', {}, el('tr', {}, ['Game', 'When', 'Who', 'Shown ', 'Played ', 'Closed ', 'Right ', 'Extra watch ', ''].map((h) => el('th', { class: h.endsWith(' ') ? 'n' : '', text: h.trim() })))),
+        el('tbody', {}, d.moments.map((m) => {
+          const r = repById.get(m.id) || {};
+          const run = openRun(m);
+          const when = m.clock === 'director' ? 'Director' : `${m.clock === 'viewer' ? 'Viewer' : 'Stream'} ${mmss(m.atSec)}${m.repeatMax > 1 ? ` · every ${mmss(m.repeatEverySec)} ×${m.repeatMax}` : ''}`;
+          return el('tr', {},
+            el('td', {}, el('strong', { text: m.title }), el('div', { class: 'muted small', text: TYPES[m.type] + (m.enabled ? '' : ' · off') + (run ? ' · running now' : '') })),
+            el('td', { class: 'small', text: when + ` · open ${m.openSec}s` }),
+            el('td', { class: 'small', text: AUD[m.audience] }),
+            el('td', { class: 'n', text: String(r.shown ?? 0) }), el('td', { class: 'n', text: `${r.played ?? 0} (${r.playRate ?? 0}%)` }), el('td', { class: 'n', text: String(r.dismissed ?? 0) }),
+            el('td', { class: 'n', text: r.correctRate == null ? '–' : r.correctRate + '%' }),
+            el('td', { class: 'n', title: 'How much longer players watched after it than viewers who skipped it', text: r.extraWatchSec == null ? '–' : (r.extraWatchSec >= 0 ? '+' : '') + mmss(Math.abs(r.extraWatchSec)) }),
+            el('td', {}, el('div', { class: 'row' },
+              el('button', { class: 'btn small', disabled: !!run || !m.enabled, onclick: guard(async () => { await call('POST', `/api/tournaments/${ev.id}/moments/${m.id}/fire`, {}); toast('Live on the watch page now'); render(); }), text: run ? 'Running' : 'Fire now' }),
+              m.type === 'prediction' ? el('button', { class: 'btn small', onclick: () => settle(m), text: 'Settle' }) : null,
+              canManage ? el('button', { class: 'btn small', onclick: () => editMoment(m, infs.influencers), text: 'Edit' }) : null,
+              canManage ? el('button', { class: 'btn small', onclick: guard(async () => { if (!confirm('Delete “' + m.title + '” and its results?')) return; await call('DELETE', `/api/tournaments/${ev.id}/moments/${m.id}`); render(); }), text: 'Delete' }) : null)));
+        }))) : el('p', { class: 'muted', style: 'padding:14px', text: 'No games yet. Add a quiz, a poll, a prediction or a wheel.' })));
+    if (canManage) {
+      const gap = el('input', { type: 'number', min: '0', max: '3600', value: String(d.gapSec), style: 'width:100px' });
+      box.append(el('h2', { text: 'Settings' }), el('div', { class: 'card row' }, el('label', { style: 'margin:0', text: 'Seconds between two games' }), gap,
+        el('button', { class: 'btn small', onclick: guard(async () => { await call('PATCH', `/api/tournaments/${ev.id}/viewership-settings`, { momentGapSec: Number(gap.value) }); toast('Saved'); }), text: 'Save' })));
+    }
+    timer = setInterval(guard(async () => { if (tab === 'games' && !document.querySelector('dialog[open]')) main.lastChild.replaceChildren(await gamesView()); }), 15000);
+    return box;
+  }
+
+  function settle(m) {
+    const sel = el('select', {}, m.options.map((o) => el('option', { value: o.id, text: o.text })));
+    const dlg = el('dialog', {}, el('h2', { style: 'margin-top:0', text: 'Settle: ' + m.title }), el('p', { class: 'muted small', text: 'What actually happened? Viewers who called it are told on the watch page.' }), sel,
+      el('div', { class: 'row', style: 'margin-top:14px' }, el('button', { class: 'btn primary', onclick: guard(async () => { await call('POST', `/api/tournaments/${ev.id}/moments/${m.id}/resolve`, { correctOption: sel.value }); dlg.close(); toast('Settled'); render(); }), text: 'Settle' }), el('button', { class: 'btn', onclick: () => dlg.close(), text: 'Cancel' })));
+    dlg.addEventListener('close', () => dlg.remove()); document.body.append(dlg); dlg.showModal();
+  }
+
+  function editMoment(m, influencers) {
+    const v = m || { type: 'quiz', title: '', question: '', options: [], clock: 'viewer', atSec: 60, repeatEverySec: null, repeatMax: 1, openSec: 60, audience: 'all', audienceRef: null, lateJoin: false, enabled: true, correctOption: null };
+    const type = el('select', {}, Object.entries(TYPES).map(([k, t]) => el('option', { value: k, text: t, selected: v.type === k ? true : null })));
+    const title = el('input', { value: v.title, maxlength: '80', placeholder: 'Golf quiz' });
+    const question = el('input', { value: v.question || '', maxlength: '200', placeholder: 'How many holes in a round?' });
+    const opts = el('textarea', { rows: '5', placeholder: 'One per line.\nWheel: text | chance | win  e.g.  ₹100 voucher | 1 | win' });
+    opts.value = v.options.map((o) => v.type === 'spin' ? [o.text, o.weight ?? 1, o.win ? 'win' : ''].filter((x) => x !== '').join(' | ') : o.text).join('\n');
+    const correct = el('select');
+    const clock = el('select', {}, Object.entries(CLOCKS).map(([k, t]) => el('option', { value: k, text: t, selected: v.clock === k ? true : null })));
+    const at = el('input', { value: mmss(v.atSec), placeholder: 'm:ss (e.g. 2:00)' });
+    const every = el('input', { value: mmss(v.repeatEverySec), placeholder: 'm:ss (blank = once)' });
+    const times = el('input', { type: 'number', min: '1', max: '100', value: String(v.repeatMax) });
+    const open = el('input', { type: 'number', min: '10', max: '3600', value: String(v.openSec) });
+    const aud = el('select', {}, Object.entries(AUD).map(([k, t]) => el('option', { value: k, text: t, selected: v.audience === k ? true : null })));
+    const ref = el('select', {}, influencers.map((i) => el('option', { value: i.id, text: i.name, selected: v.audienceRef === i.id ? true : null })));
+    const late = el('input', { type: 'checkbox', checked: v.lateJoin ? true : null, style: 'width:auto' });
+    const on = el('input', { type: 'checkbox', checked: v.enabled ? true : null, style: 'width:auto' });
+    const lines = () => opts.value.split('\n').map((l) => l.trim()).filter(Boolean);
+    const refresh = () => {
+      const keep = correct.value || v.correctOption;
+      correct.replaceChildren(...lines().map((l, i) => el('option', { value: 'o' + (i + 1), text: l, selected: keep === 'o' + (i + 1) ? true : null })));
+      correctRow.hidden = type.value !== 'quiz';
+      timeRow.hidden = clock.value === 'director';
+      refRow.hidden = aud.value !== 'ref';
+      lateRow.hidden = clock.value === 'viewer';
+    };
+    const field = (label, input, hint) => el('div', {}, el('label', { text: label }), input, hint ? el('div', { class: 'muted small', text: hint }) : null);
+    const correctRow = field('Right answer', correct);
+    const timeRow = el('div', { class: 'form' }, field('Shows at', at, 'On the chosen clock'), field('Repeat every', every), field('Times in all', times));
+    const refRow = field('Influencer', ref);
+    const lateRow = el('label', { style: 'display:flex;gap:6px;align-items:center' }, late, 'Also show it to viewers who join after it closed');
+    [type, clock, aud].forEach((x) => x.addEventListener('change', refresh));
+    opts.addEventListener('input', refresh);
+    const save = guard(async () => {
+      const options = lines().map((l, i) => {
+        if (type.value !== 'spin') return { id: 'o' + (i + 1), text: l.slice(0, 80) };
+        const [text, w, win] = l.split('|').map((x) => x.trim());
+        return { id: 'o' + (i + 1), text: text.slice(0, 80), weight: w === undefined || w === '' ? 1 : Number(w), win: /^win$/i.test(win || '') };
+      });
+      const atSec = parseTime(at.value), ev2 = parseTime(every.value);
+      if (Number.isNaN(atSec) || Number.isNaN(ev2)) throw new Error('Times look wrong: use m:ss, like 2:30.');
+      const body = {
+        type: type.value, title: title.value, question: question.value || null, options,
+        correctOption: type.value === 'quiz' ? correct.value : null,
+        clock: clock.value, atSec: clock.value === 'director' ? null : atSec, repeatEverySec: ev2, repeatMax: Number(times.value) || 1,
+        openSec: Number(open.value) || 60, audience: aud.value, audienceRef: aud.value === 'ref' ? ref.value : null, lateJoin: late.checked, enabled: on.checked,
+      };
+      if (m) await call('PATCH', `/api/tournaments/${ev.id}/moments/${m.id}`, body); else await call('POST', `/api/tournaments/${ev.id}/moments`, body);
+      dlg.close(); toast('Saved'); render();
+    });
+    const dlg = el('dialog', { style: 'width:min(640px,94vw)' },
+      el('h2', { style: 'margin-top:0', text: m ? 'Edit game' : 'Add a game' }),
+      el('div', { class: 'form' }, field('Type', type), field('Title', title)),
+      el('div', { style: 'margin-top:10px' }, field('Question (optional for a wheel)', question)),
+      el('div', { style: 'margin-top:10px' }, field('Answers / wheel segments', opts)),
+      el('div', { style: 'margin-top:10px' }, correctRow),
+      el('div', { style: 'margin-top:10px' }, field('Clock', clock)),
+      el('div', { style: 'margin-top:10px' }, timeRow),
+      el('div', { class: 'form', style: 'margin-top:10px' }, field('Open for (seconds)', open), field('Who sees it', aud)),
+      el('div', { style: 'margin-top:10px' }, refRow),
+      el('div', { style: 'margin-top:10px' }, lateRow),
+      el('label', { style: 'display:flex;gap:6px;align-items:center;margin-top:10px' }, on, 'On'),
+      el('div', { class: 'row', style: 'margin-top:16px' }, el('button', { class: 'btn primary', onclick: save, text: 'Save' }), el('button', { class: 'btn', onclick: () => dlg.close(), text: 'Cancel' })));
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg); refresh(); dlg.showModal();
+  }
+
+  const VIEWS = { influencers: influencersView, games: gamesView };
   guard(eventId ? event : events)();
 })();
 </script>

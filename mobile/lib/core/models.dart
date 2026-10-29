@@ -1580,3 +1580,39 @@ class OnboardingChecklist {
     );
   }
 }
+
+/// A game on the watch page (quiz, poll, prediction, spin), as the director's list shows it.
+class GameMoment {
+  const GameMoment({required this.id, required this.type, required this.title, required this.clock, this.options = const [], this.enabled = true, this.running = false});
+  final String id;
+  final String type;
+  final String title;
+  final String clock;
+  final List<(String, String)> options;
+  final bool enabled;
+  final bool running;
+
+  String get typeLabel => switch (type) { 'quiz' => 'Quiz', 'poll' => 'Poll', 'prediction' => 'Prediction', 'spin' => 'Spin the wheel', _ => 'Game' };
+  String get clockLabel => switch (clock) { 'director' => 'Fire when you like', 'stream' => 'On the stream clock', _ => 'On each viewer’s clock' };
+
+  /// From GET /api/tournaments/:id/moments (moments + runs).
+  static List<GameMoment> listFromJson(Map<String, dynamic> j) {
+    final now = DateTime.now();
+    final open = <String>{
+      for (final r in (j['runs'] as List? ?? const []).cast<Map<String, dynamic>>())
+        if ((DateTime.tryParse('${r['closesAt']}') ?? now).isAfter(now)) r['momentId'] as String,
+    };
+    return [
+      for (final m in (j['moments'] as List? ?? const []).cast<Map<String, dynamic>>())
+        GameMoment(
+          id: m['id'] as String,
+          type: (m['type'] as String?) ?? 'quiz',
+          title: (m['title'] as String?) ?? '',
+          clock: (m['clock'] as String?) ?? 'director',
+          options: [for (final o in (m['options'] as List? ?? const []).cast<Map<String, dynamic>>()) ('${o['id']}', '${o['text']}')],
+          enabled: m['enabled'] != false,
+          running: open.contains(m['id']),
+        ),
+    ];
+  }
+}

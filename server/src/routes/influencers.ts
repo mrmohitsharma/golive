@@ -116,13 +116,16 @@ export function registerInfluencerRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.patch('/api/tournaments/:id/viewership-settings', { preHandler: user }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, tid(req), 'manage');
-    const b = z.object({ attributionDays: z.number().int().min(1).max(30).optional(), influencerBoard: z.boolean().optional() }).parse(req.body);
+    const b = z
+      .object({ attributionDays: z.number().int().min(1).max(30).optional(), influencerBoard: z.boolean().optional(), momentGapSec: z.number().int().min(0).max(3600).optional() })
+      .parse(req.body);
     await repo.db.query(
-      'UPDATE tournaments SET attribution_days = COALESCE($2, attribution_days), influencer_board = COALESCE($3, influencer_board) WHERE id = $1',
-      [t.id, b.attributionDays ?? null, b.influencerBoard ?? null],
+      `UPDATE tournaments SET attribution_days = COALESCE($2, attribution_days), influencer_board = COALESCE($3, influencer_board),
+         moment_gap_sec = COALESCE($4, moment_gap_sec) WHERE id = $1`,
+      [t.id, b.attributionDays ?? null, b.influencerBoard ?? null, b.momentGapSec ?? null],
     );
     const fresh = (await repo.tournamentById(t.id))!;
-    return { attributionDays: fresh.attribution_days, influencerBoard: fresh.influencer_board };
+    return { attributionDays: fresh.attribution_days, influencerBoard: fresh.influencer_board, momentGapSec: fresh.moment_gap_sec };
   });
 
   // ---------------------------------------------------------------- the web Studio

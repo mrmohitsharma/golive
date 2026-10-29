@@ -36,6 +36,28 @@
   .remind-ok { display:block; font-size:12px; color:var(--muted); margin-top:8px; }
   .remind-msg { font-size:12px; color:var(--under); min-height:14px; margin-top:4px; }
   .remind.done { color:#cfe6d8; font-size:14px; margin-top:16px; }
+  /* Games (moments): a card under the video, never over it (YouTube's rules). */
+  .moment { margin-top:12px; background:var(--panel); border:1px solid var(--gold); border-radius:12px; padding:14px 16px 12px; position:relative; animation:pop .25s ease-out; }
+  @keyframes pop { from { transform:translateY(6px); opacity:0; } }
+  .moment .k { color:var(--gold); font-size:11px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+  .moment h3 { margin:4px 0 2px; font-size:17px; }
+  .moment .q { margin:0 0 10px; color:#dfe7e2; }
+  .moment .x { position:absolute; top:8px; right:8px; background:none; border:0; color:var(--muted); font-size:20px; cursor:pointer; width:36px; height:36px; }
+  .moment .opts { display:grid; gap:8px; }
+  .moment .opt { text-align:left; background:#0f1315; border:1px solid var(--line); border-radius:9px; color:var(--ink); padding:11px 12px; font:inherit; cursor:pointer; position:relative; overflow:hidden; }
+  .moment .opt:disabled { cursor:default; }
+  .moment .opt .bar { position:absolute; inset:0 auto 0 0; background:rgba(46,125,79,.35); z-index:0; transition:width .6s; }
+  .moment .opt span { position:relative; z-index:1; }
+  .moment .opt .pct { float:right; font-weight:700; }
+  .moment .opt.mine { border-color:var(--gold); } .moment .opt.wrong { border-color:var(--under); } .moment .opt.right { border-color:var(--green); border-width:2px; }
+  .moment .time { height:3px; background:var(--line); border-radius:2px; margin-top:12px; overflow:hidden; }
+  .moment .time i { display:block; height:100%; background:var(--gold); transition:width 1s linear; }
+  .moment .res { margin-top:10px; font-weight:700; }
+  .wheel { width:220px; height:220px; margin:6px auto 12px; border-radius:50%; border:4px solid var(--gold); position:relative; transition:transform 3.2s cubic-bezier(.17,.67,.21,1); }
+  .wheel-wrap { position:relative; }
+  .wheel-wrap::after { content:""; position:absolute; top:-2px; left:50%; transform:translateX(-50%); border:10px solid transparent; border-top:16px solid var(--live); }
+  .wheel b { position:absolute; left:50%; top:50%; transform-origin:0 0; font-size:11px; color:#fff; text-shadow:0 1px 2px #000; white-space:nowrap; }
+  .moment .go { width:100%; background:var(--live); border:0; color:#fff; border-radius:9px; padding:12px; font:inherit; font-weight:800; cursor:pointer; }
   .links { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0; }
   .btn { display:inline-block; padding:7px 12px; border-radius:8px; background:var(--panel); border:1px solid var(--line); text-decoration:none; font:inherit; font-size:14px; color:var(--ink); cursor:pointer; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; }
@@ -204,6 +226,8 @@
     }).then((r) => r.ok ? r.json() : Promise.reject(r.status)).then((j) => {
       view.token = j.token;
       view.clock = j.watchedSec;
+      games.visits = j.visits || 1;
+      for (const k of j.done || []) games.done.add(k);
       view.live = j.live;
       setStreamClock(j.streamClockSec);
       store.set(VIEWER_KEY, j.viewerKey);
@@ -236,6 +260,166 @@
     stream: () => view.streamClockSec == null ? null : view.streamClockSec + Math.floor((Date.now() - view.streamAt) / 1000),
     unmuted,
   };
+
+
+  // ------------------------------------------------------------ games (moments) on three clocks
+  // viewer clock: this viewer's watched seconds · stream clock: since the first Go live ·
+  // director: fired live. One card at a time (director first, then stream, then viewer), with a
+  // gap between cards. The server checks every play and decides every result.
+  const momentBox = el('div');
+  const games = { feed: null, done: new Set(), current: null, lastShownAt: 0, visits: 1 };
+  const ansKey = 'gl_ans_' + id;
+  const myAnswers = (() => { try { return JSON.parse(store.get(ansKey) || '{}'); } catch { return {}; } })();
+  const saveAnswer = (key, ans) => { myAnswers[key] = ans; store.set(ansKey, JSON.stringify(myAnswers)); };
+  const settledShown = new Set();
+
+  async function pollGames() {
+    try {
+      games.feed = await api(`/api/public/tournaments/${id}/moments`);
+      if (games.feed.streamClockSec != null && view.streamClockSec == null) setStreamClock(games.feed.streamClockSec);
+      // Predictions settled since: tell the viewer how they did.
+      for (const r of games.feed.runs) {
+        const k = r.momentId + ':' + r.runKey;
+        if (r.correctOption && myAnswers[k] && !settledShown.has(k)) {
+          settledShown.add(k);
+          const m = games.feed.moments.find((x) => x.id === r.momentId);
+          if (m) toastCard(myAnswers[k] === r.correctOption ? 'You called it! ' + m.title : 'Not this time: ' + m.title + '. Answer: ' + ((m.options.find((o) => o.id === r.correctOption) || {}).text || ''));
+        }
+      }
+    } catch {}
+    setTimeout(pollGames, document.hidden ? 15000 : 5000);
+  }
+
+  function inAudience(m) {
+    if (m.audience === 'unmuted') return goLiveClocks.unmuted();
+    if (m.audience === 'ref') return refSlug() === m.audienceRef;
+    if (m.audience === 'new') return games.visits <= 1;
+    if (m.audience === 'returning') return games.visits > 1;
+    return true;
+  }
+
+  function nextGame() {
+    const f = games.feed;
+    if (!f || !view.token) return null;
+    const now = Date.now();
+    const offset = f.serverTime ? Date.parse(f.serverTime) - now : 0;
+    const cands = [];
+    const byId = new Map(f.moments.map((m) => [m.id, m]));
+    for (const r of f.runs) {
+      const m = byId.get(r.momentId);
+      const key = r.momentId + ':' + r.runKey;
+      if (!m || m.type === 'draw' || games.done.has(key) || !inAudience(m)) continue;
+      const closes = Date.parse(r.closesAt) - offset;
+      if (now < closes) cands.push({ m, runKey: r.runKey, key, until: closes, prio: m.clock === 'director' ? 0 : 1 });
+      else if (m.lateJoin && Date.parse(r.startedAt) > now - 30 * 60000) cands.push({ m, runKey: r.runKey, key, until: now + m.openSec * 1000, prio: 1 });
+    }
+    const clock = goLiveClocks.viewer();
+    for (const m of f.moments) {
+      if (m.clock !== 'viewer' || m.type === 'draw' || !inAudience(m)) continue;
+      for (let n = 0; n < m.repeatMax; n++) {
+        const due = m.atSec + n * (m.repeatEverySec || 0);
+        if (clock < due) break;
+        const key = m.id + ':v' + n;
+        if (games.done.has(key)) continue;
+        cands.push({ m, runKey: 'v' + n, key, until: now + m.openSec * 1000, prio: 2 });
+        break;
+      }
+    }
+    cands.sort((a, b) => a.prio - b.prio);
+    const c = cands[0];
+    if (!c) return null;
+    // Gap between cards (the director's games skip the wait).
+    if (c.prio > 0 && now - games.lastShownAt < (f.gapSec || 0) * 1000) return null;
+    return c;
+  }
+
+  const post = (url, body) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    .then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error((j.error && j.error.message) || 'Try again'); return j; });
+
+  function closeCard(kind) {
+    const c = games.current;
+    if (!c) return;
+    if (kind === 'dismissed' && !c.played) post(`/api/public/moments/${c.m.id}/seen`, { token: view.token, runKey: c.runKey, kind: 'dismissed' }).catch(() => {});
+    clearInterval(c.timer);
+    games.current = null;
+    momentBox.replaceChildren();
+  }
+
+  function toastCard(text) {
+    if (games.current) return;
+    momentBox.replaceChildren(el('div', { class: 'moment' }, el('div', { class: 'k', text: 'Result' }), el('h3', { text }), el('button', { class: 'x', 'aria-label': 'Close', text: '×', onclick: () => momentBox.replaceChildren() })));
+    setTimeout(() => { if (!games.current) momentBox.replaceChildren(); }, 8000);
+  }
+
+  const LABEL = { quiz: 'Quiz', poll: 'Poll', prediction: 'Predict', spin: 'Spin the wheel' };
+  function showCard(c) {
+    games.current = c;
+    games.done.add(c.key);
+    games.lastShownAt = Date.now();
+    post(`/api/public/moments/${c.m.id}/seen`, { token: view.token, runKey: c.runKey, kind: 'shown' }).catch(() => {});
+    const m = c.m;
+    const res = el('div', { class: 'res' });
+    const bar = el('i', { style: 'width:100%' });
+    const total = Math.max(1, c.until - Date.now());
+    let body;
+    if (m.type === 'spin') {
+      const n = m.options.length, step = 360 / n;
+      const colors = ['#2e7d4f', '#c9a227', '#1e5f8a', '#a83232', '#6b3fa0', '#3a7d7d', '#8a5a1e', '#4a4f55'];
+      const wheel = el('div', { class: 'wheel', style: 'background:conic-gradient(' + m.options.map((o, i) => `${colors[i % colors.length]} ${i * step}deg ${(i + 1) * step}deg`).join(',') + ')' });
+      m.options.forEach((o, i) => { const b = el('b', { text: o.text.slice(0, 18) }); b.style.transform = `rotate(${i * step + step / 2 - 90}deg) translate(28px,-6px)`; wheel.append(b); });
+      const go = el('button', { class: 'go', text: 'SPIN' });
+      go.onclick = async () => {
+        go.disabled = true;
+        try {
+          const r = (await post(`/api/public/moments/${m.id}/play`, { token: view.token, runKey: c.runKey })).result;
+          c.played = true;
+          const i = Math.max(0, m.options.findIndex((o) => o.id === r.segment));
+          wheel.style.transform = `rotate(${360 * 5 + (360 - (i * step + step / 2))}deg)`;
+          setTimeout(() => { res.textContent = r.win ? '🎉 ' + r.text : r.text; setTimeout(() => closeCard(), 7000); }, 3300);
+        } catch (e) { res.textContent = e.message; go.disabled = false; }
+      };
+      body = [el('div', { class: 'wheel-wrap' }, wheel), go];
+    } else {
+      const btns = m.options.map((o) => el('button', { class: 'opt' }, el('span', { class: 'bar', style: 'width:0' }), el('span', { text: o.text })));
+      btns.forEach((b, i) => {
+        b.onclick = async () => {
+          btns.forEach((x) => (x.disabled = true));
+          try {
+            const r = (await post(`/api/public/moments/${m.id}/play`, { token: view.token, runKey: c.runKey, answer: m.options[i].id })).result;
+            c.played = true;
+            b.classList.add('mine');
+            if (m.type === 'quiz') {
+              btns.forEach((x, j) => { if (m.options[j].id === r.correctOption) x.classList.add('right'); });
+              if (!r.correct) b.classList.add('wrong');
+              res.textContent = r.correct ? 'Correct! 🎉' : 'Not quite.';
+            }
+            if (r.results) r.results.forEach((x, j) => { btns[j].querySelector('.bar').style.width = x.percent + '%'; btns[j].append(el('span', { class: 'pct', text: x.percent + '%' })); });
+            if (m.type === 'prediction') { saveAnswer(c.m.id + ':' + c.runKey, m.options[i].id); res.textContent = "Saved! We'll tell you if you called it."; }
+            if (m.type === 'poll') res.textContent = 'Thanks for voting!';
+            setTimeout(() => closeCard(), 7000);
+          } catch (e) { res.textContent = e.message; btns.forEach((x) => (x.disabled = false)); }
+        };
+      });
+      body = [el('div', { class: 'opts' }, ...btns)];
+    }
+    momentBox.replaceChildren(el('div', { class: 'moment', role: 'dialog', 'aria-label': m.title },
+      el('button', { class: 'x', 'aria-label': 'Close', text: '×', onclick: () => closeCard('dismissed') }),
+      el('div', { class: 'k', text: LABEL[m.type] || 'Game' }),
+      el('h3', { text: m.title }),
+      m.question ? el('p', { class: 'q', text: m.question }) : null,
+      ...body, res, el('div', { class: 'time' }, bar)));
+    c.timer = setInterval(() => {
+      const left = c.until - Date.now();
+      bar.style.width = Math.max(0, (100 * left) / total) + '%';
+      if (left <= 0 && !c.played) closeCard();
+    }, 1000);
+  }
+
+  setInterval(() => {
+    if (games.current || document.hidden) return;
+    const c = nextGame();
+    if (c) showCard(c);
+  }, 1000);
 
   // "Remind me": a phone number, messaged when the stream starts.
   function remindForm() {
@@ -458,7 +642,7 @@
 
   if (!id) { list(); return; }
   app.replaceChildren(head,
-    el('div', { class: 'grid' }, el('div', {}, playerBox, linksBox), sidePanel),
+    el('div', { class: 'grid' }, el('div', {}, playerBox, momentBox, linksBox), sidePanel),
     clipsPanel,
     el('footer', { text: 'Produced with Go Live' }));
   if (new URLSearchParams(location.search).get('tab') === 'chat') sideTab = 'chat';
@@ -466,6 +650,7 @@
   renderComposer();
   tournament();
   pollChat();
+  pollGames();
 })();
 </script>
 </body>

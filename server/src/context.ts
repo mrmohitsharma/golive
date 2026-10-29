@@ -21,6 +21,7 @@ import type { GoogleSignIn } from './google-signin.js';
 import type { ViewershipService } from './viewership.js';
 import type { Messenger } from './messaging.js';
 import type { InfluencersService } from './influencers.js';
+import type { MomentsService } from './moments.js';
 
 /** Everything route modules need. */
 export interface Ctx {
@@ -47,4 +48,5 @@ export interface Ctx {
   viewership: ViewershipService;
   messenger: Messenger;
   influencers: InfluencersService;
+  moments: MomentsService;
 }

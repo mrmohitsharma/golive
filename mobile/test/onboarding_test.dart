@@ -31,4 +31,17 @@ void main() {
     expect(again.tournament.profile.id, 'wedding');
     expect(const Tournament(id: 'x', name: 'old').profile.isGolf, isTrue, reason: 'events made before types are golf');
   });
+
+  test('games list: running when a run is still open', () {
+    final soon = DateTime.now().add(const Duration(minutes: 1)).toIso8601String();
+    final list = GameMoment.listFromJson({
+      'moments': [
+        {'id': 'm1', 'type': 'prediction', 'title': 'Birdie?', 'clock': 'director', 'options': [{'id': 'y', 'text': 'Yes'}, {'id': 'n', 'text': 'No'}]},
+        {'id': 'm2', 'type': 'spin', 'title': 'Spin', 'clock': 'viewer', 'enabled': false},
+      ],
+      'runs': [{'momentId': 'm1', 'closesAt': soon}],
+    });
+    expect([list[0].running, list[0].options.length, list[0].typeLabel], [true, 2, 'Prediction']);
+    expect([list[1].running, list[1].enabled], [false, false]);
+  });
 }

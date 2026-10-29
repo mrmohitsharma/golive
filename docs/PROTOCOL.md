@@ -79,6 +79,14 @@ Errors are `{"error":{"code","message"}}` with a human-readable message the apps
 | `GET /i/:key`, `GET /api/public/influencer/:key` | influencer | Their numbers, rank and (if allowed) the leaderboard |
 | `GET /studio`, `/studio/:id` | organiser | Web Studio (login with the website account) |
 
+| `GET/POST /api/tournaments/:id/moments`, `PATCH/DELETE …/:mid` | director / manage | Games: quiz, poll, prediction, spin (draw: step 4); clock `viewer` / `stream` / `director`, `atSec`, `repeatEverySec` × `repeatMax`, `openSec`, audience (all, unmuted, one influencer's viewers, new, returning), `lateJoin` |
+| `POST …/moments/:mid/fire`, `POST …/moments/:mid/resolve {correctOption}` | director | Fire now for everyone watching; settle a prediction |
+| `GET …/moments/report` | director | Per game: runs, shown, played (rate), closed, right %, answers, watch time after (players vs skippers) |
+| `GET /api/public/tournaments/:id/moments` | watch page | Games (no right answers) and shared runs; cached 2 s |
+| `POST /api/public/moments/:mid/seen {token, runKey, kind}`, `…/play {token, runKey, answer?}` | watch page | Shown/closed; play: server checks the run is open, the viewer clock got there, the audience, one play each, and decides the result (spin drawn server-side) |
+
+Watch page order: one card at a time, director first, then stream, then viewer clock, with `moment_gap_sec` (default 60) between cards (director games skip the gap). Cards sit under the video, never over it. `runKey` = shared run id, or `v<n>` for a viewer's own n-th run.
+
 Clocks: **viewer clock** = seconds this viewer actually watched (video playing, tab visible; continues on return). **Stream clock** = seconds since `tournaments.first_live_at` (first Go live; never reset). Viewers are anonymous (random browser id; only a salted hash of the /24 network is stored, to cap one network at `VIEW_NET_CAP` = 25).
 
 ## WebSocket
