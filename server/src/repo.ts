@@ -57,6 +57,7 @@ export interface TournamentRow {
   moment_gap_sec: number;
   prize_terms: string | null;
   prizes_per_viewer: number;
+  viewership_on_at: Date | null;
   output_key: string | null;
   outputs: TournamentOutputs;
   public_watch: boolean;

@@ -299,6 +299,9 @@ class _BillingScreenState extends State<BillingScreen> with WidgetsBindingObserv
         WalletKind.minutes => Icons.timer,
         WalletKind.admin => Icons.support_agent,
         WalletKind.refund => Icons.undo,
+        WalletKind.destinations => Icons.cell_tower,
+        WalletKind.viewership => Icons.campaign,
+        WalletKind.messages => Icons.sms,
       };
 
   static String _date(DateTime d) {

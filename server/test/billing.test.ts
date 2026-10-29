@@ -90,7 +90,7 @@ describe('billing: free allowance, extra cameras, live minutes, credits, Cashfre
     assert.equal((await api(h, 'GET', '/api/admin/overview', undefined, owner.token)).status, 403);
     assert.equal((await api(h, 'GET', '/api/admin/overview')).status, 401);
     const s = await expectOk(api(h, 'GET', '/api/admin/settings', undefined, adminToken));
-    assert.deepEqual(s.pricing, { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5, graceMinutes: 5, freeDestinations: 1, destinationPrice: 50 });
+    assert.deepEqual(s.pricing, { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5, graceMinutes: 5, freeDestinations: 1, destinationPrice: 50, viewershipPrice: 500, viewershipMessages: 500, messagePrice: 1 });
     const bad = await api(h, 'PUT', '/api/admin/settings', { packs: [{ id: 'a', label: 'A', priceInr: 100, credits: 100 }, { id: 'a', label: 'B', priceInr: 200, credits: 200 }] }, adminToken);
     assert.equal(bad.body.error.code, 'duplicate_pack');
     await expectOk(

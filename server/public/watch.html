@@ -542,7 +542,7 @@
       playerBox.replaceChildren(el('div', { class: 'placeholder' },
         el('div', {}, el('div', { style: 'font-size:18px;font-weight:700', text: t.live ? 'Live now' : 'The broadcast has not started yet' }),
           el('div', { class: 'sub', text: t.facebookUrl ? 'Watch on Facebook below. This page updates live.' : (t.live ? 'The video appears here in a moment.' : 'Get a message the moment it starts.') }),
-          t.live ? null : remindForm())));
+          t.live || !t.extras ? null : remindForm())));
     }
     linksBox.replaceChildren(
       ...[t.youtube && el('a', { class: 'btn', href: t.youtube.watchUrl, target: '_blank', rel: 'noopener', text: 'Watch on YouTube' }),

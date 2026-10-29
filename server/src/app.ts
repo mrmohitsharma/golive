@@ -37,6 +37,7 @@ import { registerDestinationRoutes } from './routes/destinations.js';
 import { DestinationsService } from './destinations.js';
 import { GoogleSignIn } from './google-signin.js';
 import { ViewershipService } from './viewership.js';
+import { applyRetention } from './retention.js';
 import { Messenger } from './messaging.js';
 import { InfluencersService } from './influencers.js';
 import { registerInfluencerRoutes } from './routes/influencers.js';
@@ -44,6 +45,7 @@ import { MomentsService } from './moments.js';
 import { registerMomentRoutes } from './routes/moments.js';
 import { PrizesService } from './prizes.js';
 import { registerPrizeRoutes } from './routes/prizes.js';
+import { registerReportRoutes } from './routes/reports.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -110,6 +112,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   chat.onChange = (tid) => hub.chatChanged(tid);
   const viewership = new ViewershipService(config, repo, (tid) => hub.engineState(tid).streaming.active);
   const messenger = new Messenger(config, repo, msg91Fetch, log);
+  // Messages: the add-on's included ones first, then paid per message from the wallet.
+  messenger.gate = (tid, n, sent, critical) => billing.allowMessages(tid, n, sent, critical);
   const influencers = new InfluencersService(config, repo, sealer, messenger, (tid) => viewership.watchingByRef(tid));
   const moments = new MomentsService(repo, viewership);
   const prizes = new PrizesService(config, repo, moments, viewership, messenger);
@@ -181,6 +185,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerInfluencerRoutes(fastify, ctx);
   registerMomentRoutes(fastify, ctx);
   registerPrizeRoutes(fastify, ctx);
+  registerReportRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook
@@ -216,7 +221,10 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     cloud.start();
     hub.startYoutubePolling();
     billing.start();
-    const purge = () => void chat.purgePlatformComments().catch((err) => log.warn({ err }, 'chat purge failed'));
+    const purge = () => {
+      void chat.purgePlatformComments().catch((err) => log.warn({ err }, 'chat purge failed'));
+      void applyRetention(repo).catch((err) => log.warn({ err }, 'viewership retention failed'));
+    };
     purge();
     purgeTimer = setInterval(purge, 6 * 3600 * 1000);
     purgeTimer.unref();

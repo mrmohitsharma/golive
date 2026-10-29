@@ -70,6 +70,8 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
     orgName: t.org_name ?? null,
     startsOn: t.starts_on,
     eventType: t.event_type ?? 'golf',
+    // "Remind me" and games on the watch page (the Influencers & games add-on).
+    extras: ctx.billing.viewershipOn(t),
     live: isLive(t),
     watchPage: `${base}/watch/${t.id}`,
     youtube: youtubeFor(t),

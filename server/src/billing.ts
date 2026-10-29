@@ -24,10 +24,26 @@ export const pricingSchema = z.object({
   // and the price of each extra one, bought per event.
   freeDestinations: z.number().int().min(0).max(100).default(1),
   destinationPrice: z.number().min(0).max(1_000_000).default(50),
+  // Influencers & games add-on (viewership engine), bought per event; SMS messages included,
+  // then a price per message.
+  viewershipPrice: z.number().min(0).max(1_000_000).default(500),
+  viewershipMessages: z.number().int().min(0).max(1_000_000).default(500),
+  messagePrice: z.number().min(0).max(1_000).default(1),
 });
 export type Pricing = z.infer<typeof pricingSchema>;
 
-export const DEFAULT_PRICING: Pricing = { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5, graceMinutes: 5, freeDestinations: 1, destinationPrice: 50 };
+export const DEFAULT_PRICING: Pricing = {
+  freeCameras: 2,
+  freeMinutes: 10,
+  cameraPrice: 100,
+  minutePrice: 5,
+  graceMinutes: 5,
+  freeDestinations: 1,
+  destinationPrice: 50,
+  viewershipPrice: 500,
+  viewershipMessages: 500,
+  messagePrice: 1,
+};
 
 export const packSchema = z.object({
   id: z.string().trim().regex(/^[a-z0-9_-]{1,32}$/i, 'pack id: letters, numbers, - or _'),
@@ -64,7 +80,7 @@ export interface OrgBillingRow {
 export interface WalletTxRow {
   id: string;
   org_id: string;
-  kind: 'purchase' | 'cameras' | 'minutes' | 'admin' | 'refund' | 'destinations';
+  kind: 'purchase' | 'cameras' | 'minutes' | 'admin' | 'refund' | 'destinations' | 'viewership' | 'messages';
   amount_cc: string;
   quantity: number | null;
   tournament_id: string | null;
@@ -342,6 +358,75 @@ export class BillingService {
     await this.walletChanged(t.org_id);
     const fresh = (await this.repo.tournamentById(t.id))!;
     return this.tournamentState(fresh);
+  }
+
+  // ------------------------------------------------------------------ influencers & games add-on
+  /** Is the add-on on for this event? Always on when billing is off on this server. */
+  viewershipOn(t: TournamentRow): boolean {
+    return !this.enabled || Boolean(t.viewership_on_at);
+  }
+
+  requireViewership(t: TournamentRow): void {
+    if (!this.viewershipOn(t)) {
+      throw new HttpError(402, 'viewership_addon', 'Turn on Influencers & games for this event first (Studio, or the event screen).');
+    }
+  }
+
+  async viewershipState(t: TournamentRow, messagesUsed: number) {
+    const b = await this.orgBilling(t.org_id);
+    const p = await this.pricingFor(t.org_id, b);
+    return {
+      required: this.enabled,
+      on: this.viewershipOn(t),
+      price: p.viewershipPrice,
+      messagesIncluded: p.viewershipMessages,
+      messagesUsed,
+      messagePrice: p.messagePrice,
+      balance: fromCc(b.balance_cc),
+    };
+  }
+
+  /** Buys the add-on for one event (credits from the club's wallet). */
+  async buyViewership(t: TournamentRow, by: string): Promise<void> {
+    if (!this.enabled) return;
+    if (t.viewership_on_at) return;
+    const b = await this.orgBilling(t.org_id);
+    if (b.suspended) throw new HttpError(403, 'club_suspended', suspendedText(b));
+    const p = await this.pricingFor(t.org_id, b);
+    const cc = toCc(p.viewershipPrice);
+    await this.repo.tx(async (c) => {
+      const r = await c.query('UPDATE tournaments SET viewership_on_at = now() WHERE id = $1 AND viewership_on_at IS NULL', [t.id]);
+      if (!r.rowCount || cc <= 0) return;
+      const left = await this.debit(c, t.org_id, cc, { kind: 'viewership', quantity: 1, tournamentId: t.id, note: 'Influencers & games', by });
+      if (left === null) {
+        throw new HttpError(402, 'insufficient_credits', `Influencers & games costs ${fromCc(cc)} credits; the club has ${fromCc(b.balance_cc)}. Buy credits first.`);
+      }
+    });
+    await this.walletChanged(t.org_id);
+  }
+
+  /**
+   * How many of `n` new messages may go out: the included ones, then as many as the wallet pays
+   * for (charged here). One-time codes for prize claims always go out, paid if the wallet can.
+   */
+  async allowMessages(tournamentId: string, n: number, alreadySent: number, critical: boolean): Promise<number> {
+    if (!this.enabled || n <= 0) return n;
+    const t = await this.repo.tournamentById(tournamentId);
+    if (!t) return 0;
+    const b = await this.orgBilling(t.org_id);
+    const p = await this.pricingFor(t.org_id, b);
+    const free = Math.max(0, p.viewershipMessages - alreadySent);
+    const paid = Math.max(0, n - free);
+    if (!paid || p.messagePrice <= 0) return n;
+    const unit = toCc(p.messagePrice);
+    const affordable = Math.min(paid, Math.floor(Number(b.balance_cc) / unit));
+    if (affordable > 0) {
+      await this.repo.tx(async (c) =>
+        this.debit(c, t.org_id, affordable * unit, { kind: 'messages', quantity: affordable, tournamentId: t.id, ref: `msg:${t.id}`, note: 'SMS messages', by: 'system' }),
+      );
+      await this.walletChanged(t.org_id);
+    }
+    return critical ? n : Math.min(n, free + affordable);
   }
 
   // ------------------------------------------------------------------ live minutes

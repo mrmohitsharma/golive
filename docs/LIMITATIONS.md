@@ -45,6 +45,9 @@ Streaming continues with the screen off (foreground service, "camera is live" no
 | Facebook comments | Needs `pages_read_user_content` (App Review for other clubs; clubs connected earlier must reconnect). The 50 newest are read every 4 s, so in a flood of more than ~12 comments/second some are missed. Facebook may hide the commenter's name for some accounts ("Facebook viewer"). | — |
 | Chat | One-way: watch-page messages are not posted to YouTube/Facebook and staff cannot reply from the app. Viewers identify only by a typed name (anyone can type any name). | Phase 2: CoGolfers login for viewers. |
 | Live previews in a browser | WebRTC needs port 8189 (UDP, or TCP as a fallback) open on the server, and `PUBLIC_IP` set to the server's public IP. If both are blocked by the viewer's network, previews stay on "Connecting"; a TURN server would be the next step. | Open both rules in the AWS security group. |
+| Watch-page counts | Only people watching on our watch page are counted per viewer (influencer links, shares). People watching inside the YouTube app show only in YouTube's total. Counting is anonymous per browser: one person on two browsers counts twice; private windows count as new viewers. | Compare with YouTube's number in Reports. |
+| Games and prizes | Prize games are run by the organiser, who must follow Indian promotion rules (no purchase needed, terms published). Meta does not allow requiring a share to win, so sharing is optional. | Publish prize terms in the Studio; get a legal check before big prizes. |
+| SMS | Needs MSG91 with DLT-approved templates; until then the test sender only records messages. After the included messages, SMS stop when the wallet is empty (claim codes still go). | Approve the 4 DLT templates (DEPLOYMENT §3j). |
 | Scorer conflicts | Two scorers entering the same player+hole: the last one received wins. | Assign one scorer per group. |
 
 ## Verification status

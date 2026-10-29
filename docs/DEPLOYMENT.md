@@ -272,6 +272,8 @@ MSG91_TEMPLATE_WINNER=...
 MSG91_TEMPLATE_DRAW=...
 ```
 
+Influencers, games, prizes and "Remind me" are a paid add-on per event when billing is on: 500 credits with 500 SMS included, then 1 credit per SMS (set `viewershipPrice`, `viewershipMessages`, `messagePrice` in /admin > Pricing). Organisers turn it on in the Studio (banner on every tab). Viewer counts and Reports are always free.
+
 ## 4. Cloud mode (OBS on the server)
 
 ```bash

@@ -118,12 +118,14 @@
   function render() {
     clearInterval(timer);
     const body = el('div', {}, el('p', { class: 'muted', text: 'Loading…' }));
+    const bannerSlot = el('div');
     const tabs = [['influencers', 'Influencers'], ['games', 'Games'], ['winners', 'Winners'], ['reports', 'Reports']];
     main.replaceChildren(
       el('div', { class: 'row' }, el('a', { class: 'btn small', href: '/studio', text: '‹ Events' }), el('a', { class: 'btn small', href: '/watch/' + ev.id, target: '_blank', rel: 'noopener', text: 'Open watch page' })),
       el('h2', { text: ev.name }),
       el('nav', { class: 'tabs' }, tabs.map(([k, label]) => el('button', { class: tab === k ? 'on' : '', disabled: !VIEWS[k], onclick: () => { tab = k; render(); }, text: label }))),
-      body);
+      bannerSlot, body);
+    guard(async () => { const b = await addonBanner(); if (b) bannerSlot.replaceChildren(b); })();
     guard(async () => { body.replaceChildren(await VIEWS[tab](body)); })();
   }
 
@@ -467,7 +469,63 @@
     return box;
   }
 
-  const VIEWS = { influencers: influencersView, games: gamesView, winners: winnersView };
+
+  // ------------------------------------------------------------------ reports
+  function chart(series) {
+    if (series.length < 2) return el('p', { class: 'muted small', text: 'The graph appears after a couple of minutes of viewing.' });
+    const W = 1000, H = 220, pad = 30;
+    const max = Math.max(1, ...series.map((p) => Math.max(p.watching, p.youtube || 0)));
+    const x = (i) => pad + (i * (W - pad * 2)) / (series.length - 1);
+    const y = (v) => H - pad - (v * (H - pad * 2)) / max;
+    const line = (key) => series.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p[key] || 0).toFixed(1)}`).join(' ');
+    const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Viewers over time">
+      <line x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}" stroke="#252b30"/>
+      <text x="${pad}" y="18" fill="#9aa5a0" font-size="12">${max} max</text>
+      ${series.some((p) => p.youtube != null) ? `<path d="${line('youtube')}" fill="none" stroke="#ff3355" stroke-width="2"/>` : ''}
+      <path d="${line('watching')}" fill="none" stroke="#c9a227" stroke-width="2.5"/>
+      <text x="${pad}" y="${H - 8}" fill="#9aa5a0" font-size="12">${new Date(series[0].at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</text>
+      <text x="${W - pad}" y="${H - 8}" fill="#9aa5a0" font-size="12" text-anchor="end">${new Date(series.at(-1).at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</text></svg>`;
+    const box = el('div'); box.innerHTML = svg; // drawn from numbers only
+    return el('div', {}, box, el('div', { class: 'row small' }, el('span', { style: 'color:var(--gold)', text: '● Watch page' }), el('span', { style: 'color:#ff3355', text: '● YouTube' })));
+  }
+  async function reportsView() {
+    const [v, addon] = await Promise.all([call('GET', `/api/tournaments/${ev.id}/viewership`), call('GET', `/api/tournaments/${ev.id}/viewership-addon`)]);
+    const s = v.viewership;
+    const t = (sec) => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    const dl = (kind) => guard(async () => {
+      const r = await fetch(`/api/tournaments/${ev.id}/report.csv?kind=${kind}`, { headers: { authorization: 'Bearer ' + token } });
+      if (!r.ok) throw new Error('Export failed');
+      const a = el('a', { href: URL.createObjectURL(await r.blob()), download: `${kind}-${ev.name.replace(/\W+/g, '-').toLowerCase()}.csv` }); document.body.append(a); a.click(); a.remove();
+    });
+    timer = setInterval(guard(async () => { if (tab === 'reports') main.lastChild.replaceChildren(await reportsView()); }), 30000);
+    return el('div', {},
+      el('div', { class: 'grid' },
+        stat(s.watchingNow, 'Watching on the page now'), stat(s.peakWatching, 'Peak on the page'),
+        stat(s.youtube.viewersNow ?? '–', 'Watching on YouTube now'), stat(s.youtube.peak ?? '–', 'Peak on YouTube'),
+        stat(s.viewers, 'Page viewers'), stat(s.qualifiedViewers, 'Viewers 30 s+'), stat(t(s.avgWatchSec), 'Average watch'),
+        stat(s.watchMinutes, 'Minutes watched'), stat(s.unmutedRate + '%', 'Unmuted at some point'), stat(s.returningViewers, 'Came back'),
+        stat(s.bouncedViewers, 'Left under 30 s'), stat(s.replayMinutes, 'Replay minutes'), stat(s.viaViewerShares, 'Came via viewers’ shares'),
+        stat(`${s.apps.instagram} / ${s.apps.whatsapp}`, 'Opened in Instagram / WhatsApp'), stat(s.flaggedViewers, 'Not counted (bots, fake views)'),
+        stat(addon.required ? `${addon.messagesUsed} / ${addon.messagesIncluded}` : String(addon.messagesUsed), 'SMS sent' + (addon.required ? ' / included' : ''))),
+      el('h2', { text: 'Viewers over time' }), el('div', { class: 'card' }, chart(s.series)),
+      el('h2', { text: 'Download' }),
+      el('div', { class: 'row' }, el('button', { class: 'btn', onclick: dl('minutes'), text: 'Viewers per minute (CSV)' }), el('button', { class: 'btn', onclick: dl('influencers'), text: 'Influencers (CSV)' }), el('button', { class: 'btn', onclick: dl('games'), text: 'Games (CSV)' })),
+      el('p', { class: 'muted small', text: 'The watch page counts only people who watch there (influencer links, shares, your own link). YouTube counts everyone watching on YouTube, including the watch page player.' }));
+  }
+
+  // ------------------------------------------------------------------ the add-on (Influencers & games)
+  async function addonBanner() {
+    const a = await call('GET', `/api/tournaments/${ev.id}/viewership-addon`).catch(() => null);
+    if (!a || !a.required || a.on) return null;
+    const canBuy = ev.role === 'owner' || ev.role === 'director';
+    return el('div', { class: 'banner warn' },
+      el('strong', { text: 'Influencers & games is off for this event. ' }),
+      `Influencer links, games and prizes, “Remind me” and ${a.messagesIncluded} SMS cost ${a.price} credits per event (wallet: ${a.balance}). `,
+      canBuy ? el('button', { class: 'btn small primary', style: 'margin-left:8px', onclick: guard(async () => { if (!confirm(`Turn on Influencers & games for ${a.price} credits?`)) return; await call('POST', `/api/tournaments/${ev.id}/billing/viewership`, {}); toast('Turned on'); render(); }), text: `Turn on · ${a.price} credits` }) : null,
+      el('div', { class: 'small muted', style: 'margin-top:4px', text: 'Viewer counts and Reports work without it.' }));
+  }
+
+  const VIEWS = { influencers: influencersView, games: gamesView, winners: winnersView, reports: reportsView };
   guard(eventId ? event : events)();
 })();
 </script>

@@ -37,6 +37,9 @@ export class Messenger {
   /** Test sender: the last messages, so tests (and the admin) can see what would have gone out. */
   readonly sentInTest: (OutgoingMessage & { text: string })[] = [];
 
+  /** Billing: how many of n new messages of an event may go out (the rest are recorded as not sent). */
+  gate?: (tournamentId: string, n: number, alreadySent: number, critical: boolean) => Promise<number>;
+
   constructor(
     private readonly config: Config,
     private readonly repo: Repo,
@@ -72,8 +75,26 @@ export class Messenger {
   }
 
   /** Sends several messages of one kind (MSG91 takes up to 1,000 recipients per call). Returns how many went out. */
-  async send(list: OutgoingMessage[]): Promise<number> {
+  async send(input: OutgoingMessage[]): Promise<number> {
     let sent = 0;
+    let list = input;
+    // Included messages first, then paid ones; over the limit they are not sent (codes always are).
+    const tid = list[0]?.tournamentId;
+    if (tid && this.gate && list.length) {
+      const allowed = await this.gate(tid, list.length, await this.countForEvent(tid), list[0].kind === 'otp');
+      if (allowed < list.length) {
+        const skipped = list.slice(allowed);
+        list = list.slice(0, allowed);
+        const vals: unknown[] = [];
+        const rows = skipped.map((m, j) => {
+          vals.push(tid, m.kind, maskPhone(m.phone));
+          return `($${j * 3 + 1}::uuid, $${j * 3 + 2}, $${j * 3 + 3}, 'none', 'failed', 'no_credits')`;
+        });
+        await this.repo.db.query(`INSERT INTO messages (tournament_id, kind, to_masked, provider, status, error) VALUES ${rows.join(', ')}`, vals);
+        this.log.warn({ tournamentId: tid, skipped: skipped.length }, 'messages not sent: no credits left');
+      }
+      if (!list.length) return 0;
+    }
     for (let i = 0; i < list.length; i += 500) {
       const part = list.slice(i, i + 500);
       const kind = part[0].kind;

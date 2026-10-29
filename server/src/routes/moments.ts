@@ -78,6 +78,7 @@ export function registerMomentRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.post('/api/tournaments/:id/moments', { preHandler: user }, async (req, reply) => {
     const { t } = await requireTournament(repo, req.principal!, tid(req), 'manage');
+    ctx.billing.requireViewership(t);
     if ((await moments.list(t.id)).length >= 100) throw new HttpError(409, 'too_many_moments', 'An event can have at most 100 games.');
     const m = await moments.create(t, momentBody.parse(req.body));
     changed(t.id);
@@ -103,6 +104,7 @@ export function registerMomentRoutes(app: FastifyInstance, ctx: Ctx) {
   /** "Fire moment" in the control room: opens it now for everyone watching. */
   app.post('/api/tournaments/:id/moments/:mid/fire', { preHandler: user }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, tid(req), 'direct');
+    ctx.billing.requireViewership(t);
     const run = await moments.fire(t, mid(req), userOf(req).email);
     changed(t.id);
     return { run: { id: run.id, runNo: run.run_no, closesAt: new Date(run.closes_at).toISOString() } };
@@ -132,7 +134,8 @@ export function registerMomentRoutes(app: FastifyInstance, ctx: Ctx) {
     const t = await repo.tournamentById(id.data);
     if (!t || t.archived || !t.public_watch) throw new HttpError(404, 'not_found', 'Not found.');
     const slugs = new Map((await influencers.list(t.id, true)).map((i) => [i.id, i.slug]));
-    const body = { ...(await moments.feed(t, slugs)), streamClockSec: viewership.streamClockSec(t) };
+    const feed = ctx.billing.viewershipOn(t) ? await moments.feed(t, slugs) : { gapSec: 60, moments: [], runs: [], serverTime: new Date().toISOString() };
+    const body = { ...feed, streamClockSec: viewership.streamClockSec(t) };
     feedCache.set(id.data, { at: Date.now(), body });
     if (feedCache.size > 2000) feedCache.delete(feedCache.keys().next().value!);
     return body;

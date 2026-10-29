@@ -53,6 +53,7 @@ export function registerInfluencerRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.post('/api/tournaments/:id/influencers', { preHandler: user }, async (req, reply) => {
     const { t } = await requireTournament(repo, req.principal!, tid(req), 'manage');
+    ctx.billing.requireViewership(t);
     if ((await influencers.list(t.id, true)).length >= 200) throw new HttpError(409, 'too_many_influencers', 'An event can have at most 200 influencers.');
     const inf = await influencers.create(t, body.parse(req.body));
     reply.status(201);
@@ -128,6 +129,20 @@ export function registerInfluencerRoutes(app: FastifyInstance, ctx: Ctx) {
     return { attributionDays: fresh.attribution_days, influencerBoard: fresh.influencer_board, momentGapSec: fresh.moment_gap_sec };
   });
 
+  // ---------------------------------------------------------------- the add-on
+  app.get('/api/tournaments/:id/viewership-addon', { preHandler: user }, async (req) => {
+    const { t } = await requireTournament(repo, req.principal!, tid(req), 'direct');
+    return ctx.billing.viewershipState(t, await ctx.messenger.countForEvent(t.id));
+  });
+
+  /** Turns on Influencers & games for one event (credits from the club's wallet). */
+  app.post('/api/tournaments/:id/billing/viewership', { preHandler: user }, async (req) => {
+    const { t } = await requireTournament(repo, req.principal!, tid(req), 'manage');
+    await ctx.billing.buyViewership(t, (req.principal as { email?: string }).email ?? 'organiser');
+    const fresh = (await repo.tournamentById(t.id))!;
+    return ctx.billing.viewershipState(fresh, await ctx.messenger.countForEvent(t.id));
+  });
+
   // ---------------------------------------------------------------- the web Studio
   /** Organisers' web page for influencers, games, winners and reports (login with the website account). */
   const studioFile = [path.resolve(here, '../../public/studio.html'), path.resolve(here, '../../../public/studio.html')].find((p) => fs.existsSync(p));
@@ -194,6 +209,7 @@ export function registerInfluencerRoutes(app: FastifyInstance, ctx: Ctx) {
     const t = await repo.tournamentById(tid(req));
     if (!t || t.archived || !t.public_watch) throw new HttpError(404, 'not_found', 'Tournament not found.');
     const b = z.object({ phone: z.string().trim().min(8).max(20), consent: z.literal(true), ref: z.string().max(40).nullish() }).parse(req.body);
+    if (!ctx.billing.viewershipOn(t)) throw new HttpError(409, 'reminders_off', 'Reminders are not on for this event.');
     const r = await influencers.addReminder(t, b.phone, await influencers.refIdFor(t.id, b.ref));
     reply.status(r.created ? 201 : 200);
     return { ok: true, live: isLive(t.id) };
