@@ -9,6 +9,8 @@
   var submit = document.getElementById('submit');
   var side = document.getElementById('auth-side');
   var lamp = document.getElementById('lamp-text');
+  // ?next=/studio/... after logging in (only paths on this site).
+  var next = (function () { var n = new URLSearchParams(location.search).get('next'); return n && /^\/(studio|account)(\/[\w-]*)?$/.test(n) ? n : null; })();
 
   document.querySelectorAll('[data-toggle-pw]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -92,7 +94,7 @@
           localStorage.setItem('baas.token', res.d.token);
           localStorage.setItem('baas.session', JSON.stringify({ user: res.d.user, orgs: res.d.orgs }));
         } catch (err) {}
-        window.location.href = '/account' + (mode === 'signup' ? '?welcome=1' : '');
+        window.location.href = next || ('/account' + (mode === 'signup' ? '?welcome=1' : ''));
       })
       .catch(function (err) {
         submit.disabled = false;
@@ -109,7 +111,7 @@
       localStorage.setItem('baas.token', d.token);
       localStorage.setItem('baas.session', JSON.stringify({ user: d.user, orgs: d.orgs }));
     } catch (err) {}
-    window.location.href = '/account' + (created || !(d.orgs || []).length ? '?welcome=1' : '');
+    window.location.href = (next && (d.orgs || []).length) ? next : '/account' + (created || !(d.orgs || []).length ? '?welcome=1' : '');
   }
   function onGoogle(resp) {
     errBox.classList.remove('show');

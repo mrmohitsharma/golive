@@ -69,6 +69,7 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
     venue: t.venue,
     orgName: t.org_name ?? null,
     startsOn: t.starts_on,
+    eventType: t.event_type ?? 'golf',
     live: isLive(t),
     watchPage: `${base}/watch/${t.id}`,
     youtube: youtubeFor(t),
@@ -137,9 +138,10 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/public/tournaments/:id/view', async (req) => {
     const id = z.string().uuid().safeParse((req.params as { id: string }).id);
     if (!id.success) throw new HttpError(404, 'not_found', 'Tournament not found.');
-    const body = z.object({ viewerKey: z.string().max(64).nullish() }).parse(req.body ?? {});
+    const body = z.object({ viewerKey: z.string().max(64).nullish(), ref: z.string().max(40).nullish() }).parse(req.body ?? {});
     const t = await publicEvent(id.data);
-    const v = await viewership.start(t, { viewerKey: body.viewerKey, ip: req.ip, userAgent: req.headers['user-agent'] });
+    const refId = await ctx.influencers.refIdFor(t.id, body.ref);
+    const v = await viewership.start(t, { viewerKey: body.viewerKey, ip: req.ip, userAgent: req.headers['user-agent'], refId });
     return { token: v.token, viewerKey: v.viewerKey, watchedSec: v.watchedSec, ...clocks(t) };
   });
 

@@ -53,6 +53,7 @@ export async function startHarness(
     cloudDriver?: CloudDriver | null;
     relaySpawn?: Parameters<typeof buildApp>[0]['relaySpawn'];
     cashfreeFetch?: typeof fetch;
+    msg91Fetch?: typeof fetch;
     billingClock?: () => number;
   } = {},
 ): Promise<Harness> {
@@ -74,6 +75,7 @@ export async function startHarness(
     metaFetch: opts.metaFetch,
     relaySpawn: opts.relaySpawn,
     cashfreeFetch: opts.cashfreeFetch,
+    msg91Fetch: opts.msg91Fetch,
     billingClock: opts.billingClock,
     cloudDriver: opts.cloudDriver ?? null,
   });

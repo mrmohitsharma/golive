@@ -1,5 +1,6 @@
 import { eventProfile } from './event-types.js';
 import type { ViewershipService } from './viewership.js';
+import type { InfluencersService } from './influencers.js';
 import crypto from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { Config } from './config.js';
@@ -91,6 +92,7 @@ export interface HubServices {
   billing: BillingService;
   chatReaders: ChatReaders;
   viewership?: ViewershipService;
+  influencers?: InfluencersService;
 }
 
 const COMMAND_TIMEOUT_MS = 8000;
@@ -529,6 +531,9 @@ export class Hub {
       await this.repo.markOnboarding(tournamentId, 'live').catch(() => {});
       // Stream clock (viewership): the first Go live of the event.
       await this.services.viewership?.streamStarted(tournamentId).catch(() => {});
+      // "Remind me" sign-ups get their message when the stream starts (once).
+      const tr = await this.repo.tournamentById(tournamentId).catch(() => null);
+      if (tr) await this.services.influencers?.sendReminders(tr).catch((err) => this.log.warn({ err: (err as Error).message }, 'reminders failed'));
     }
     if (l.engine.programmeCameraId !== prevProgramme && l.engine.programmeCameraId) {
       const cam = await this.repo.cameraById(l.engine.programmeCameraId);

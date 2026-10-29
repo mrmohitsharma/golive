@@ -51,6 +51,9 @@ export interface TournamentRow {
   yt_source: 'org' | 'golive' | 'key';
   event_type: string;
   first_live_at: Date | null;
+  watch_slug: string | null;
+  attribution_days: number;
+  influencer_board: boolean;
   output_key: string | null;
   outputs: TournamentOutputs;
   public_watch: boolean;

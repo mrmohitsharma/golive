@@ -44,6 +44,13 @@ const schema = z.object({
   // Join links open the app (onboarding P1-9). Android App Links: the package and the SHA-256
   // fingerprints of the signing certificates (upload key and Play app signing, comma-separated).
   // iOS Universal Links: "<TEAM ID>.<bundle id>". Empty = that file is not served.
+  // SMS through MSG91 (Flow API, DLT-approved templates). Empty auth key = test sender (outbox only).
+  MSG91_AUTH_KEY: optional,
+  MSG91_API_BASE: z.string().default('https://control.msg91.com/api/v5'),
+  MSG91_TEMPLATE_OTP: optional,
+  MSG91_TEMPLATE_REMINDER: optional,
+  MSG91_TEMPLATE_WINNER: optional,
+  MSG91_TEMPLATE_DRAW: optional,
   // Viewership: more viewers than this from one network in one event are not counted.
   VIEW_NET_CAP: z.coerce.number().int().min(1).default(25),
   ANDROID_PACKAGE: z.string().default('com.cogolfers.cogolfer_live'),

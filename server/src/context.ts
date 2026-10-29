@@ -19,6 +19,8 @@ import type { ChatReaders } from './chat-readers.js';
 import type { DestinationsService } from './destinations.js';
 import type { GoogleSignIn } from './google-signin.js';
 import type { ViewershipService } from './viewership.js';
+import type { Messenger } from './messaging.js';
+import type { InfluencersService } from './influencers.js';
 
 /** Everything route modules need. */
 export interface Ctx {
@@ -43,4 +45,6 @@ export interface Ctx {
   destinations: DestinationsService;
   googleSignIn: GoogleSignIn;
   viewership: ViewershipService;
+  messenger: Messenger;
+  influencers: InfluencersService;
 }

@@ -24,6 +24,18 @@
   .player { position:relative; aspect-ratio:16/9; background:#000; border-radius:10px; overflow:hidden; }
   .player iframe, .player #yt-player { position:absolute; inset:0; width:100%; height:100%; border:0; }
   .placeholder { position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:24px; background:linear-gradient(135deg,#123222,#0b0e10); color:#dfe7e2; }
+  .placeholder > div { width:100%; max-width:380px; justify-self:center; }
+  .placeholder { grid-template-columns:minmax(0,1fr); }
+  .player.waiting { aspect-ratio:auto; min-height:max(260px, 56.25vw); }
+  @media (min-width: 861px) { .player.waiting { aspect-ratio:16/9; min-height:0; } }
+  .remind { margin:16px auto 0; width:100%; text-align:left; }
+  .remind button { white-space:nowrap; }
+  .remind-row { display:flex; gap:8px; }
+  .remind input[type=tel] { flex:1; min-width:0; background:#0f1315; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:10px 12px; font:inherit; }
+  .remind button { background:var(--live); border:0; color:#fff; border-radius:8px; padding:0 14px; font:inherit; font-weight:700; cursor:pointer; }
+  .remind-ok { display:block; font-size:12px; color:var(--muted); margin-top:8px; }
+  .remind-msg { font-size:12px; color:var(--under); min-height:14px; margin-top:4px; }
+  .remind.done { color:#cfe6d8; font-size:14px; margin-top:16px; }
   .links { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0; }
   .btn { display:inline-block; padding:7px 12px; border-radius:8px; background:var(--panel); border:1px solid var(--line); text-decoration:none; font:inherit; font-size:14px; color:var(--ink); cursor:pointer; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; }
@@ -124,7 +136,7 @@
   const sideTabs = el('div', { class: 'tabs' });
   const sideBody = el('div', { class: 'body' });
   const sidePanel = el('div', { class: 'panel side' }, sideTabs, sideBody);
-  let sideTab = 'board', unread = 0;
+  let sideTab = 'board', unread = 0, hasBoard = true;
   const clipsPanel = el('div', { class: 'panel', style: 'margin-top:16px' });
   const head = el('header');
 
@@ -175,13 +187,20 @@
   }
 
   const VIEWER_KEY = 'gl_viewer';
+  // Influencer link (?r=<slug>): kept for this event so a reload or a later visit keeps the credit.
+  const REF_KEY = 'gl_ref_' + id;
+  (() => {
+    const r = new URLSearchParams(location.search).get('r');
+    if (r && /^[a-z0-9-]{1,40}$/.test(r) && !store.get(REF_KEY)) store.set(REF_KEY, JSON.stringify({ r, at: Date.now() }));
+  })();
+  const refSlug = () => { try { const v = JSON.parse(store.get(REF_KEY) || 'null'); return v && Date.now() - v.at < 30 * 86400000 ? v.r : null; } catch { return null; } };
   const view = { token: null, starting: null, clock: 0, streamClockSec: null, streamAt: 0, live: false, pendPlay: 0, pendUnmuted: 0, lastSend: Date.now() };
   // Started when the video first plays: that is when the viewer clock starts.
   function startView() {
     if (view.token || view.starting || !id) return view.starting;
     view.starting = fetch(`/api/public/tournaments/${id}/view`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ viewerKey: store.get(VIEWER_KEY) }),
+      body: JSON.stringify({ viewerKey: store.get(VIEWER_KEY), ref: refSlug() }),
     }).then((r) => r.ok ? r.json() : Promise.reject(r.status)).then((j) => {
       view.token = j.token;
       view.clock = j.watchedSec;
@@ -218,18 +237,45 @@
     unmuted,
   };
 
+  // "Remind me": a phone number, messaged when the stream starts.
+  function remindForm() {
+    if (store.get('gl_remind_' + id)) return el('div', { class: 'remind done', text: "You're on the list: we'll message you when it starts." });
+    const phone = el('input', { type: 'tel', inputmode: 'tel', autocomplete: 'tel', placeholder: 'Mobile number', maxlength: '16', 'aria-label': 'Mobile number' });
+    const ok = el('input', { type: 'checkbox', id: 'remind-ok' });
+    const msg = el('div', { class: 'remind-msg' });
+    const form = el('form', { class: 'remind' },
+      el('div', { class: 'remind-row' }, phone, el('button', { type: 'submit', text: 'Remind me' })),
+      el('label', { class: 'remind-ok' }, ok, ' Message me when it starts. I agree to the ', el('a', { href: '/privacy', target: '_blank', rel: 'noopener', text: 'privacy policy' }), '.'),
+      msg);
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      if (!ok.checked) { msg.textContent = 'Tick the box so we can message you.'; return; }
+      try {
+        const r = await fetch(`/api/public/tournaments/${id}/remind`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phone: phone.value, consent: true, ref: refSlug() }) });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error && j.error.message);
+        store.set('gl_remind_' + id, '1');
+        form.replaceWith(el('div', { class: 'remind done', text: "Done! We'll message you when it starts." }));
+      } catch (err) { msg.textContent = err.message || 'Could not save it. Try again.'; }
+    };
+    return form;
+  }
+
   function renderPlayer(t) {
     const vid = t.youtube && t.youtube.videoId;
     if (vid && vid !== shownVideo) {
       shownVideo = vid;
+      playerBox.classList.remove('waiting');
       mountPlayer(t);
     }
     if (!vid && shownVideo !== '') {
       shownVideo = '';
       player = null; ytPlaying = false;
+      playerBox.classList.add('waiting');
       playerBox.replaceChildren(el('div', { class: 'placeholder' },
         el('div', {}, el('div', { style: 'font-size:18px;font-weight:700', text: t.live ? 'Live now' : 'The broadcast has not started yet' }),
-          el('div', { class: 'sub', text: t.facebookUrl ? 'Watch on Facebook below. Scores update here live.' : 'Scores update here live.' }))));
+          el('div', { class: 'sub', text: t.facebookUrl ? 'Watch on Facebook below. This page updates live.' : (t.live ? 'The video appears here in a moment.' : 'Get a message the moment it starts.') }),
+          t.live ? null : remindForm())));
     }
     linksBox.replaceChildren(
       ...[t.youtube && el('a', { class: 'btn', href: t.youtube.watchUrl, target: '_blank', rel: 'noopener', text: 'Watch on YouTube' }),
@@ -259,7 +305,7 @@
             el('td', { class: 'num' + (String(r.toPar).startsWith('-') ? ' under' : ''), text: r.toPar }),
             el('td', { class: 'num', text: r.thru }))))))
       : el('div', { class: 'empty', text: 'Scores appear here as soon as the first hole is played.' });
-    boardPanel.replaceChildren(chips, body);
+    boardPanel.replaceChildren(...[chips, body].filter(Boolean));
   }
 
   function renderClips(clips) {
@@ -376,11 +422,11 @@
   }
 
   function drawTabs() {
-    sideTabs.replaceChildren(
-      el('button', { class: sideTab === 'board' ? 'on' : '', onclick: () => { sideTab = 'board'; drawSide(); }, text: 'Leaderboard' }),
+    sideTabs.replaceChildren(...[
+      hasBoard ? el('button', { class: sideTab === 'board' ? 'on' : '', onclick: () => { sideTab = 'board'; drawSide(); }, text: 'Leaderboard' }) : null,
       el('button', { class: sideTab === 'chat' ? 'on' : '', onclick: () => { sideTab = 'chat'; unread = 0; drawSide(); chatList.scrollTop = chatList.scrollHeight; newBtn.hidden = true; } },
         'Live chat', unread ? el('span', { class: 'count', text: unread > 99 ? '99+' : String(unread) }) : null),
-    );
+    ].filter(Boolean));
   }
   function drawSide() { drawTabs(); sideBody.replaceChildren(sideTab === 'chat' ? chatPanel : boardPanel); }
 
@@ -399,6 +445,9 @@
           livePill(t.live));
       }
       renderPlayer(t);
+      // Golf events show the leaderboard; other kinds of event go straight to the chat.
+      const golf = !t.eventType || t.eventType === 'golf';
+      if (!golf && hasBoard) { hasBoard = false; if (sideTab === 'board') sideTab = 'chat'; drawSide(); }
       renderBoard(d.leaderboard);
       renderClips(d.clips);
     } catch (e) {

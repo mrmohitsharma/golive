@@ -70,6 +70,15 @@ Errors are `{"error":{"code","message"}}` with a human-readable message the apps
 | `POST /api/public/view/beat` `{token, playingSec, unmutedSec}` | watch page | Every 30 s and on hide/close (sendBeacon, text/plain JSON accepted). At most 38 s per report |
 | `GET /api/tournaments/:id/viewership` | director | Watching now, viewers, qualified (30 s+), bounced, returning, watch/live/replay minutes, unmuted rate, apps, YouTube's own count, per-minute series, and `playable` (can the page play the video) |
 
+| `GET/POST /api/tournaments/:id/influencers`, `PATCH …/:iid`, `POST …/:iid/rotate-stats` | director / manage | Influencers: name, handle, platform, terms, PAN (encrypted); short link `/w/<event>/<slug>`, stats page `/i/<key>` |
+| `GET /api/tournaments/:id/influencers/:iid/kit` | director | QR (SVG), short link and event text; the Studio draws the story and post images |
+| `GET /api/tournaments/:id/influencers/stats` | director | Per influencer: taps, viewers, 30 s+, left <30 s, minutes, avg, unmuted, returning, reminders, arrival time, watching now; totals incl. share via links |
+| `PATCH /api/tournaments/:id/viewership-settings` `{attributionDays, influencerBoard}` | manage | Credit window (first link wins), whether influencers see each other's totals |
+| `GET /w/:event[/:slug]` | anyone | Link preview tags (og:title "<name> invites you…"), counts a tap (crawlers excluded), redirects to `/watch/<id>?r=<slug>` |
+| `POST /api/public/tournaments/:id/remind` `{phone, consent: true, ref?}` | watch page | "Remind me": one per number; SMS when the stream starts |
+| `GET /i/:key`, `GET /api/public/influencer/:key` | influencer | Their numbers, rank and (if allowed) the leaderboard |
+| `GET /studio`, `/studio/:id` | organiser | Web Studio (login with the website account) |
+
 Clocks: **viewer clock** = seconds this viewer actually watched (video playing, tab visible; continues on return). **Stream clock** = seconds since `tournaments.first_live_at` (first Go live; never reset). Viewers are anonymous (random browser id; only a salted hash of the /24 network is stored, to cap one network at `VIEW_NET_CAP` = 25).
 
 ## WebSocket

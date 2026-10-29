@@ -253,6 +253,25 @@ APP_STORE_URL=https://apps.apple.com/app/id<number>
 
 Check `https://<domain>/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association` after `docker compose up -d`. Without the app, `/join/<code>` shows the store buttons and the code.
 
+## 3j. SMS through MSG91 (reminders, prize codes, winners)
+
+Until these are set, a test sender records every message in the outbox (`messages` table) and the log, so everything can be tested. Indian SMS needs DLT: register the company (entity ID), a sender ID (e.g. `GOLIVE`) and these templates (`{#var#}` = variable), then create a Flow in MSG91 for each and paste its ID:
+
+| Setting | Template text |
+|---|---|
+| `MSG91_TEMPLATE_OTP` | `{#var#} is your Go Live code to claim your prize. Valid for 10 minutes. Do not share it.` |
+| `MSG91_TEMPLATE_REMINDER` | `{#var#} is live now on Go Live. Watch: {#var#}` |
+| `MSG91_TEMPLATE_WINNER` | `You won {#var#} in {#var#}! Claim within 24 hours: {#var#} - Go Live` |
+| `MSG91_TEMPLATE_DRAW` | `You are in the {#var#} lucky draw. Winners announced at the end of the show - Go Live` |
+
+```
+MSG91_AUTH_KEY=<from MSG91 > API>
+MSG91_TEMPLATE_OTP=...
+MSG91_TEMPLATE_REMINDER=...
+MSG91_TEMPLATE_WINNER=...
+MSG91_TEMPLATE_DRAW=...
+```
+
 ## 4. Cloud mode (OBS on the server)
 
 ```bash

@@ -67,6 +67,8 @@ export class ViewershipService {
   private pending = new Map<string, Pending>();
   private presence = new Map<string, Map<string, Presence>>();
   private youtubeNow = new Map<string, { viewers: number; at: number }>();
+  /** Which influencer brought each viewer (for "watching now" per influencer). */
+  private refs = new Map<string, string | null>();
   private flushing: Promise<void> | null = null;
 
   constructor(
@@ -121,12 +123,17 @@ export class ViewershipService {
     const net = this.netHash(input.ip);
     const existing = (await this.repo.db.query<ViewerRow>('SELECT * FROM viewers WHERE tournament_id = $1 AND viewer_key = $2', [t.id, key])).rows[0];
     let viewer: ViewerRow;
+    const days = t.attribution_days ?? 7;
     if (existing) {
       const away = this.now() - new Date(existing.last_seen_at).getTime();
+      // First influencer link wins; a later link counts only if the viewer had none and
+      // first came within the event's attribution window.
+      const credit =
+        input.refId && !existing.ref_id && this.now() - new Date(existing.first_seen_at).getTime() <= days * 86_400_000 ? input.refId : null;
       viewer = (
         await this.repo.db.query<ViewerRow>(
-          'UPDATE viewers SET visits = visits + $2, last_seen_at = now() WHERE id = $1 RETURNING *',
-          [existing.id, away > NEW_VISIT_MS ? 1 : 0],
+          'UPDATE viewers SET visits = visits + $2, last_seen_at = now(), ref_id = COALESCE(ref_id, $3) WHERE id = $1 RETURNING *',
+          [existing.id, away > NEW_VISIT_MS ? 1 : 0, credit],
         )
       ).rows[0];
     } else {
@@ -143,6 +150,8 @@ export class ViewershipService {
         )
       ).rows[0];
     }
+    this.refs.set(viewer.id, viewer.ref_id);
+    if (this.refs.size > 200_000) this.refs.delete(this.refs.keys().next().value!);
     return { token: this.sign(viewer.id, t.id, viewer.flagged), viewerKey: key, watchedSec: viewer.watched_sec, viewer };
   }
 
@@ -231,6 +240,17 @@ export class ViewershipService {
       if (p.unmuted) unmuted++;
     }
     return { watching, unmuted };
+  }
+
+  /** Watching now, per influencer link (viewers with no link are left out). */
+  watchingByRef(tournamentId: string): Map<string, number> {
+    this.watchingNow(tournamentId); // drops viewers who stopped reporting
+    const out = new Map<string, number>();
+    for (const id of this.presence.get(tournamentId)?.keys() ?? []) {
+      const ref = this.refs.get(id);
+      if (ref) out.set(ref, (out.get(ref) ?? 0) + 1);
+    }
+    return out;
   }
 
   setYoutubeViewers(tournamentId: string, viewers: number | null): void {

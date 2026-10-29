@@ -37,6 +37,9 @@ import { registerDestinationRoutes } from './routes/destinations.js';
 import { DestinationsService } from './destinations.js';
 import { GoogleSignIn } from './google-signin.js';
 import { ViewershipService } from './viewership.js';
+import { Messenger } from './messaging.js';
+import { InfluencersService } from './influencers.js';
+import { registerInfluencerRoutes } from './routes/influencers.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -50,6 +53,8 @@ export interface AppDeps {
   fetchImpl?: typeof fetch;
   /** Replaces fetch for Google/YouTube (tests). */
   googleFetch?: typeof fetch;
+  /** Replaces fetch for MSG91 (tests). */
+  msg91Fetch?: typeof fetch;
   /** Replaces the cloud engine driver (tests). */
   cloudDriver?: CloudDriver | null;
   /** Replaces fetch for the Facebook Graph API (tests). */
@@ -66,7 +71,7 @@ export interface App extends Ctx {
   fastify: FastifyInstance;
 }
 
-export async function buildApp({ config, db, startBackground = true, fetchImpl, googleFetch, cloudDriver, metaFetch, relaySpawn, cashfreeFetch, billingClock }: AppDeps): Promise<App> {
+export async function buildApp({ config, db, startBackground = true, fetchImpl, googleFetch, cloudDriver, metaFetch, relaySpawn, cashfreeFetch, billingClock, msg91Fetch }: AppDeps): Promise<App> {
   const fastify = Fastify({
     logger: { level: config.LOG_LEVEL, redact: ['req.headers.authorization', 'req.query.token', 'req.query.secret', 'req.query.k', 'req.query.sig'] },
     trustProxy: true,
@@ -100,7 +105,9 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const chatReaders = new ChatReaders(config, repo, chat, youtube, facebook, log);
   chat.onChange = (tid) => hub.chatChanged(tid);
   const viewership = new ViewershipService(config, repo, (tid) => hub.engineState(tid).streaming.active);
-  hub.services = { graphics, media, youtube, cloud, outputs, billing, chatReaders, viewership };
+  const messenger = new Messenger(config, repo, msg91Fetch, log);
+  const influencers = new InfluencersService(config, repo, sealer, messenger, (tid) => viewership.watchingByRef(tid));
+  hub.services = { graphics, media, youtube, cloud, outputs, billing, chatReaders, viewership, influencers };
   const poller = new HealthPoller(
     config,
     (snap) => {
@@ -128,7 +135,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
   const googleSignIn = new GoogleSignIn(config, googleFetch);
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -164,6 +171,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerAdminRoutes(fastify, ctx);
   registerChatRoutes(fastify, ctx);
   registerSiteRoutes(fastify, ctx);
+  registerInfluencerRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook

@@ -69,6 +69,11 @@ services:
       ANDROID_PACKAGE: ${ANDROID_PACKAGE:-com.cogolfers.cogolfer_live}
       ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
       IOS_APP_ID: ${IOS_APP_ID:-}
+      MSG91_AUTH_KEY: ${MSG91_AUTH_KEY:-}
+      MSG91_TEMPLATE_OTP: ${MSG91_TEMPLATE_OTP:-}
+      MSG91_TEMPLATE_REMINDER: ${MSG91_TEMPLATE_REMINDER:-}
+      MSG91_TEMPLATE_WINNER: ${MSG91_TEMPLATE_WINNER:-}
+      MSG91_TEMPLATE_DRAW: ${MSG91_TEMPLATE_DRAW:-}
       # Facebook Page live (optional): Meta app with Facebook Login, redirect URI https://<domain>/api/facebook/callback
       META_APP_ID: ${META_APP_ID:-}
       META_APP_SECRET: ${META_APP_SECRET:-}

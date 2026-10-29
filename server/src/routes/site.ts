@@ -28,6 +28,7 @@ const ASSETS: Record<string, string> = {
   'account.js': 'text/javascript; charset=utf-8',
   'scenes.js': 'text/javascript; charset=utf-8',
   'favicon.svg': 'image/svg+xml',
+  'og.png': 'image/png',
 };
 
 /**
