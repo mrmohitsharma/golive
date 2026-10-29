@@ -36,6 +36,7 @@ import { registerSiteRoutes } from './routes/site.js';
 import { registerDestinationRoutes } from './routes/destinations.js';
 import { DestinationsService } from './destinations.js';
 import { GoogleSignIn } from './google-signin.js';
+import { ViewershipService } from './viewership.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -98,7 +99,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const chat = new ChatService(config, repo);
   const chatReaders = new ChatReaders(config, repo, chat, youtube, facebook, log);
   chat.onChange = (tid) => hub.chatChanged(tid);
-  hub.services = { graphics, media, youtube, cloud, outputs, billing, chatReaders };
+  const viewership = new ViewershipService(config, repo, (tid) => hub.engineState(tid).streaming.active);
+  hub.services = { graphics, media, youtube, cloud, outputs, billing, chatReaders, viewership };
   const poller = new HealthPoller(
     config,
     (snap) => {
@@ -126,7 +128,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
   const googleSignIn = new GoogleSignIn(config, googleFetch);
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -191,6 +193,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   });
 
   let purgeTimer: NodeJS.Timeout | undefined;
+  const viewTimers: NodeJS.Timeout[] = [];
   if (startBackground) {
     poller.start();
     cloud.start();
@@ -200,6 +203,21 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     purge();
     purgeTimer = setInterval(purge, 6 * 3600 * 1000);
     purgeTimer.unref();
+    // Viewership: write the watch-page reports every 5 s; once a minute, a watching-now row
+    // per event and YouTube's own viewer count for live events.
+    viewTimers.push(setInterval(() => void viewership.flush().catch((err) => log.warn({ err }, 'viewership flush failed')), 5000));
+    viewTimers.push(
+      setInterval(async () => {
+        for (const tid of hub.streamingTournaments()) {
+          const t = await repo.tournamentById(tid).catch(() => null);
+          if (!t) continue;
+          const v = await youtube.videoStatus(t).catch(() => null);
+          viewership.setYoutubeViewers(tid, v?.concurrentViewers ?? null);
+        }
+        await viewership.snapshotMinute().catch((err) => log.warn({ err }, 'viewership snapshot failed'));
+      }, 60_000),
+    );
+    for (const tm of viewTimers) tm.unref();
   }
   // Long-lived responses (graphics SSE, WebSockets) would otherwise keep close() waiting.
   fastify.addHook('preClose', async () => {
@@ -208,6 +226,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     chatReaders.stopAll();
     billing.close();
     if (purgeTimer) clearInterval(purgeTimer);
+    for (const tm of viewTimers) clearInterval(tm);
+    await viewership.flush().catch(() => {});
     hub.close();
   });
   fastify.addHook('onClose', async () => {

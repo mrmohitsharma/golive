@@ -44,6 +44,8 @@ const schema = z.object({
   // Join links open the app (onboarding P1-9). Android App Links: the package and the SHA-256
   // fingerprints of the signing certificates (upload key and Play app signing, comma-separated).
   // iOS Universal Links: "<TEAM ID>.<bundle id>". Empty = that file is not served.
+  // Viewership: more viewers than this from one network in one event are not counted.
+  VIEW_NET_CAP: z.coerce.number().int().min(1).default(25),
   ANDROID_PACKAGE: z.string().default('com.cogolfers.cogolfer_live'),
   ANDROID_CERT_SHA256: optional,
   IOS_APP_ID: optional,

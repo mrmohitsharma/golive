@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import QRCode from 'qrcode';
 import { YOUTUBE_RTMPS_INGEST, youtubeVideoId } from '../youtube.js';
 import { EVENT_TYPE_IDS, EVENT_TYPES, eventProfile, initialGraphics } from '../event-types.js';
+import { playableVideo } from '../viewership.js';
 import { z } from 'zod';
 import type { Ctx } from '../context.js';
 import { HttpError } from '../errors.js';
@@ -370,6 +371,13 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
    * is stopped) and creates the YouTube broadcast (if the event streams to a channel and has
    * none). Each part is reported; one failing does not undo the other.
    */
+  /** Viewership of the watch page: watching now, viewers, watch time, unmuted, YouTube's count. */
+  app.get('/api/tournaments/:id/viewership', { preHandler: user }, async (req) => {
+    const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
+    const status = await youtube.videoStatus(t).catch(() => null);
+    return { viewership: await ctx.viewership.summary(t), playable: playableVideo(t, status) };
+  });
+
   app.post('/api/tournaments/:id/start-show', { preHandler: user }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
     const body = z.object({ privacy: z.enum(['public', 'unlisted', 'private']).default('unlisted') }).parse(req.body ?? {});

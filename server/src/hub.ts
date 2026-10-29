@@ -1,4 +1,5 @@
 import { eventProfile } from './event-types.js';
+import type { ViewershipService } from './viewership.js';
 import crypto from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { Config } from './config.js';
@@ -89,6 +90,7 @@ export interface HubServices {
   outputs: OutputsService;
   billing: BillingService;
   chatReaders: ChatReaders;
+  viewership?: ViewershipService;
 }
 
 const COMMAND_TIMEOUT_MS = 8000;
@@ -523,7 +525,11 @@ export class Hub {
     );
     // Onboarding timing (P1-12): mixer up = test done; streaming = first live.
     if (!prevObs && l.engine.obsConnected) await this.repo.markOnboarding(tournamentId, 'test').catch(() => {});
-    if (!prevStreaming && l.engine.streaming.active) await this.repo.markOnboarding(tournamentId, 'live').catch(() => {});
+    if (!prevStreaming && l.engine.streaming.active) {
+      await this.repo.markOnboarding(tournamentId, 'live').catch(() => {});
+      // Stream clock (viewership): the first Go live of the event.
+      await this.services.viewership?.streamStarted(tournamentId).catch(() => {});
+    }
     if (l.engine.programmeCameraId !== prevProgramme && l.engine.programmeCameraId) {
       const cam = await this.repo.cameraById(l.engine.programmeCameraId);
       if (cam) await this.services.graphics.onProgramme(tournamentId, { cameraName: cam.name, hole: cam.hole }).catch(() => {});

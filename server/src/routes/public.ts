@@ -21,7 +21,7 @@ const CACHE_MS = 5000;
  * Responses are cached for 5 s so thousands of viewers cost a handful of DB queries.
  */
 export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
-  const { config, repo, hub, scoring, media } = ctx;
+  const { config, repo, hub, scoring, media, viewership } = ctx;
   const corsOrigins = originList(config.PUBLIC_CORS_ORIGINS);
   const embedOrigins = originList(config.WATCH_EMBED_ORIGINS);
   const cache = new Map<string, { at: number; body: unknown }>();
@@ -122,6 +122,44 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
         clips: (await media.publicClips(t.id)).map(clipPublic),
         serverTime: new Date().toISOString(),
       };
+    });
+  });
+
+  // ---------------------------------------------------------------- viewership (step 1)
+  const publicEvent = async (tid: string) => {
+    const t = await cached(`row:${tid}`, () => repo.tournamentById(tid));
+    if (!t || t.archived || !t.public_watch) throw new HttpError(404, 'not_found', 'Tournament not found.');
+    return t;
+  };
+  const clocks = (t: TournamentRow) => ({ streamClockSec: viewership.streamClockSec(t), live: isLive(t), beatSec: 30 });
+
+  /** The watch page starts a view: an anonymous viewer id (kept in the browser) and its clock so far. */
+  app.post('/api/public/tournaments/:id/view', async (req) => {
+    const id = z.string().uuid().safeParse((req.params as { id: string }).id);
+    if (!id.success) throw new HttpError(404, 'not_found', 'Tournament not found.');
+    const body = z.object({ viewerKey: z.string().max(64).nullish() }).parse(req.body ?? {});
+    const t = await publicEvent(id.data);
+    const v = await viewership.start(t, { viewerKey: body.viewerKey, ip: req.ip, userAgent: req.headers['user-agent'] });
+    return { token: v.token, viewerKey: v.viewerKey, watchedSec: v.watchedSec, ...clocks(t) };
+  });
+
+  /**
+   * Every 30 s (and when the page is hidden or closed, via sendBeacon): seconds watched with the
+   * video playing and the tab visible, and seconds unmuted. Accepts JSON sent as text/plain too.
+   */
+  app.register(async (scope) => {
+    scope.addContentTypeParser('text/plain', { parseAs: 'string', bodyLimit: 4096 }, (_req, body, done) => {
+      try {
+        done(null, JSON.parse(String(body)));
+      } catch {
+        done(new HttpError(400, 'bad_body', 'Expected JSON.'), undefined);
+      }
+    });
+    scope.post('/api/public/view/beat', async (req) => {
+      const body = z.object({ token: z.string().max(200), playingSec: z.number().min(0).max(3600), unmutedSec: z.number().min(0).max(3600) }).parse(req.body);
+      const b = viewership.beat(body.token, body.playingSec, body.unmutedSec);
+      const t = await publicEvent(b.tournamentId);
+      return { addedSec: b.addedSec, ...clocks(t) };
     });
   });
 

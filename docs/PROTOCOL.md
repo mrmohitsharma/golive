@@ -62,6 +62,16 @@ Errors are `{"error":{"code","message"}}` with a human-readable message the apps
 
 `POST /api/tournaments/:id/cameras/register`: `name` is optional (the server names it `Cam N`). Events carry `eventType` and `profile`; `/api/info` adds `goliveChannel` and `googleSignIn`; the YouTube state adds `source` and `goliveAvailable`.
 
+### Viewership engine (V6)
+
+| Endpoint | Who | What |
+|---|---|---|
+| `POST /api/public/tournaments/:id/view` `{viewerKey?}` | watch page | Starts a view when the video first plays: `{token, viewerKey, watchedSec, streamClockSec, live, beatSec}` |
+| `POST /api/public/view/beat` `{token, playingSec, unmutedSec}` | watch page | Every 30 s and on hide/close (sendBeacon, text/plain JSON accepted). At most 38 s per report |
+| `GET /api/tournaments/:id/viewership` | director | Watching now, viewers, qualified (30 s+), bounced, returning, watch/live/replay minutes, unmuted rate, apps, YouTube's own count, per-minute series, and `playable` (can the page play the video) |
+
+Clocks: **viewer clock** = seconds this viewer actually watched (video playing, tab visible; continues on return). **Stream clock** = seconds since `tournaments.first_live_at` (first Go live; never reset). Viewers are anonymous (random browser id; only a salted hash of the /24 network is stored, to cap one network at `VIEW_NET_CAP` = 25).
+
 ## WebSocket
 
 Every frame is JSON with a `type`. Server → any client: `hello`, `error {code,message}`, `pong`.

@@ -378,6 +378,27 @@ export class YouTubeService {
     });
   }
 
+  /**
+   * The video behind the event, as YouTube sees it: can other sites embed it, is it "made for
+   * kids", its privacy, and how many are watching on YouTube right now (1 quota unit).
+   */
+  async videoStatus(t: TournamentRow): Promise<{ embeddable: boolean; madeForKids: boolean; privacy: string | null; concurrentViewers: number | null } | null> {
+    if (!t.yt_broadcast_id || t.yt_source === 'key' || !this.enabled) return null;
+    const at = await this.tokenFor(t);
+    const r = await this.call<{
+      items?: { status?: { embeddable?: boolean; madeForKids?: boolean; privacyStatus?: string }; liveStreamingDetails?: { concurrentViewers?: string } }[];
+    }>(at, 'GET', 'videos', { part: 'status,liveStreamingDetails', id: t.yt_broadcast_id });
+    const v = r.items?.[0];
+    if (!v) return null;
+    const cv = v.liveStreamingDetails?.concurrentViewers;
+    return {
+      embeddable: v.status?.embeddable !== false,
+      madeForKids: v.status?.madeForKids === true,
+      privacy: v.status?.privacyStatus ?? null,
+      concurrentViewers: cv == null ? null : Number(cv),
+    };
+  }
+
   async status(t: TournamentRow): Promise<Partial<YoutubeState>> {
     if (!t.yt_broadcast_id || !t.yt_stream_id || t.yt_source === 'key') return {};
     const at = await this.tokenFor(t);

@@ -22,7 +22,7 @@
   .grid { display:grid; grid-template-columns: minmax(0,2fr) minmax(280px,1fr); gap:16px; }
   @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
   .player { position:relative; aspect-ratio:16/9; background:#000; border-radius:10px; overflow:hidden; }
-  .player iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  .player iframe, .player #yt-player { position:absolute; inset:0; width:100%; height:100%; border:0; }
   .placeholder { position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:24px; background:linear-gradient(135deg,#123222,#0b0e10); color:#dfe7e2; }
   .links { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0; }
   .btn { display:inline-block; padding:7px 12px; border-radius:8px; background:var(--panel); border:1px solid var(--line); text-decoration:none; font:inherit; font-size:14px; color:var(--ink); cursor:pointer; }
@@ -97,6 +97,7 @@
     for (const k of kids) if (k != null) n.append(k);
     return n;
   };
+  const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
   const livePill = (live) => el('span', { class: 'pill ' + (live ? 'live' : 'off'), text: live ? 'LIVE' : 'NOT LIVE' });
 
   // ------------------------------------------------------------ list of tournaments
@@ -127,17 +128,105 @@
   const clipsPanel = el('div', { class: 'panel', style: 'margin-top:16px' });
   const head = el('header');
 
+  // ------------------------------------------------------------ player (YouTube IFrame API) + viewership
+  // The video is YouTube's player; the API tells us when it plays, pauses and is muted, so the
+  // viewer clock counts only real watching (playing, tab visible). Reports go to our server
+  // every 30 s and when the page is hidden or closed.
+  let ytApi = null, player = null, ytPlaying = false;
+  const loadYt = () => ytApi || (ytApi = new Promise((resolve, reject) => {
+    if (window.YT && window.YT.Player) return resolve(window.YT);
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); resolve(window.YT); };
+    const sc = document.createElement('script');
+    sc.src = 'https://www.youtube.com/iframe_api';
+    sc.onerror = reject;
+    document.head.append(sc);
+    setTimeout(() => reject(new Error('timeout')), 8000);
+  }));
+
+  function plainIframe(t) {
+    playerBox.replaceChildren(el('iframe', {
+      src: t.youtube.embedUrl, title: t.name,
+      allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: 'true', referrerpolicy: 'strict-origin-when-cross-origin',
+    }));
+  }
+
+  async function mountPlayer(t) {
+    const holder = el('div', { id: 'yt-player' });
+    playerBox.replaceChildren(holder);
+    try {
+      const YT = await loadYt();
+      player = new YT.Player(holder, {
+        videoId: t.youtube.videoId,
+        host: 'https://www.youtube.com',
+        playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0, origin: location.origin },
+        events: {
+          onReady: (e) => { try { e.target.mute(); e.target.playVideo(); } catch {} },
+          onStateChange: (e) => { ytPlaying = e.data === 1; if (ytPlaying) startView(); },
+        },
+      });
+      const f = playerBox.querySelector('iframe');
+      if (f) f.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+    } catch {
+      // The API did not load (blocked or offline): still play the video, without the viewer clock.
+      player = null;
+      plainIframe(t);
+    }
+  }
+
+  const VIEWER_KEY = 'gl_viewer';
+  const view = { token: null, starting: null, clock: 0, streamClockSec: null, streamAt: 0, live: false, pendPlay: 0, pendUnmuted: 0, lastSend: Date.now() };
+  // Started when the video first plays: that is when the viewer clock starts.
+  function startView() {
+    if (view.token || view.starting || !id) return view.starting;
+    view.starting = fetch(`/api/public/tournaments/${id}/view`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ viewerKey: store.get(VIEWER_KEY) }),
+    }).then((r) => r.ok ? r.json() : Promise.reject(r.status)).then((j) => {
+      view.token = j.token;
+      view.clock = j.watchedSec;
+      view.live = j.live;
+      setStreamClock(j.streamClockSec);
+      store.set(VIEWER_KEY, j.viewerKey);
+    }).catch(() => {}).finally(() => { view.starting = null; });
+    return view.starting;
+  }
+  function setStreamClock(sec) { view.streamClockSec = sec; view.streamAt = Date.now(); }
+  const unmuted = () => { try { return player && !player.isMuted() && player.getVolume() > 0; } catch { return false; } };
+
+  function report(beacon) {
+    if (!view.token || (!view.pendPlay && !beacon)) return;
+    const body = JSON.stringify({ token: view.token, playingSec: view.pendPlay, unmutedSec: view.pendUnmuted });
+    view.pendPlay = 0; view.pendUnmuted = 0; view.lastSend = Date.now();
+    if (beacon && navigator.sendBeacon) { navigator.sendBeacon('/api/public/view/beat', new Blob([body], { type: 'text/plain' })); return; }
+    fetch('/api/public/view/beat', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true })
+      .then((r) => r.ok ? r.json() : null).then((j) => { if (j) { view.live = j.live; setStreamClock(j.streamClockSec); } }).catch(() => {});
+  }
+  setInterval(() => {
+    if (player && ytPlaying && !document.hidden && view.token) {
+      view.pendPlay++; view.clock++;
+      if (unmuted()) view.pendUnmuted++;
+    }
+    if (Date.now() - view.lastSend >= 30000) report(false);
+  }, 1000);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) report(true); });
+  window.addEventListener('pagehide', () => report(true));
+  // For the games (next step): the three clocks on this page.
+  window.goLiveClocks = {
+    viewer: () => view.clock,
+    stream: () => view.streamClockSec == null ? null : view.streamClockSec + Math.floor((Date.now() - view.streamAt) / 1000),
+    unmuted,
+  };
+
   function renderPlayer(t) {
     const vid = t.youtube && t.youtube.videoId;
     if (vid && vid !== shownVideo) {
       shownVideo = vid;
-      playerBox.replaceChildren(el('iframe', {
-        src: t.youtube.embedUrl, title: t.name,
-        allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: 'true', referrerpolicy: 'strict-origin-when-cross-origin',
-      }));
+      mountPlayer(t);
     }
     if (!vid && shownVideo !== '') {
       shownVideo = '';
+      player = null; ytPlaying = false;
       playerBox.replaceChildren(el('div', { class: 'placeholder' },
         el('div', {}, el('div', { style: 'font-size:18px;font-weight:700', text: t.live ? 'Live now' : 'The broadcast has not started yet' }),
           el('div', { class: 'sub', text: t.facebookUrl ? 'Watch on Facebook below. Scores update here live.' : 'Scores update here live.' }))));
@@ -192,7 +281,6 @@
     watch: '<svg viewBox="0 0 24 24"><path d="M7 3v18h2v-7l9-3.5L9 7V3z"/></svg>',
   };
   const SRC_NAME = { youtube: 'YouTube', facebook: 'Facebook', watch: 'CoGolfers' };
-  const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
   const chatKey = 'cg_chat_' + id;
   let chatAuth = null;
   try { chatAuth = JSON.parse(store.get(chatKey) || 'null'); } catch {}
