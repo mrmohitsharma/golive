@@ -65,6 +65,7 @@ export function registerCameraRoutes(app: FastifyInstance, ctx: Ctx) {
         throw err;
       });
     await hub.camerasChanged(t.id);
+    if (created) await repo.markOnboarding(t.id, 'camera');
     reply.status(created ? 201 : 200);
     return {
       camera: hub.cameraDto(camera),

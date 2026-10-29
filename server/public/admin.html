@@ -155,8 +155,23 @@
         stat('Credits held by clubs', cr(o.creditsHeldByClubs)),
         stat('Online payments', o.paymentsEnabled ? 'On' : 'Off', o.paymentsEnabled ? `Cashfree ${o.cashfreeMode}` : 'Add Cashfree keys to the server'),
       ),
+      onboardingCard(o.onboarding),
       await goliveCard(),
       el('h2', { text: 'Live now' }), liveTable(lv.live));
+  }
+
+  // Sign-up to first live, new organisations in the last 90 days (goal: 5 minutes).
+  function onboardingCard(ob) {
+    if (!ob) return null;
+    const m = (v) => v == null ? '–' : (v < 60 ? `${v} min` : `${Math.round(v / 6) / 10} h`);
+    const pct = (n) => ob.signups ? `${n} of ${ob.signups} (${Math.round(100 * n / ob.signups)}%)` : '0';
+    return el('div', {}, el('h2', { text: `Onboarding · sign-ups in the last ${ob.days} days` }),
+      el('div', { class: 'grid' },
+        stat('Median time to first live', m(ob.medianMinutes.live), `Goal: 5 min · ${pct(ob.reached.live)} went live`),
+        stat('To first event', m(ob.medianMinutes.event), pct(ob.reached.event)),
+        stat('To first camera', m(ob.medianMinutes.camera), pct(ob.reached.camera)),
+        stat('To first test', m(ob.medianMinutes.test), pct(ob.reached.test)),
+      ));
   }
 
   // The platform's own YouTube channel: organisers without YouTube go live on it (unlisted).

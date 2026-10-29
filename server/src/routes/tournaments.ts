@@ -80,6 +80,7 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
     }
     // One camera, scorer and commentator code per event, made now, so nobody has to tap "New code" (P1-8).
     await ensureInviteCodes(t.id, userOf(req).id);
+    await repo.markOnboarding(t.id, 'event');
     reply.status(201);
     return { tournament: tournamentDto(t) };
   });

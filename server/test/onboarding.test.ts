@@ -180,3 +180,39 @@ describe('onboarding: one-tap camera setup', () => {
     assert.equal(anon.status, 401);
   });
 });
+
+describe('onboarding: checklist and timing', () => {
+  let h: Harness;
+
+  before(async () => {
+    h = await startHarness();
+  });
+  after(async () => h.close());
+
+  it('steps tick off as the organiser goes; /admin shows the median time to first live', async () => {
+    const o = await signup(h, 'timing@club.test', 'Timing Club');
+    const check = async () => (await expectOk(api(h, 'GET', `/api/orgs/${o.orgId}/onboarding`, undefined, o.token)));
+    let c = await check();
+    assert.deepEqual(c.steps, { account: true, channel: false, cameras: false, test: false, live: false });
+    assert.equal(c.hasEvent, false);
+    const tid = await createTournament(h, o.token, o.orgId, { name: 'Timing Cup' });
+    await expectOk(api(h, 'PUT', `/api/tournaments/${tid}/youtube/key`, { streamKey: 'abcd-efgh-ijkl-mnop' }, o.token));
+    const inv = await expectOk(api(h, 'GET', `/api/tournaments/${tid}/invites`, undefined, o.token));
+    const cam = (await expectOk(api(h, 'POST', '/api/join', { code: inv.invites[0].code, deviceId: 'device-timing01', name: 'V' }))).token;
+    await expectOk(api(h, 'POST', `/api/tournaments/${tid}/cameras/register`, { deviceId: 'device-timing01', platform: 'android' }, cam));
+    c = await check();
+    assert.deepEqual([c.hasEvent, c.steps.channel, c.steps.cameras, c.steps.live], [true, true, true, false]);
+    // The mixer comes up and streams: test and live are recorded once.
+    await h.app.repo.markOnboarding(tid, 'test');
+    await h.db.query("UPDATE orgs SET created_at = now() - interval '4 minutes' WHERE id = $1", [o.orgId]);
+    await h.app.repo.markOnboarding(tid, 'live');
+    c = await check();
+    assert.equal(c.done, true);
+    const admin = await signup(h, 'boss@golive.test', 'HQ');
+    await h.db.query('UPDATE users SET is_platform_admin = true WHERE id = $1', [admin.userId]);
+    const ov = await expectOk(api(h, 'GET', '/api/admin/overview', undefined, admin.token));
+    assert.equal(ov.onboarding.signups, 2);
+    assert.equal(ov.onboarding.reached.live, 1);
+    assert.ok(ov.onboarding.medianMinutes.live >= 3.9 && ov.onboarding.medianMinutes.live <= 4.2, String(ov.onboarding.medianMinutes.live));
+  });
+});

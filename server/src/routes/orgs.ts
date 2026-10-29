@@ -92,6 +92,38 @@ export function registerOrgRoutes(app: FastifyInstance, ctx: Ctx) {
     return null;
   });
 
+  // ---------------------------------------------------------------- onboarding checklist (P1-12)
+  /** The home-screen checklist: Account, Channel, Cameras, Test, Live. Hidden once live. */
+  app.get('/api/orgs/:id/onboarding', { preHandler: user }, async (req) => {
+    const orgId = uuid.parse((req.params as { id: string }).id);
+    await requireOrg(repo, req.principal!, orgId, 'view');
+    const o = (
+      await repo.db.query<{ first_event_at: Date | null; first_camera_at: Date | null; first_test_at: Date | null; first_live_at: Date | null }>(
+        'SELECT first_event_at, first_camera_at, first_test_at, first_live_at FROM orgs WHERE id = $1',
+        [orgId],
+      )
+    ).rows[0];
+    const own = youtube.enabled ? await repo.orgYoutube(orgId) : null;
+    const fb = facebook.enabled ? await repo.orgFacebook(orgId) : null;
+    const keyed = (
+      await repo.db.query<{ n: string }>(
+        `SELECT count(*)::text AS n FROM tournaments t WHERE t.org_id = $1 AND NOT t.archived
+           AND ((t.yt_source = 'key' AND t.yt_stream_key_enc IS NOT NULL) OR t.yt_source = 'golive'
+                OR EXISTS (SELECT 1 FROM event_destinations d WHERE d.tournament_id = t.id))`,
+        [orgId],
+      )
+    ).rows[0];
+    const golive = youtube.enabled && (await youtube.goliveAvailable());
+    const steps = {
+      account: true,
+      channel: Boolean(own || fb?.page_id || Number(keyed.n) > 0 || golive),
+      cameras: Boolean(o?.first_camera_at),
+      test: Boolean(o?.first_test_at),
+      live: Boolean(o?.first_live_at),
+    };
+    return { steps, hasEvent: Boolean(o?.first_event_at), done: steps.live };
+  });
+
   // ---------------------------------------------------------------- YouTube
   app.get('/api/orgs/:id/youtube', { preHandler: user }, async (req) => {
     const orgId = uuid.parse((req.params as { id: string }).id);

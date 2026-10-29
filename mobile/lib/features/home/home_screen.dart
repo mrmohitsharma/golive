@@ -10,6 +10,7 @@ import '../commentary/commentator_screen.dart';
 import '../org/billing_screen.dart';
 import '../org/org_screen.dart';
 import '../scoring/scorer_screen.dart';
+import '../director/control_room_screen.dart';
 import '../onboarding/first_show_guide.dart';
 import '../tournament/tournament_screen.dart';
 
@@ -48,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Tournament>? _tournaments;
   ServerInfo _info = const ServerInfo();
   bool _infoLoaded = false;
+  OnboardingChecklist? _checklist;
   // The first-show guide opens by itself once, for an organisation with no events.
   final Set<String> _guideShown = {};
   String? _error;
@@ -80,6 +82,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final list = await _api.tournaments();
       if (mounted) setState(() => _tournaments = list);
       _maybeGuide();
+      final org = s.selectedOrg;
+      if (org != null && org.canCreateTournaments) {
+        final c = await _api.onboarding(org.id).catchError((Object _) => const OnboardingChecklist(live: true));
+        if (mounted) setState(() => _checklist = c);
+      }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     }
@@ -213,6 +220,38 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) _open(t.copyWith(role: org.role));
   }
 
+  /// Five steps to the first show, each with the button that does it. Hidden after the first live.
+  Widget _checklistCard(BuildContext context, OrgMembership org, Tournament latest) {
+    final c = _checklist!;
+    final theme = Theme.of(context);
+    void control() => Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => ControlRoomScreen(session: s, tournament: latest.copyWith(role: org.role))))
+        .then((_) => _load());
+    Widget row(bool done, String title, String hint, String action, VoidCallback onTap) => ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, color: done ? Colors.green : null),
+          title: Text(title, style: done ? const TextStyle(decoration: TextDecoration.lineThrough) : null),
+          subtitle: done ? null : Text(hint),
+          trailing: done ? null : TextButton(onPressed: onTap, child: Text(action)),
+        );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Your first show · ${c.count} of 5', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 4),
+          LinearProgressIndicator(value: c.count / 5),
+          row(true, 'Account', '', '', () {}),
+          row(c.channel, 'Channel', 'Choose where it goes live', 'Choose', () => _open(latest)),
+          row(c.cameras, 'Cameras', 'Share the camera link with the phones', 'Share', () => _open(latest)),
+          row(c.test, 'Test', 'Start the show and check the cameras', 'Start', control),
+          row(c.live, 'Live', 'Tap Go live in the control room', 'Go live', control),
+        ]),
+      ),
+    );
+  }
+
   static IconData _typeIcon(String id) {
     for (final (tid, _, icon) in eventTypeChoices) {
       if (tid == id) return icon;
@@ -296,6 +335,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text('Joining someone else’s team? Ask its owner to add you.', style: Theme.of(context).textTheme.bodySmall),
               ],
               if (org != null && _tournaments == null && _error == null) const LinearProgressIndicator(),
+              if (org != null && _checklist != null && !_checklist!.done && list.isNotEmpty) _checklistCard(context, org, list.first),
               if (org != null && _tournaments != null && list.isEmpty)
                 org.canCreateTournaments
                     ? Card(

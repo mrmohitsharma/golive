@@ -1556,3 +1556,27 @@ class ChatFeed {
     );
   }
 }
+
+/// The home-screen checklist (P1-12): Account, Channel, Cameras, Test, Live.
+class OnboardingChecklist {
+  const OnboardingChecklist({this.channel = false, this.cameras = false, this.test = false, this.live = false, this.hasEvent = false});
+  final bool channel;
+  final bool cameras;
+  final bool test;
+  final bool live;
+  final bool hasEvent;
+
+  bool get done => live;
+  int get count => 1 + [channel, cameras, test, live].where((x) => x).length;
+
+  factory OnboardingChecklist.fromJson(Map<String, dynamic> j) {
+    final s = (j['steps'] as Map<String, dynamic>?) ?? const {};
+    return OnboardingChecklist(
+      channel: s['channel'] == true,
+      cameras: s['cameras'] == true,
+      test: s['test'] == true,
+      live: s['live'] == true,
+      hasEvent: j['hasEvent'] == true,
+    );
+  }
+}

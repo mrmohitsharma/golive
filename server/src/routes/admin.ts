@@ -66,8 +66,35 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
       billingEnabled: billing.enabled,
       paymentsEnabled: payments.enabled,
       cashfreeMode: config.CASHFREE_ENV,
+      onboarding: await onboardingStats(),
     };
   });
+
+  /**
+   * Sign-up to first live (P1-12), over organisations created in the last 90 days: how many
+   * reached each step and the median minutes from sign-up. Goal: first live within 5 minutes.
+   */
+  const onboardingStats = async () => {
+    const r = (
+      await q.query<Record<string, string | null>>(
+        `SELECT count(*)::text AS signups,
+                count(first_event_at)::text AS events, count(first_camera_at)::text AS cameras,
+                count(first_test_at)::text AS tests, count(first_live_at)::text AS lives,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM first_event_at - created_at))::text AS to_event,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM first_camera_at - created_at))::text AS to_camera,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM first_test_at - created_at))::text AS to_test,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM first_live_at - created_at))::text AS to_live
+           FROM orgs WHERE created_at >= now() - interval '90 days'`,
+      )
+    ).rows[0];
+    const min = (v: string | null) => (v == null ? null : Math.round((Number(v) / 60) * 10) / 10);
+    return {
+      days: 90,
+      signups: Number(r.signups),
+      reached: { event: Number(r.events), camera: Number(r.cameras), test: Number(r.tests), live: Number(r.lives) },
+      medianMinutes: { event: min(r.to_event), camera: min(r.to_camera), test: min(r.to_test), live: min(r.to_live) },
+    };
+  };
 
   // ---------------------------------------------------------------- pricing and packs
   app.get('/api/admin/settings', { preHandler: admin }, async () => billing.settings());

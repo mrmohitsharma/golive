@@ -486,6 +486,7 @@ export class Hub {
     const prevPreview = l.engine.previewCameraId;
     const prevReplay = l.engine.replayActive;
     const prevStreaming = l.engine.streaming.active;
+    const prevObs = l.engine.obsConnected;
     l.engine = {
       ...l.engine,
       connected: true,
@@ -520,6 +521,9 @@ export class Hub {
     await this.syncRelays(tournamentId, prevStreaming, l.engine.streaming.active).catch((err) =>
       this.log.warn({ err: (err as Error).message }, 'restream sync failed'),
     );
+    // Onboarding timing (P1-12): mixer up = test done; streaming = first live.
+    if (!prevObs && l.engine.obsConnected) await this.repo.markOnboarding(tournamentId, 'test').catch(() => {});
+    if (!prevStreaming && l.engine.streaming.active) await this.repo.markOnboarding(tournamentId, 'live').catch(() => {});
     if (l.engine.programmeCameraId !== prevProgramme && l.engine.programmeCameraId) {
       const cam = await this.repo.cameraById(l.engine.programmeCameraId);
       if (cam) await this.services.graphics.onProgramme(tournamentId, { cameraName: cam.name, hole: cam.hole }).catch(() => {});

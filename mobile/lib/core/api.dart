@@ -164,6 +164,8 @@ class ApiClient {
   Future<void> removeMember(String orgId, String userId) => delete('/api/orgs/$orgId/members/$userId');
 
   Future<OrgYoutube> orgYoutube(String orgId) async => OrgYoutube.fromJson(await get('/api/orgs/$orgId/youtube'));
+  Future<OnboardingChecklist> onboarding(String orgId) async => OnboardingChecklist.fromJson(await get('/api/orgs/$orgId/onboarding'));
+
   Future<String> youtubeConnectUrl(String orgId) async => (await post('/api/orgs/$orgId/youtube/connect'))['url'] as String;
   Future<void> disconnectYoutube(String orgId) => delete('/api/orgs/$orgId/youtube');
 

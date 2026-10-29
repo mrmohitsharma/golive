@@ -183,6 +183,12 @@ export class Repo {
     return (await q.query<UserRow>('UPDATE users SET google_sub = $2 WHERE id = $1 RETURNING *', [userId, sub])).rows[0];
   }
 
+  /** Records the first time an organisation reaches an onboarding step (no-op afterwards). */
+  async markOnboarding(tournamentId: string, step: 'event' | 'camera' | 'test' | 'live'): Promise<void> {
+    const col = { event: 'first_event_at', camera: 'first_camera_at', test: 'first_test_at', live: 'first_live_at' }[step];
+    await this.db.query(`UPDATE orgs SET ${col} = now() WHERE id = (SELECT org_id FROM tournaments WHERE id = $1) AND ${col} IS NULL`, [tournamentId]);
+  }
+
   async createOrg(name: string, q: Queryable = this.db): Promise<OrgRow> {
     return (await q.query<OrgRow>('INSERT INTO orgs (name) VALUES ($1) RETURNING *', [name.trim()])).rows[0];
   }
