@@ -42,6 +42,26 @@ Send `Authorization: Bearer <jwt>` on REST and on the WebSocket `wss://<server>/
 
 Errors are `{"error":{"code","message"}}` with a human-readable message the apps show as-is.
 
+### Onboarding (Phase 1, V6)
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /api/auth/config` | anyone | `{signupEnabled, google: {clientId} \| null}` |
+| `POST /api/auth/google` `{idToken, orgName?}` | anyone | Sign in or up with a Google ID token; `newUser` true = no organisation yet |
+| `POST /api/auth/handoff` | account | One-time QR (5 min) to sign the app in: `{code, url, expiresAt, qrSvg}` |
+| `POST /api/auth/handoff/redeem` `{code}` | anyone | Exchanges the code once for a session |
+| `GET /api/event-types` | anyone | Kinds of event with caption labels and whether golf scoring applies |
+| `GET /api/tournaments/:id/invites` | director | Camera, scorer, commentator invites with `shareText` and `whatsapp` links (made if missing) |
+| `PUT /api/tournaments/:id/youtube/source` `{source: org\|golive}` | director | Main YouTube stream on the organisation's channel or the Go Live channel |
+| `PUT /api/tournaments/:id/youtube/key` `{streamKey?, streamUrl?, videoUrl?}` / `DELETE` | director | Stream with a key pasted from YouTube Studio |
+| `POST /api/tournaments/:id/start-show` `{privacy?}` | director | Starts the cloud mixer and creates the YouTube broadcast if missing: `{done, problems, production, youtube}` |
+| `POST /api/speedtest/upload` (octet-stream) | signed in | Upload test for camera setup: `{bytes}` |
+| `GET /api/orgs/:id/onboarding` | member | Checklist: `{steps: {account, channel, cameras, test, live}, hasEvent, done}` |
+| `GET/POST/PATCH/DELETE /api/admin/golive-channel[/connect]` | platform admin | The Go Live YouTube channel |
+| `/.well-known/assetlinks.json`, `/.well-known/apple-app-site-association` | anyone | App Links / Universal Links for `/join/*` and `/app/login/*` |
+
+`POST /api/tournaments/:id/cameras/register`: `name` is optional (the server names it `Cam N`). Events carry `eventType` and `profile`; `/api/info` adds `goliveChannel` and `googleSignIn`; the YouTube state adds `source` and `goliveAvailable`.
+
 ## WebSocket
 
 Every frame is JSON with a `type`. Server → any client: `hello`, `error {code,message}`, `pong`.
