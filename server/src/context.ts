@@ -23,6 +23,7 @@ import type { Messenger } from './messaging.js';
 import type { InfluencersService } from './influencers.js';
 import type { MomentsService } from './moments.js';
 import type { PrizesService } from './prizes.js';
+import type { Sessions } from './sessions.js';
 
 /** Everything route modules need. */
 export interface Ctx {
@@ -51,4 +52,5 @@ export interface Ctx {
   influencers: InfluencersService;
   moments: MomentsService;
   prizes: PrizesService;
+  sessions: Sessions;
 }

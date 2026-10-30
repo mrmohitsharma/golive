@@ -12,6 +12,8 @@ export interface UserRow {
   is_platform_admin: boolean;
   disabled: boolean;
   created_at: Date;
+  token_ver: number;
+  last_login_at: Date | null;
 }
 
 export interface OrgRow {

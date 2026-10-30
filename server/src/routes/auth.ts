@@ -14,8 +14,9 @@ const password = z.string().min(8, 'Password must be at least 8 characters').max
 export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
   const { config, repo, googleSignIn } = ctx;
 
-  const sessionFor = async (u: { id: string; email: string; name: string; is_platform_admin: boolean }) => {
-    const principal: Principal = { kind: 'user', id: u.id, email: u.email, name: u.name, platformAdmin: u.is_platform_admin };
+  const sessionFor = async (u: { id: string; email: string; name: string; is_platform_admin: boolean; token_ver?: number }) => {
+    const principal: Principal = { kind: 'user', id: u.id, email: u.email, name: u.name, platformAdmin: u.is_platform_admin, ver: u.token_ver ?? 0 };
+    await repo.db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [u.id]).catch(() => {});
     const orgs = await repo.memberships(u.id);
     return {
       token: signPrincipal(config, principal),
@@ -142,7 +143,14 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
       if (!u || u.disabled) throw new HttpError(401, 'unauthorized', 'Sign in again.');
       const orgs = await repo.memberships(u.id);
       return {
-        principal: { kind: 'user', id: u.id, email: u.email, name: u.name, platformAdmin: u.is_platform_admin },
+        principal: {
+          kind: 'user',
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          platformAdmin: u.is_platform_admin && !p.impersonator,
+          impersonatedBy: p.impersonator?.email ?? null,
+        },
         orgs: orgs.map((o) => ({ id: o.org_id, name: o.org_name, role: o.role })),
       };
     }

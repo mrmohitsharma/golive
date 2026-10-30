@@ -10,7 +10,7 @@
   var side = document.getElementById('auth-side');
   var lamp = document.getElementById('lamp-text');
   // ?next=/studio/... after logging in (only paths on this site).
-  var next = (function () { var n = new URLSearchParams(location.search).get('next'); return n && /^\/(studio|account)(\/[\w-]*)?$/.test(n) ? n : null; })();
+  var next = (function () { var n = new URLSearchParams(location.search).get('next'); return n && /^\/(studio|account|web)(\/[\w-]+)*\/?$/.test(n) ? n : null; })();
 
   document.querySelectorAll('[data-toggle-pw]').forEach(function (b) {
     b.addEventListener('click', function () {

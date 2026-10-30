@@ -17,7 +17,17 @@ export type GuestRole = (typeof GUEST_ROLES)[number];
  *  - engine: the OBS agent of one tournament (laptop or cloud), authenticated by engine key.
  */
 export type Principal =
-  | { kind: 'user'; id: string; email: string; name: string; platformAdmin: boolean }
+  | {
+      kind: 'user';
+      id: string;
+      email: string;
+      name: string;
+      platformAdmin: boolean;
+      /** Session version (users.token_ver): bumping it signs the user out everywhere. */
+      ver?: number;
+      /** Set while a platform admin is logged in as this user (support). Never an admin then. */
+      impersonator?: { id: string; email: string };
+    }
   | { kind: 'guest'; id: string; name: string; tournamentId: string; role: GuestRole }
   | { kind: 'engine'; id: string; name: string; tournamentId: string };
 
@@ -29,6 +39,9 @@ interface Claims {
   pa?: boolean;
   t?: string;
   r?: GuestRole;
+  v?: number;
+  im?: string;
+  ime?: string;
 }
 
 export function principalKey(p: Principal): string {
@@ -43,14 +56,23 @@ export function verifyPassword(password: string, hash: string): Promise<boolean>
   return bcrypt.compare(password, hash);
 }
 
-export function signPrincipal(config: Config, p: Principal): string {
+export function signPrincipal(config: Config, p: Principal, ttlOverride?: string): string {
   const claims: Claims =
     p.kind === 'user'
-      ? { sub: p.id, k: 'user', n: p.name, e: p.email, pa: p.platformAdmin || undefined }
+      ? {
+          sub: p.id,
+          k: 'user',
+          n: p.name,
+          e: p.email,
+          pa: (p.platformAdmin && !p.impersonator) || undefined,
+          v: p.ver || undefined,
+          im: p.impersonator?.id,
+          ime: p.impersonator?.email,
+        }
       : p.kind === 'guest'
         ? { sub: p.id, k: 'guest', n: p.name, t: p.tournamentId, r: p.role }
         : { sub: p.id, k: 'engine', n: p.name, t: p.tournamentId };
-  const ttl = p.kind === 'guest' ? config.GUEST_TTL : config.JWT_TTL;
+  const ttl = ttlOverride ?? (p.kind === 'guest' ? config.GUEST_TTL : config.JWT_TTL);
   return jwt.sign(claims, config.JWT_SECRET, { expiresIn: ttl as jwt.SignOptions['expiresIn'], issuer: 'cogolfer-live' });
 }
 
@@ -58,7 +80,17 @@ export function verifyPrincipal(config: Config, token: string): Principal | null
   try {
     const c = jwt.verify(token, config.JWT_SECRET, { issuer: 'cogolfer-live' }) as Claims;
     if (!c.sub) return null;
-    if (c.k === 'user') return { kind: 'user', id: c.sub, email: c.e ?? '', name: c.n, platformAdmin: Boolean(c.pa) };
+    if (c.k === 'user') {
+      return {
+        kind: 'user',
+        id: c.sub,
+        email: c.e ?? '',
+        name: c.n,
+        platformAdmin: Boolean(c.pa) && !c.im,
+        ver: c.v ?? 0,
+        impersonator: c.im ? { id: c.im, email: c.ime ?? '' } : undefined,
+      };
+    }
     if (c.k === 'guest' && c.t && c.r && (GUEST_ROLES as readonly string[]).includes(c.r)) {
       return { kind: 'guest', id: c.sub, name: c.n, tournamentId: c.t, role: c.r };
     }
@@ -82,10 +114,20 @@ declare module 'fastify' {
   }
 }
 
+/**
+ * Checks a signed-in user's session against the database (disabled, signed out everywhere,
+ * admin rights removed). Set once by the app; cached for a few seconds per user.
+ */
+let sessionCheck: ((p: Extract<Principal, { kind: 'user' }>) => Promise<Principal | null>) | null = null;
+export function setSessionCheck(fn: typeof sessionCheck): void {
+  sessionCheck = fn;
+}
+
 export function requireAuth(config: Config, ...kinds: Principal['kind'][]) {
   return async (req: FastifyRequest, _reply: FastifyReply) => {
     const token = bearerFrom(req);
-    const p = token ? verifyPrincipal(config, token) : null;
+    let p = token ? verifyPrincipal(config, token) : null;
+    if (p && p.kind === 'user' && sessionCheck) p = await sessionCheck(p);
     if (!p) throw new HttpError(401, 'unauthorized', 'Sign in again: your session is missing or expired.');
     if (kinds.length && !kinds.includes(p.kind)) {
       throw new HttpError(403, 'forbidden', 'This action needs a signed-in account.');

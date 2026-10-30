@@ -9,7 +9,8 @@ import { Hub } from './hub.js';
 import { HealthPoller } from './health.js';
 import { Thumbnailer } from './thumbnails.js';
 import { HttpError, errorBody } from './errors.js';
-import { bearerFrom, hashPassword, verifyPrincipal } from './auth.js';
+import { bearerFrom, hashPassword, setSessionCheck, verifyPrincipal } from './auth.js';
+import { Sessions } from './sessions.js';
 import { decideMediaAuth } from './media.js';
 import { Sealer, constantTimeEqual } from './crypto.js';
 import { YouTubeService } from './youtube.js';
@@ -46,6 +47,7 @@ import { registerMomentRoutes } from './routes/moments.js';
 import { PrizesService } from './prizes.js';
 import { registerPrizeRoutes } from './routes/prizes.js';
 import { registerReportRoutes } from './routes/reports.js';
+import { registerWebRoutes } from './routes/web.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -118,6 +120,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const moments = new MomentsService(repo, viewership);
   const prizes = new PrizesService(config, repo, moments, viewership, messenger);
   moments.prizes = prizes;
+  const sessions = new Sessions(repo);
+  setSessionCheck((p) => sessions.check(p));
   hub.services = { graphics, media, youtube, cloud, outputs, billing, chatReaders, viewership, influencers };
   const poller = new HealthPoller(
     config,
@@ -146,7 +150,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
   const googleSignIn = new GoogleSignIn(config, googleFetch);
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -179,6 +183,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerMediaRoutes(fastify, ctx);
   registerPublicRoutes(fastify, ctx);
   registerBillingRoutes(fastify, ctx);
+  fastify.addHook('onSend', sessions.hook);
   registerAdminRoutes(fastify, ctx);
   registerChatRoutes(fastify, ctx);
   registerSiteRoutes(fastify, ctx);
@@ -186,6 +191,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerMomentRoutes(fastify, ctx);
   registerPrizeRoutes(fastify, ctx);
   registerReportRoutes(fastify, ctx);
+  registerWebRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook
@@ -212,6 +218,15 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
       return;
     }
     hub.attach(socket, principal);
+    // Accounts: the session must still be valid (not disabled, not signed out everywhere).
+    if (principal.kind === 'user') {
+      void sessions.check(principal).then(
+        (ok) => {
+          if (!ok) socket.close(4001, 'unauthorized');
+        },
+        () => {},
+      );
+    }
   });
 
   let purgeTimer: NodeJS.Timeout | undefined;
