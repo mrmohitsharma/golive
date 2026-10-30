@@ -25,6 +25,23 @@ export async function render(view, { id, tab = 'overview' }) {
 }
 const reloadTab = (id, tab) => go(`/web/e/${id}/${tab}`);
 
+/** Buys extra camera or destination slots for this event, from the club's credits. */
+const buySlots = (id, kind, b, tab) => guard(async () => {
+  const x = kind === 'cameras' ? b.cameras : b.destinations;
+  const what = kind === 'cameras' ? 'camera' : 'destination';
+  const v = await dialog({ title: `Add ${what} slots`, text: `This event has ${x.limit} ${what} slots (${x.free} free). Each extra one costs ${x.price} credits, once, for this event. Club balance: ${num(b.balance)} credits.`, ok: 'Buy', fields: [
+    { name: 'count', label: `Extra ${what}s`, type: 'number', value: 1, min: 1, required: true }] });
+  if (!v) return;
+  try {
+    await post(`/api/tournaments/${id}/billing/${kind}`, { count: Math.max(1, Math.round(v.count)) });
+    toast(`${v.count} ${what} slot${v.count > 1 ? 's' : ''} added`);
+    reloadTab(id, tab);
+  } catch (e) {
+    if (e.status === 402) { if (await confirmBox('Not enough credits', `${e.message} Buy credits now?`, 'Buy credits', false)) go('/web/wallet'); return; }
+    throw e;
+  }
+});
+
 // ------------------------------------------------------------------ overview
 async function overview(body, id, s) {
   const b = s.billing;
@@ -58,7 +75,11 @@ async function overview(body, id, s) {
           if (!(await confirmBox('Stop the cloud mixer?', 'If you are live, the broadcast ends.', 'Stop'))) return;
           await post(`/api/tournaments/${id}/cloud-engine/stop`); reloadTab(id, 'overview');
         }), text: `Stop cloud mixer (${prod.cloud.status})` }) : null,
-        el('a', { class: 'btn', href: `/web/e/${id}/control`, text: 'Control room' }))),
+        el('a', { class: 'btn', href: `/web/e/${id}/control`, text: 'Control room' }),
+        b?.enabled ? el('button', { class: 'btn', onclick: buySlots(id, 'cameras', b, 'overview'), text: 'Add camera slots' }) : null,
+        prod.mode === 'cloud' && !['running', 'starting'].includes(prod.cloud.status) ? el('button', { class: 'btn', onclick: guard(async () => {
+          const r = await post(`/api/tournaments/${id}/cloud-engine/start`); toast(`Cloud mixer ${r.production?.cloud?.status ?? 'starting'}: ready in about a minute`); reloadTab(id, 'overview');
+        }), text: 'Start cloud mixer only' }) : null)),
     camInvite ? el('div', { class: 'card', style: 'margin-top:12px;display:flex;gap:16px;align-items:center;flex-wrap:wrap' },
       el('img', { src: `${camInvite.qrUrl}?token=${encodeURIComponent(state.token)}`, alt: 'Camera QR code', style: 'width:160px;height:160px;background:#fff;border-radius:8px' }),
       el('div', {}, el('strong', { text: 'Camera invite' }), el('p', { class: 'small muted', text: 'Scan with the Go Live app, or share the link. No account needed.' }),
@@ -72,7 +93,9 @@ async function people(body, id, s) {
   const [{ invites }, { codes }] = await Promise.all([get(`/api/tournaments/${id}/invites`), get(`/api/tournaments/${id}/join-codes`)]);
   const ROLE = { camera: 'Cameras', scorer: 'Scorers', commentator: 'Commentators' };
   body.append(
-    el('h2', { text: 'Cameras' }),
+    el('div', { class: 'row', style: 'margin-bottom:-8px' }, el('h2', { text: 'Cameras' }), el('div', { class: 'sp' }),
+      s.billing?.enabled ? el('span', { class: 'small muted', text: `${s.billing.cameras.used} of ${s.billing.cameras.limit} camera slots used` }) : null,
+      s.billing?.enabled ? el('button', { class: 'btn small', onclick: buySlots(id, 'cameras', s.billing, 'people'), text: 'Add camera slots' }) : null),
     table(['Camera', 'Position', 'Phone', 'Status', ''], (s.cameras ?? []).map((c) => [el('strong', { text: c.name }), c.hole ? `${s.tournament.profile?.positionLabel ?? 'Hole'} ${c.hole}` : (c.position ?? '–'), c.deviceModel ?? c.platform ?? '–',
       pill({ live: 'ok', connecting: 'warn', paused: 'warn', offline: '' }[c.status], c.onAir ? 'On air' : c.status),
       el('span', { class: 'row' },
@@ -139,7 +162,8 @@ async function streaming(body, id, s) {
       const v = await dialog({ title: 'Add a destination', text: 'Any service that gives an RTMP stream URL and key (another YouTube channel, a website player…).', ok: 'Add', fields: [{ name: 'label', label: 'Name', required: true }, { name: 'streamUrl', label: 'Stream URL', required: true }, { name: 'streamKey', label: 'Stream key', required: true }, { name: 'vertical', label: 'Vertical (9:16) for phones', type: 'checkbox' }] });
       if (!v) return; await post(`/api/tournaments/${id}/destinations`, { kind: 'key', ...v }); reloadTab(id, 'streaming');
     }), text: 'Add destination' }),
-      billing ? el('span', { class: 'small muted', text: `${billing.destinations.used} of ${billing.destinations.limit} destinations used${billing.destinations.price ? ` · extra ones ${billing.destinations.price} credits` : ''}` }) : null),
+      billing ? el('span', { class: 'small muted', text: `${billing.destinations.used} of ${billing.destinations.limit} destinations used${billing.destinations.price ? ` · extra ones ${billing.destinations.price} credits` : ''}` }) : null,
+      billing?.enabled ? el('button', { class: 'btn small', onclick: buySlots(id, 'destinations', billing, 'streaming'), text: 'Add destination slots' }) : null),
     setup ? el('div', {}, el('h2', { text: 'Laptop production (OBS)' }),
       el('div', { class: 'card' }, el('p', { class: 'small', text: 'On the laptop with OBS, run the Go Live agent with these settings:' }),
         el('pre', { class: 'mono card', style: 'white-space:pre-wrap;user-select:all', text: setup.envFile }),

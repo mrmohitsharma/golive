@@ -212,6 +212,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
     const b = await billing.updateOrgBilling(orgId, body);
     // A suspension takes effect on live broadcasts straight away.
     if (body.suspended) await billing.tick().catch(() => {});
+    if (body.suspended) void ctx.notifier.suspended(orgId, body.suspendedReason ?? null).catch(() => {});
     return { suspended: b.suspended, suspendedReason: b.suspended_reason, overrides: b.overrides, pricing: await billing.pricingFor(orgId, b) };
   });
 

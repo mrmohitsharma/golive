@@ -627,7 +627,11 @@ export class BillingService {
     if (fresh) this.hooks?.changed(tid, await this.tournamentState(fresh));
   }
 
+  /** Called after every wallet change (low-credit email). */
+  onWalletChanged: ((orgId: string) => Promise<void>) | null = null;
+
   private async walletChanged(orgId: string, skip?: string): Promise<void> {
+    if (this.onWalletChanged) void this.onWalletChanged(orgId).catch(() => {});
     if (!this.hooks) return;
     // Live tournaments of this club show the new balance immediately.
     for (const tid of this.hooks.streaming()) {

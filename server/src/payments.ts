@@ -99,6 +99,7 @@ export interface PaymentRow {
   created_by: string | null;
   created_at: Date;
   paid_at: Date | null;
+  return_path?: string | null;
   list_inr?: string | null;
   coupon_code?: string | null;
   discount_inr?: string;
@@ -153,6 +154,8 @@ export class PaymentsService {
   /** Where the keys came from. */
   source: 'admin' | 'server config' | 'none' = 'none';
   invoices: InvoiceService | null = null;
+  /** Emails after a payment or refund succeeds. */
+  notify: { receipt: (paymentId: string) => Promise<void>; refund: (refundId: string) => Promise<void> } | null = null;
 
   constructor(
     private readonly config: Config,
@@ -278,7 +281,7 @@ export class PaymentsService {
     return out;
   }
 
-  async checkout(orgId: string, user: { id: string; email: string; name: string }, packId: string, phone: string, couponCode?: string | null): Promise<{ payment: PaymentRow; checkoutUrl: string }> {
+  async checkout(orgId: string, user: { id: string; email: string; name: string }, packId: string, phone: string, couponCode?: string | null, returnPath?: string | null): Promise<{ payment: PaymentRow; checkoutUrl: string }> {
     if (!this.enabled) throw new HttpError(501, 'payments_off', 'Online payment is not set up on this server yet. Contact Go Live to add credits.');
     await this.billing.checkNotSuspended(orgId);
     const q = await this.quote(orgId, packId, couponCode);
@@ -287,9 +290,9 @@ export class PaymentsService {
     const orderId = `cg_${crypto.randomBytes(12).toString('hex')}`;
     const payment = (
       await this.repo.db.query<PaymentRow>(
-        `INSERT INTO payments (org_id, order_id, pack_id, amount_inr, credits_cc, created_by, list_inr, coupon_code, discount_inr, bonus_cc)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-        [orgId, orderId, pack.id, q.amountInr.toFixed(2), toCc(pack.credits), user.id, pack.priceInr.toFixed(2), q.coupon?.code ?? null, q.discountInr.toFixed(2), toCc(q.bonusCredits)],
+        `INSERT INTO payments (org_id, order_id, pack_id, amount_inr, credits_cc, created_by, list_inr, coupon_code, discount_inr, bonus_cc, return_path)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [orgId, orderId, pack.id, q.amountInr.toFixed(2), toCc(pack.credits), user.id, pack.priceInr.toFixed(2), q.coupon?.code ?? null, q.discountInr.toFixed(2), toCc(q.bonusCredits), returnPath ?? null],
       )
     ).rows[0];
     const base = this.config.PUBLIC_BASE_URL.replace(/\/$/, '');
@@ -330,6 +333,7 @@ export class PaymentsService {
     if (p.status === 'paid' || !this.enabled) return p;
     const order = await this.call<{ order_status?: string; order_amount?: number; order_currency?: string }>('GET', `/orders/${encodeURIComponent(p.order_id)}`);
     const status = order.order_status ?? '';
+    let paidNow = false;
     if (status === 'PAID') {
       if (Math.round(Number(order.order_amount) * 100) !== Math.round(Number(p.amount_inr) * 100) || (order.order_currency && order.order_currency !== 'INR')) {
         throw new HttpError(409, 'amount_mismatch', 'The paid amount does not match the order. Contact CoGolfers support.');
@@ -342,8 +346,10 @@ export class PaymentsService {
           await this.billing.credit(p.org_id, Number(p.credits_cc) + bonus, { kind: 'purchase', ref: p.order_id, note, by: (await c.query<{ email: string }>('SELECT email FROM users WHERE id = $1', [p.created_by])).rows[0]?.email ?? null }, c);
           if (p.coupon_code) await c.query('INSERT INTO coupon_redemptions (code, org_id, payment_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [p.coupon_code, p.org_id, p.id]);
           if (this.invoices) await this.invoices.forPayment(p.id, c);
+          paidNow = true;
         }
       });
+      if (paidNow && this.notify) void this.notify.receipt(p.id).catch(() => {});
     } else if (status === 'EXPIRED' || status === 'TERMINATED') {
       await this.repo.db.query("UPDATE payments SET status = 'expired' WHERE id = $1 AND status = 'created'", [p.id]);
     }
@@ -439,10 +445,12 @@ export class PaymentsService {
   private async applyRefundStatus(row: RefundRow, status: string, error: string | null): Promise<RefundRow> {
     const s = status.toUpperCase();
     if (s === 'SUCCESS') {
-      await this.repo.tx(async (c) => {
+      const done = await this.repo.tx(async (c) => {
         const u = await c.query("UPDATE refunds SET status = 'success', processed_at = now(), error = NULL WHERE id = $1 AND status = 'pending' RETURNING id", [row.id]);
         if (u.rows[0] && this.invoices) await this.invoices.forRefund(row.id, c);
+        return Boolean(u.rows[0]);
       });
+      if (done && this.notify) void this.notify.refund(row.id).catch(() => {});
     } else if (s === 'FAILED' || s === 'CANCELLED') {
       await this.repo.tx(async (c: pg.PoolClient) => {
         const u = await c.query(`UPDATE refunds SET status = $2, processed_at = now(), error = $3 WHERE id = $1 AND status = 'pending' RETURNING id`, [row.id, s === 'FAILED' ? 'failed' : 'cancelled', error]);

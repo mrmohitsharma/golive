@@ -84,12 +84,20 @@ export function registerBillingRoutes(app: FastifyInstance, ctx: Ctx) {
     const orgId = idParam(req);
     await requireOrg(repo, req.principal!, orgId, 'create');
     const u = userOf(req);
-    const body = z.object({ packId: z.string().min(1).max(32), phone: phone.optional(), coupon: z.string().trim().max(40).nullish() }).parse(req.body);
+    const body = z
+      .object({
+        packId: z.string().min(1).max(32),
+        phone: phone.optional(),
+        coupon: z.string().trim().max(40).nullish(),
+        // Where to go back to after paying: only web app pages on this site.
+        returnTo: z.string().regex(/^\/web(\/[\w-]+)*\/?$/).nullish(),
+      })
+      .parse(req.body);
     const b = await billing.orgBilling(orgId);
     const mobile = body.phone ?? b.billing_phone;
     if (!mobile) throw new HttpError(400, 'phone_required', 'Enter a mobile number for the payment receipt.');
     if (body.phone && !b.billing_phone) await billing.updateOrgBilling(orgId, { phone: body.phone });
-    const r = await payments.checkout(orgId, u, body.packId, mobile, body.coupon);
+    const r = await payments.checkout(orgId, u, body.packId, mobile, body.coupon, body.returnTo);
     reply.status(201);
     return { payment: paymentDto(r.payment), checkoutUrl: r.checkoutUrl };
   });
@@ -175,8 +183,19 @@ document.getElementById('pay').onclick = function () {
       return p as PaymentRow;
     });
     const balance = fromCc((await billing.orgBilling(p.org_id)).balance_cc);
+    const back = p.return_path ? `${p.return_path}?paid=${p.id}` : null;
     if (p.status === 'paid') {
-      return page(reply, 'Payment received', `<h1>Payment received</h1><p class="ok">${fromCc(p.credits_cc).toLocaleString('en-IN')} credits added.</p><p class="sub">Balance: ${balance.toLocaleString('en-IN')} credits. Go back to the ${esc(brand)} app.</p>`);
+      const credits = fromCc(Number(p.credits_cc) + Number(p.bonus_cc ?? 0)).toLocaleString('en-IN');
+      return page(
+        reply,
+        'Payment received',
+        back
+          ? `<h1>Payment received</h1><p class="ok">${credits} credits added.</p><p class="sub">Balance: ${balance.toLocaleString('en-IN')} credits. Taking you back…</p><button onclick="location.href='${esc(back)}'">Back to ${esc(brand)}</button><script>setTimeout(function(){location.href=${JSON.stringify(back)}},2500)</script>`
+          : `<h1>Payment received</h1><p class="ok">${credits} credits added.</p><p class="sub">Balance: ${balance.toLocaleString('en-IN')} credits. Go back to the ${esc(brand)} app.</p>`,
+      );
+    }
+    if (back && p.status !== 'created') {
+      return page(reply, 'Payment', `<h1>Payment not completed</h1><p class="bad">${p.status === 'expired' ? 'The payment expired.' : 'The payment failed.'}</p><button onclick="location.href='${esc(back)}'">Back to ${esc(brand)}</button>`);
     }
     if (p.status === 'expired') return page(reply, 'Payment', '<h1>Payment not completed</h1><p class="bad">The payment expired. Start again from the app.</p>');
     return page(

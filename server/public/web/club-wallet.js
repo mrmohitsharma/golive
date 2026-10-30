@@ -5,6 +5,14 @@ export const title = 'Wallet';
 
 export async function render(view) {
   const id = state.orgId;
+  // Back from Cashfree: confirm the payment, show the result, clean the address.
+  const paid = new URLSearchParams(location.search).get('paid');
+  if (paid) {
+    history.replaceState({}, '', '/web/wallet');
+    const r = await get(`/api/payments/${paid}`).catch(() => null);
+    if (r?.payment.status === 'paid') toast(`Payment received: ${num(r.payment.credits + (r.payment.bonusCredits ?? 0))} credits added`);
+    else if (r) toast(r.payment.status === 'created' ? 'Payment not completed yet. If money left your account, credits arrive within a few minutes.' : 'The payment did not go through.', r.payment.status !== 'created');
+  }
   const org = state.orgs.find((o) => o.id === id);
   const owner = org?.role === 'owner' || state.me.platformAdmin;
   const [b, inv] = await Promise.all([get(`/api/orgs/${id}/billing`), owner ? get(`/api/orgs/${id}/invoices`).catch(() => ({ invoices: [] })) : { invoices: [] }]);
@@ -17,7 +25,7 @@ export async function render(view) {
       const q = await post(`/api/orgs/${id}/billing/coupon`, { packId: pack.id, coupon: v.coupon });
       toast(`Coupon applied: pay ${inr(q.amountInr)}${q.bonusCredits ? `, +${num(q.bonusCredits)} bonus credits` : ''}`);
     }
-    const r = await post(`/api/orgs/${id}/billing/checkout`, { packId: pack.id, phone: v.phone || undefined, coupon: v.coupon || null });
+    const r = await post(`/api/orgs/${id}/billing/checkout`, { packId: pack.id, phone: v.phone || undefined, coupon: v.coupon || null, returnTo: '/web/wallet' });
     location.href = r.checkoutUrl;
   });
   const p = b.pricing;
