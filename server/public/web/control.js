@@ -34,6 +34,37 @@ class Whep {
   fail(msg) { this.note.textContent = msg; clearTimeout(this.timer); const gen = this.gen; this.timer = setTimeout(() => { if (gen === this.gen) this.connect(); }, 3000); }
 }
 
+/** Sends this browser's microphone as commentary (WHIP), like the commentator app. */
+class Whip {
+  constructor() { this.pc = null; this.stream = null; this.session = null; this.bearer = null; }
+  get on() { return Boolean(this.pc); }
+  async start(whipUrl, bearer, deviceId) {
+    this.bearer = bearer;
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    this.pc = pc;
+    for (const tr of this.stream.getAudioTracks()) pc.addTransceiver(tr, { direction: 'sendonly', streams: [this.stream] });
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise((r) => { if (pc.iceGatheringState === 'complete') return r(); const t = setTimeout(r, 2000); pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); r(); } }; });
+    const res = await fetch(whipUrl, { method: 'POST', headers: { 'content-type': 'application/sdp', authorization: 'Bearer ' + bearer }, body: pc.localDescription.sdp });
+    if (res.status !== 201) { await this.stop(); throw new Error(`Could not send the microphone (${res.status})`); }
+    const loc = res.headers.get('location');
+    if (loc) this.session = `${whipUrl}/${loc.split('/').pop()}`;
+    await pc.setRemoteDescription({ type: 'answer', sdp: await res.text() });
+  }
+  async stop() {
+    if (this.session) fetch(this.session, { method: 'DELETE', headers: { authorization: 'Bearer ' + this.bearer } }).catch(() => {});
+    this.session = null; this.pc?.close(); this.pc = null;
+    this.stream?.getTracks().forEach((t) => t.stop()); this.stream = null;
+  }
+}
+const mic = new Whip();
+const deviceId = () => { try { let d = localStorage.getItem('gl.device'); if (!d) { d = 'web-' + crypto.randomUUID(); localStorage.setItem('gl.device', d); } return d; } catch { return 'web-' + Date.now() + '-browser'; } };
+const feedInput = (path) => `CG ${path} Feed`;
+const commentaryInput = (path) => `CG Commentary ${path}`;
+/** A level bar driven by the engine's meters (dBFS, about -60..0). */
+const meter = (input) => el('div', { class: 'cr-meter', 'data-input': input }, el('i'));
+
 export async function render(view, { id }) {
   document.body.classList.add('wide');
   const s0 = await get(`/api/tournaments/${id}/state`);
@@ -122,6 +153,16 @@ export async function render(view, { id }) {
         el('div', { class: 'row', style: 'margin:8px 0 16px' },
           el('button', { class: 'btn primary', onclick: () => gpatch({ lowerThird: who.value ? { visible: true, playerId: who.value } : { visible: true, playerId: null, title: ttl.value, subtitle: sub.value } }), text: 'Show caption' }),
           el('button', { class: 'btn', onclick: () => gpatch({ lowerThird: { visible: false } }), text: 'Hide' })),
+        el('label', { text: 'Leaderboard' }),
+        el('div', { class: 'row', style: 'margin-bottom:10px' },
+          el('select', { style: 'width:auto', onchange: (e) => gpatch({ leaderboard: { size: Number(e.target.value) } }) }, [5, 8, 10, 12, 15].map((n) => el('option', { value: n, selected: n === (g.leaderboard?.size ?? 8) || undefined, text: `Top ${n}` }))),
+          el('select', { style: 'width:auto', onchange: (e) => gpatch({ leaderboard: { category: e.target.value || null } }) },
+            el('option', { value: '', text: 'All categories' }), [...new Set(players.map((p) => p.category).filter(Boolean))].map((c) => el('option', { value: c, selected: c === g.leaderboard?.category || undefined, text: c })))),
+        el('label', { text: `${s.tournament.profile?.positionLabel ?? 'Hole'} card` }),
+        el('div', { class: 'row', style: 'margin-bottom:12px' },
+          el('select', { style: 'width:auto', onchange: (e) => gpatch({ holeCard: { hole: e.target.value ? Number(e.target.value) : null } }) },
+            el('option', { value: '', text: 'Follow the camera on air' }), Array.from({ length: 18 }, (_, i) => i + 1).map((n) => el('option', { value: n, selected: n === g.holeCard?.hole || undefined, text: `${s.tournament.profile?.positionLabel ?? 'Hole'} ${n}` }))),
+          el('button', { class: 'btn', onclick: () => gpatch({ holeCard: { visible: true } }), text: 'Show now' })),
         el('div', { class: 'row' },
           toggle('Leaderboard', g.leaderboard?.visible, { leaderboard: { visible: !g.leaderboard?.visible } }),
           toggle('Score bug', g.scoreBug?.visible, { scoreBug: { visible: !g.scoreBug?.visible } }),
@@ -130,19 +171,47 @@ export async function render(view, { id }) {
           g.question?.visible ? el('button', { class: 'btn primary', onclick: () => gpatch({ question: { visible: false } }), text: 'Viewer question: ON' }) : null));
     } else if (tab === 'Audio') {
       const a = s.audio ?? {};
-      const slider = (label, key, muteKey) => {
-        const r = el('input', { type: 'range', min: -60, max: 6, step: 1, value: a[key] ?? 0 });
-        const v = el('span', { class: 'small mono', text: `${a[key] ?? 0} dB` });
+      const apatch = guard(async (p) => { await patch(`/api/tournaments/${id}/audio`, p); });
+      const level = (value, onchange) => {
+        const r = el('input', { type: 'range', min: -60, max: 6, step: 1, value });
+        const v = el('span', { class: 'small mono', style: 'width:52px;text-align:right', text: `${value} dB` });
         r.oninput = () => (v.textContent = `${r.value} dB`);
-        r.onchange = guard(async () => { await patch(`/api/tournaments/${id}/audio`, { [key]: Number(r.value) }); });
-        const m = el('input', { type: 'checkbox' }); m.checked = Boolean(a[muteKey]);
-        m.onchange = guard(async () => { await patch(`/api/tournaments/${id}/audio`, { [muteKey]: m.checked }); });
-        return el('div', { style: 'margin-bottom:14px' }, el('div', { class: 'row' }, el('strong', { text: label }), el('div', { class: 'sp' }), v, el('label', { class: 'check' }, m, 'Mute')), r);
+        r.onchange = () => onchange(Number(r.value));
+        return [r, v];
       };
+      const mute = (on, onchange) => { const m = el('input', { type: 'checkbox' }); m.checked = Boolean(on); m.onchange = () => onchange(m.checked); return el('label', { class: 'check small' }, m, 'Mute'); };
+      const row = (name, input, db, muted, onDb, onMute) => { const [r, v] = level(db, onDb); return el('div', { class: 'cr-ch' }, el('div', { class: 'row' }, el('strong', { class: 'small', text: name }), el('div', { class: 'sp' }), v, mute(muted, onMute)), r, input ? meter(input) : null); };
+      const delay = el('input', { type: 'range', min: 0, max: 2000, step: 50, value: a.commentaryDelayMs ?? 0 });
+      const delayV = el('span', { class: 'small mono', text: `${a.commentaryDelayMs ?? 0} ms` });
+      delay.oninput = () => (delayV.textContent = `${delay.value} ms`);
+      delay.onchange = () => apatch({ commentaryDelayMs: Number(delay.value) });
       const duck = el('input', { type: 'checkbox' }); duck.checked = Boolean(a.ducking);
-      duck.onchange = guard(async () => { await patch(`/api/tournaments/${id}/audio`, { ducking: duck.checked }); });
-      body.append(slider('Course (camera) sound', 'courseDb', 'courseMuted'), slider('Commentary', 'commentaryDb', 'commentaryMuted'),
-        el('label', { class: 'check' }, duck, 'Lower course sound while commentators talk'));
+      duck.onchange = () => apatch({ ducking: duck.checked });
+      const micSel = el('select', {}, el('option', { value: '', text: 'Default microphone' }));
+      navigator.mediaDevices?.enumerateDevices?.().then((ds) => ds.filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default').forEach((d, i) => micSel.append(el('option', { value: d.deviceId, text: d.label || `Microphone ${i + 1}` })))).catch(() => {});
+      body.append(
+        el('h3', { class: 'cr-h', text: 'Course sound' }),
+        row('All cameras', null, a.courseDb ?? 0, a.courseMuted, (v) => apatch({ courseDb: v }), (m) => apatch({ courseMuted: m })),
+        ...cams().map((c) => row(c.name, feedInput(c.streamPath), a.cameras?.[c.id]?.db ?? 0, a.cameras?.[c.id]?.muted, (v) => apatch({ cameras: { [c.id]: { db: v } } }), (m) => apatch({ cameras: { [c.id]: { muted: m } } }))),
+        el('h3', { class: 'cr-h', text: 'Commentary' }),
+        row('All commentators', null, a.commentaryDb ?? 0, a.commentaryMuted, (v) => apatch({ commentaryDb: v }), (m) => apatch({ commentaryMuted: m })),
+        el('div', { class: 'cr-ch' }, el('div', { class: 'row' }, el('strong', { class: 'small', text: 'Delay commentary (to match video)' }), el('div', { class: 'sp' }), delayV), delay),
+        el('label', { class: 'check', style: 'margin:6px 0 10px' }, duck, 'Lower course sound while commentators talk'),
+        ...(s.commentators ?? []).map((m) => el('div', { class: 'cr-ch' },
+          el('div', { class: 'row' }, el('span', { class: 'cr-dot ' + (m.online ? 'live' : ''), style: 'position:static' }), el('strong', { class: 'small', text: m.name }), el('div', { class: 'sp' }),
+            el('button', { class: 'btn small danger', onclick: guard(async () => { if (!(await confirmBox('Remove this commentator?', `${m.name} stops being heard on the stream.`, 'Remove'))) return; await fetch(`/api/commentators/${m.id}`, { method: 'DELETE', headers: { authorization: 'Bearer ' + state.token } }); toast('Commentator removed'); }), text: 'Remove' })),
+          meter(commentaryInput(m.streamPath)))),
+        el('div', { class: 'card', style: 'padding:10px;margin-top:8px' },
+          el('strong', { class: 'small', text: 'Commentate from this browser' }),
+          el('p', { class: 'small muted', style: 'margin:4px 0 8px', text: 'Uses this computer\'s microphone. Wear headphones so the stream sound is not picked up.' }),
+          micSel,
+          el('div', { class: 'row', style: 'margin-top:8px' },
+            mic.on ? el('button', { class: 'btn danger', onclick: guard(async () => { await mic.stop(); toast('Microphone off'); drawSide(); }), text: '■ Stop commentating' })
+              : el('button', { class: 'btn primary', onclick: guard(async () => {
+                  const r = await post(`/api/tournaments/${id}/commentators/register`, { name: `${state.me.name} (web)`, deviceId: deviceId() });
+                  await mic.start(r.publish.whipUrl, r.publish.bearer, micSel.value || undefined);
+                  toast('You are on the commentary feed'); drawSide();
+                }), text: '🎙 Start commentating' }))));
     } else if (tab === 'Games') {
       moments = await get(`/api/tournaments/${id}/moments`).catch(() => ({ moments: [], runs: [] }));
       body.append(el('p', { class: 'small muted' }, 'Director games open for everyone watching. Set them up under ', el('a', { href: `/web/e/${id}/engagement`, text: 'Influencers & games' }), '.'),
@@ -172,13 +241,14 @@ export async function render(view, { id }) {
   const onMessage = (m) => {
     switch (m.type) {
       case 'snapshot': s = { ...s, ...m }; drawAll(); break;
-      case 'cameras': s.cameras = m.cameras; s.commentators = m.commentators; drawMonitors(); drawGrid(); break;
+      case 'cameras': { const before = (s.commentators ?? []).map((c) => c.id + c.online).join(); s.cameras = m.cameras; s.commentators = m.commentators; drawMonitors(); drawGrid(); if (tab === 'Audio' && before !== (m.commentators ?? []).map((c) => c.id + c.online).join()) drawSide(); break; }
       case 'engine': s.engine = m.engine ?? m; drawStatus(); drawMonitors(); drawGrid(); break;
       case 'graphics': s.graphics = m.graphics ?? m; if (tab === 'Graphics') drawSide(); break;
       case 'audio': s.audio = m.audio ?? m; break;
       case 'production': s.production = m.production ?? m; drawStatus(); break;
       case 'billing': s.billing = m.billing ?? m; drawStatus(); break;
       case 'chat': if (tab === 'Chat') drawSide(); break;
+      case 'meters': for (const bar of side.querySelectorAll('.cr-meter')) { const db = m.levels?.[bar.dataset.input]; bar.firstChild.style.width = db == null ? '0%' : `${Math.max(0, Math.min(100, ((db + 60) / 60) * 100))}%`; bar.classList.toggle('hot', db != null && db > -6); } break;
       case 'clip': if ((m.clip ?? m).status === 'ready') toast(`Clip ready: ${(m.clip ?? m).title ?? (m.clip ?? m).cameraName}`); break;
       case 'alert': alerts.prepend(el('div', { class: 'cr-alert ' + m.level, text: `${new Date(m.at ?? Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} ${m.message}` })); if (m.level !== 'info') toast(m.message, m.level === 'error'); break;
       case 'command.result': { const a = pending.get(m.requestId); pending.delete(m.requestId); if (!m.ok) toast(`${a ?? m.action}: ${m.error ?? 'failed'}`, true); break; }
@@ -225,7 +295,7 @@ export async function render(view, { id }) {
   document.addEventListener('keydown', shift, true);
   thumbTimer = setInterval(drawGrid, 5000);
   return () => {
-    closed = true; clearTimeout(wsTimer); clearInterval(thumbTimer); ws?.close(); pgm.close(); pvw.close();
+    closed = true; clearTimeout(wsTimer); clearInterval(thumbTimer); ws?.close(); pgm.close(); pvw.close(); mic.stop();
     document.removeEventListener('keydown', keys); document.removeEventListener('keydown', shift, true);
     document.body.classList.remove('wide');
   };

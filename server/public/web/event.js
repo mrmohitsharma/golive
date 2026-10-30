@@ -119,7 +119,8 @@ async function people(body, id, s) {
       const v = await dialog({ title: 'New join code', fields: [{ name: 'role', label: 'Role', type: 'select', value: 'camera', options: Object.entries(ROLE).map(([value, label]) => ({ value, label: label.slice(0, -1) })) }, { name: 'label', label: 'Label (optional)' }, { name: 'expiresInHours', label: 'Expires after hours (optional)', type: 'number' }] });
       if (!v) return; await post(`/api/tournaments/${id}/join-codes`, { role: v.role, label: v.label || null, expiresInHours: v.expiresInHours || undefined }); reloadTab(id, 'people');
     }), text: 'New code' })),
-    (s.commentators ?? []).length ? el('div', {}, el('h2', { text: 'Commentators' }), table(['Name', 'Status'], s.commentators.map((m) => [m.name, m.status ?? '–']))) : null);
+    (s.commentators ?? []).length ? el('div', {}, el('h2', { text: 'Commentators' }), table(['Name', 'Status', ''], s.commentators.map((m) => [m.name, pill(m.online ? 'ok' : '', m.online ? 'Sending sound' : 'Offline'),
+      el('button', { class: 'btn small danger', onclick: guard(async () => { if (!(await confirmBox('Remove this commentator?', `${m.name} stops being heard on the stream.`, 'Remove'))) return; await del(`/api/commentators/${m.id}`); reloadTab(id, 'people'); }), text: 'Remove' })]))) : null);
 }
 
 // ------------------------------------------------------------------ streaming

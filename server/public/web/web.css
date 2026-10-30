@@ -115,3 +115,8 @@ body.wide main { max-width:none; }
 .checklist li.done { color:var(--muted); text-decoration:line-through; }
 .checklist .tick { width:20px; height:20px; border-radius:50%; border:2px solid var(--line); display:grid; place-items:center; font-size:12px; color:#fff; flex:none; }
 .checklist li.done .tick { background:var(--green); border-color:var(--green); }
+.cr-h { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:14px 0 6px; }
+.cr-ch { padding:6px 0 8px; border-bottom:1px solid var(--line); }
+.cr-ch input[type=range] { padding:0; }
+.cr-meter { height:5px; background:#20262a; border-radius:3px; overflow:hidden; margin-top:4px; }
+.cr-meter i { display:block; height:100%; width:0; background:linear-gradient(90deg,#2ecc71,#2ecc71 75%,#f2b33d 90%,#e53935); transition:width .15s; }
