@@ -24,6 +24,11 @@ const ROUTES = [
   { path: '/web/admin/settings', page: 'admin-settings', role: 'admin', nav: ['Admin', 'Settings'] },
   { path: '/web/admin/audit', page: 'admin-audit', role: 'admin', nav: ['Admin', 'Audit log'] },
   { path: '/web/events', page: 'club-events', role: 'club', nav: ['Club', 'Events'] },
+  { path: '/web/team', page: 'club-team', role: 'owner', nav: ['Club', 'Team'] },
+  { path: '/web/channels', page: 'club-channels', role: 'owner', nav: ['Club', 'Channels'] },
+  { path: '/web/wallet', page: 'club-wallet', role: 'club', nav: ['Club', 'Wallet'] },
+  { path: '/web/e/:id', page: 'event', role: 'any' },
+  { path: '/web/e/:id/:tab', page: 'event', role: 'any' },
   { path: '/web/profile', page: 'profile', role: 'any', nav: ['Account', 'Profile'] },
 ];
 export function addRoutes(list) { ROUTES.push(...list); }

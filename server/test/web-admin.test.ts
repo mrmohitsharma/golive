@@ -23,6 +23,12 @@ describe('V7 web: app shell, sessions, audit log, log in as', () => {
     const js = await fetch(`${h.baseUrl}/web-assets/core.js`);
     assert.match(js.headers.get('content-type')!, /javascript/);
     assert.equal((await fetch(`${h.baseUrl}/web-assets/..%2Fadmin.html`)).status, 404);
+    for (const f of ['event.js', 'club-wallet.js', 'club-team.js', 'club-channels.js', 'admin-money.js', 'admin-system.js']) {
+      assert.equal((await fetch(`${h.baseUrl}/web-assets/${f}`)).status, 200, f);
+    }
+    // The Studio opens inside the web app's event page, so this site (only) may frame it.
+    const studio = await fetch(`${h.baseUrl}/studio/00000000-0000-0000-0000-000000000000?embed=1`);
+    assert.equal(studio.headers.get('content-security-policy'), "frame-ancestors 'self'");
   });
 
   it('admin actions are in the audit log, without secrets; owners cannot read it', async () => {

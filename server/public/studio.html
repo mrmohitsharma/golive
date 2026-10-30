@@ -61,6 +61,11 @@
 <header class="top"><div><div class="brand">Go Live</div><h1>Studio</h1></div><div class="sp"></div><span class="muted small" id="who"></span><button class="btn small" id="out">Log out</button></header>
 <main id="main"><p class="muted">Loading…</p></main>
 <script>
+  // Inside the web app (/web/e/<id>/engagement): no Studio header or event links of its own.
+  if (new URLSearchParams(location.search).has('embed')) document.documentElement.classList.add('embed');
+</script>
+<style>.embed header.top, .embed .studio-head { display:none !important; } .embed main { padding:0; max-width:none; } .embed body { background:transparent; }</style>
+<script>
 (() => {
   'use strict';
   const main = document.getElementById('main');
@@ -121,8 +126,8 @@
     const bannerSlot = el('div');
     const tabs = [['influencers', 'Influencers'], ['games', 'Games'], ['winners', 'Winners'], ['reports', 'Reports']];
     main.replaceChildren(
-      el('div', { class: 'row' }, el('a', { class: 'btn small', href: '/studio', text: '‹ Events' }), el('a', { class: 'btn small', href: '/watch/' + ev.id, target: '_blank', rel: 'noopener', text: 'Open watch page' })),
-      el('h2', { text: ev.name }),
+      el('div', { class: 'row studio-head' }, el('a', { class: 'btn small', href: '/studio', text: '‹ Events' }), el('a', { class: 'btn small', href: '/watch/' + ev.id, target: '_blank', rel: 'noopener', text: 'Open watch page' })),
+      el('h2', { class: 'studio-head', text: ev.name }),
       el('nav', { class: 'tabs' }, tabs.map(([k, label]) => el('button', { class: tab === k ? 'on' : '', disabled: !VIEWS[k], onclick: () => { tab = k; render(); }, text: label }))),
       bannerSlot, body);
     guard(async () => { const b = await addonBanner(); if (b) bannerSlot.replaceChildren(b); })();

@@ -152,7 +152,8 @@ export function registerInfluencerRoutes(app: FastifyInstance, ctx: Ctx) {
     if (!studioFile) throw new HttpError(500, 'missing_assets', 'Studio page is missing.');
     reply.type('text/html; charset=utf-8');
     reply.header('Cache-Control', 'no-cache');
-    reply.header('Content-Security-Policy', "frame-ancestors 'none'");
+    // The web app (/web) shows the Studio inside its event page, so only this site may frame it.
+    reply.header('Content-Security-Policy', "frame-ancestors 'self'");
     return reply.send(fs.readFileSync(studioFile));
   };
   app.get('/studio', sendStudio);
