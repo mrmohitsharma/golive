@@ -288,6 +288,12 @@ export class ChatService {
     this.changed(row.tournament_id, feed);
     return ids.size;
   }
+
+  /** Lets a banned author post again (their hidden messages stay hidden). */
+  async unban(tid: string, source: string, authorKey: string): Promise<void> {
+    await this.repo.db.query('DELETE FROM chat_bans WHERE tournament_id = $1 AND source = $2 AND author_key = $3', [tid, source, authorKey]);
+    this.feeds.get(tid)?.bans.delete(`${source}:${authorKey}`);
+  }
 }
 
 function offStatus(): SourceStatus {
@@ -296,4 +302,5 @@ function offStatus(): SourceStatus {
 
 export function ipHash(ip: string): string {
   return crypto.createHash('sha256').update(`cg-chat:${ip}`).digest('hex').slice(0, 24);
+
 }

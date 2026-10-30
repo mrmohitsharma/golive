@@ -26,6 +26,7 @@ import type { PrizesService } from './prizes.js';
 import type { Sessions } from './sessions.js';
 import type { PlatformSecrets } from './secrets.js';
 import type { InvoiceService } from './invoices.js';
+import type { PlatformSettings } from './platform.js';
 
 /** Everything route modules need. */
 export interface Ctx {
@@ -57,4 +58,5 @@ export interface Ctx {
   sessions: Sessions;
   secrets: PlatformSecrets;
   invoices: InvoiceService;
+  platform: PlatformSettings;
 }

@@ -12,6 +12,7 @@ import { HttpError, errorBody } from './errors.js';
 import { bearerFrom, hashPassword, setSessionCheck, verifyPrincipal } from './auth.js';
 import { Sessions } from './sessions.js';
 import { PlatformSecrets } from './secrets.js';
+import { PlatformSettings } from './platform.js';
 import { InvoiceService } from './invoices.js';
 import { decideMediaAuth } from './media.js';
 import { Sealer, constantTimeEqual } from './crypto.js';
@@ -52,6 +53,7 @@ import { registerReportRoutes } from './routes/reports.js';
 import { registerWebRoutes } from './routes/web.js';
 import { registerAdminWebRoutes } from './routes/admin-web.js';
 import { registerAdminMoneyRoutes } from './routes/admin-money.js';
+import { registerAdminOpsRoutes } from './routes/admin-ops.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -107,6 +109,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const outputs = new OutputsService(config, repo, sealer, youtube, facebook, relay, log, destinations, billing);
   billing.destinationCounter = (t) => outputs.destinationCount(t);
   const secrets = new PlatformSecrets(repo, sealer);
+  const platform = new PlatformSettings(config, repo);
+  await platform.reload();
   const invoices = new InvoiceService(repo);
   const payments = new PaymentsService(config, repo, billing, cashfreeFetch, secrets);
   payments.invoices = invoices;
@@ -122,6 +126,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   chat.onChange = (tid) => hub.chatChanged(tid);
   const viewership = new ViewershipService(config, repo, (tid) => hub.engineState(tid).streaming.active);
   const messenger = new Messenger(config, repo, msg91Fetch, log);
+  messenger.saved = await secrets.get('msg91');
   // Messages: the add-on's included ones first, then paid per message from the wallet.
   messenger.gate = (tid, n, sent, critical) => billing.allowMessages(tid, n, sent, critical);
   const influencers = new InfluencersService(config, repo, sealer, messenger, (tid) => viewership.watchingByRef(tid));
@@ -158,7 +163,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
   const googleSignIn = new GoogleSignIn(config, googleFetch);
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions, secrets, invoices };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions, secrets, invoices, platform };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -171,7 +176,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   /** Public server capabilities, so the app can hide features this server does not offer. */
   fastify.get('/api/info', async () => ({
     name: config.BRAND_NAME,
-    signup: config.SIGNUP_ENABLED,
+    signup: platform.signupEnabled,
     youtube: youtube.enabled,
     facebook: facebook.enabled,
     cloudProduction: cloud.available,
@@ -202,6 +207,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerWebRoutes(fastify, ctx);
   registerAdminWebRoutes(fastify, ctx);
   registerAdminMoneyRoutes(fastify, ctx);
+  registerAdminOpsRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook

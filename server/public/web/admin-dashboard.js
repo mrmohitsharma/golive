@@ -9,7 +9,7 @@ export async function render(view) {
     const alerts = [
       a.failedPayments24h && [`${a.failedPayments24h} failed payment${a.failedPayments24h > 1 ? 's' : ''} in the last 24 h`, '/web/admin/money'],
       a.stuckPayments && [`${a.stuckPayments} payment${a.stuckPayments > 1 ? 's' : ''} started but not confirmed (over 30 min)`, '/web/admin/money'],
-      a.failedMessages24h && [`${a.failedMessages24h} SMS failed in the last 24 h`, null],
+      a.failedMessages24h && [`${a.failedMessages24h} SMS failed in the last 24 h`, '/web/admin/sms'],
       a.suspendedClubs && [`${a.suspendedClubs} club${a.suspendedClubs > 1 ? 's' : ''} suspended`, '/web/admin/clubs'],
       a.lowBalanceActiveClubs && [`${a.lowBalanceActiveClubs} active club${a.lowBalanceActiveClubs > 1 ? 's' : ''} with under 100 credits`, '/web/admin/clubs'],
       ...a.engineWarnings.map((w) => [`${w.name}: ${w.text}`, '/web/admin/live']),

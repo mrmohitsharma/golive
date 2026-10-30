@@ -529,6 +529,16 @@ export class BillingService {
         [t0.id, sec, m.inGrace],
       )
     ).rows[0];
+    // Daily usage (India time) for the cost and usage reports.
+    await this.repo.db
+      .query(
+        `INSERT INTO usage_daily (day, tournament_id, org_id, mode, live_seconds, camera_seconds)
+         VALUES ((now() AT TIME ZONE 'Asia/Kolkata')::date, $1, $2, $3, $4, $4 * (SELECT count(*) FROM cameras WHERE tournament_id = $1))
+         ON CONFLICT (day, tournament_id) DO UPDATE SET live_seconds = usage_daily.live_seconds + EXCLUDED.live_seconds,
+           camera_seconds = usage_daily.camera_seconds + EXCLUDED.camera_seconds, mode = EXCLUDED.mode`,
+        [t.id, t.org_id, t.production_mode, sec],
+      )
+      .catch(() => {});
     const freeSec = p.freeMinutes * 60;
     const due = Math.ceil(Math.max(0, t.live_seconds - freeSec) / 60) - t.billed_minutes;
     if (due > 0) {

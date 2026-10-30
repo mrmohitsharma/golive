@@ -27,7 +27,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
 
   /** Self-serve: an organiser creates an account and their club in one step. */
   app.post('/api/auth/signup', async (req, reply) => {
-    if (!config.SIGNUP_ENABLED) throw new HttpError(403, 'signup_disabled', 'Sign-up is closed on this server. Ask an organiser to add you.');
+    if (!ctx.platform.signupEnabled) throw new HttpError(403, 'signup_disabled', 'Sign-up is closed on this server. Ask an organiser to add you.');
     const body = z
       .object({ name: z.string().trim().min(1).max(80), email, password, orgName: z.string().trim().min(2).max(100) })
       .parse(req.body);
@@ -57,7 +57,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
 
   /** What sign-in options this server offers (the website and app read it to show the Google button). */
   app.get('/api/auth/config', async () => ({
-    signupEnabled: config.SIGNUP_ENABLED,
+    signupEnabled: ctx.platform.signupEnabled,
     google: googleSignIn.enabled ? { clientId: googleSignIn.webClientId } : null,
   }));
 
@@ -78,7 +78,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
         if (byEmail) u = await repo.linkGoogle(byEmail.id, id.sub, c);
       }
       if (!u) {
-        if (!config.SIGNUP_ENABLED) throw new HttpError(403, 'signup_disabled', 'Sign-up is closed on this server. Ask an organiser to add you.');
+        if (!ctx.platform.signupEnabled) throw new HttpError(403, 'signup_disabled', 'Sign-up is closed on this server. Ask an organiser to add you.');
         u = await repo.createUser({ email: id.email, name: id.name, passwordHash: null, googleSub: id.sub }, c);
         newUser = true;
         if (body.orgName) {

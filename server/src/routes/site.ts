@@ -62,7 +62,6 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: Ctx) {
     YEAR: String(new Date().getFullYear()),
     PLAY_STORE_URL: esc(config.PLAY_STORE_URL ?? ''),
     APP_STORE_URL: esc(config.APP_STORE_URL ?? ''),
-    SIGNUP: config.SIGNUP_ENABLED ? 'true' : 'false',
   };
 
   const cache = new Map<string, string>();
@@ -86,7 +85,7 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: Ctx) {
     reply.header('Cache-Control', cacheable ? 'public, max-age=300' : 'no-store');
     reply.header('Content-Security-Policy', "frame-ancestors 'none'");
     reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-    return reply.send(render(file));
+    return reply.send(render(file).replace(/\{\{SIGNUP\}\}/g, ctx.platform.signupEnabled ? 'true' : 'false'));
   };
 
   for (const [route, file] of Object.entries(PAGES)) {

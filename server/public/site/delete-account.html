@@ -28,6 +28,31 @@
       </ol>
       <p>Before you ask, use or move any credits you want to keep: unused credits are lost when an organisation is deleted.</p>
 
+      <h2 id="form">Or send the request here</h2>
+      <form id="dr-form" class="dr-form" style="display:grid;gap:10px;max-width:520px">
+        <label>Email on your account<br><input type="email" name="email" required style="width:100%;padding:10px"></label>
+        <label>What do you want?<br><select name="kind" style="width:100%;padding:10px">
+          <option value="delete_account">Delete my login</option>
+          <option value="delete_club">Delete my whole organisation (events, clips, credits)</option>
+          <option value="export">Send me a copy of my data</option>
+          <option value="correct">Correct my data</option>
+        </select></label>
+        <label>Anything we should know (optional)<br><textarea name="details" rows="3" style="width:100%;padding:10px"></textarea></label>
+        <button type="submit" class="btn">Send request</button>
+        <p id="dr-msg" role="status"></p>
+      </form>
+      <script>
+      document.getElementById('dr-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var f = e.target, msg = document.getElementById('dr-msg');
+        fetch('/api/public/data-requests', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: f.email.value.trim(), kind: f.kind.value, details: f.details.value.trim() || null }) })
+          .then(function (r) { return r.json().then(function (d) { return [r.ok, d]; }); })
+          .then(function (x) { msg.textContent = x[0] ? x[1].message : (x[1].error && x[1].error.message) || 'Could not send. Email us instead.'; if (x[0]) f.reset(); })
+          .catch(function () { msg.textContent = 'Could not send. Email us instead.'; });
+      });
+      </script>
+
       <h2 id="what">What we delete and what we keep</h2>
       <div class="table-scroll"><table>
         <thead><tr><th>Deleted</th><th>Kept, and why</th></tr></thead>

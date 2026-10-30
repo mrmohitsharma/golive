@@ -4,6 +4,12 @@ import { HttpError } from './errors.js';
 
 export type MessageKind = 'reminder' | 'otp' | 'winner' | 'draw_entry';
 
+/** MSG91 settings: from Admin > SMS (stored encrypted) or, if not set there, the server config. */
+export interface Msg91Settings {
+  authKey: string;
+  templates: Record<MessageKind, string | null>;
+}
+
 /** One message: the template's variables in order ({#var#} 1, 2, 3 in the DLT template). */
 export interface OutgoingMessage {
   kind: MessageKind;
@@ -47,17 +53,33 @@ export class Messenger {
     private readonly log: { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void } = console,
   ) {}
 
+  /** Settings saved in the admin panel (null = use the server config). */
+  saved: Msg91Settings | null = null;
+
+  get settings(): Msg91Settings | null {
+    if (this.saved?.authKey) return this.saved;
+    if (!this.config.MSG91_AUTH_KEY) return null;
+    return {
+      authKey: this.config.MSG91_AUTH_KEY,
+      templates: {
+        otp: this.config.MSG91_TEMPLATE_OTP ?? null,
+        reminder: this.config.MSG91_TEMPLATE_REMINDER ?? null,
+        winner: this.config.MSG91_TEMPLATE_WINNER ?? null,
+        draw_entry: this.config.MSG91_TEMPLATE_DRAW ?? null,
+      },
+    };
+  }
+
+  get source(): 'admin' | 'server config' | 'none' {
+    return this.saved?.authKey ? 'admin' : this.config.MSG91_AUTH_KEY ? 'server config' : 'none';
+  }
+
   get live(): boolean {
-    return Boolean(this.config.MSG91_AUTH_KEY);
+    return Boolean(this.settings?.authKey);
   }
 
   private template(kind: MessageKind): string | undefined {
-    return {
-      otp: this.config.MSG91_TEMPLATE_OTP,
-      reminder: this.config.MSG91_TEMPLATE_REMINDER,
-      winner: this.config.MSG91_TEMPLATE_WINNER,
-      draw_entry: this.config.MSG91_TEMPLATE_DRAW,
-    }[kind];
+    return this.settings?.templates[kind] ?? undefined;
   }
 
   /** The text as approved in DLT (used for the test sender and the outbox preview). */
@@ -109,7 +131,7 @@ export class Messenger {
           try {
             const res = await this.fetchImpl(`${this.config.MSG91_API_BASE}/flow`, {
               method: 'POST',
-              headers: { authkey: this.config.MSG91_AUTH_KEY!, 'content-type': 'application/json', accept: 'application/json' },
+              headers: { authkey: this.settings!.authKey, 'content-type': 'application/json', accept: 'application/json' },
               body: JSON.stringify({
                 template_id: template,
                 short_url: '0',
