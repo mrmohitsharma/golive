@@ -244,8 +244,10 @@ export class Hub {
     const base = {
       tournament: {
         id: t.id,
+        orgId: t.org_id,
         name: t.name,
         venue: t.venue,
+        startsOn: t.starts_on,
         autoFallback: t.auto_fallback,
         mode: t.production_mode,
         eventType: t.event_type ?? 'golf',

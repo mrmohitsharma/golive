@@ -5,6 +5,7 @@ import { EVENT_TYPE_IDS, EVENT_TYPES, eventProfile, initialGraphics } from '../e
 import { playableVideo } from '../viewership.js';
 import { z } from 'zod';
 import type { Ctx } from '../context.js';
+import { randomSecret } from '../crypto.js';
 import { requireClubFeature } from './admin-web.js';
 import { HttpError } from '../errors.js';
 import { GUEST_ROLES, requireAuth, userOf } from '../auth.js';
@@ -87,12 +88,63 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
     return { tournament: tournamentDto(t) };
   });
 
+  /**
+   * Copies an event: its settings, course, games and (optionally) players. Never copies
+   * cameras, broadcasts, stream keys, viewers, wallet use or the add-on purchase.
+   */
+  app.post('/api/tournaments/:id/copy', { preHandler: user }, async (req, reply) => {
+    const { t } = await requireTournament(repo, req.principal!, idParam(req), 'manage');
+    await requireOrg(repo, req.principal!, t.org_id, 'create');
+    const body = z
+      .object({
+        name: z.string().trim().min(1).max(120),
+        startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+        players: z.boolean().default(false),
+        games: z.boolean().default(true),
+      })
+      .parse(req.body);
+    const copy = await repo.tx(async (c) => {
+      const n = (
+        await c.query<TournamentRow>(
+          `INSERT INTO tournaments (org_id, name, venue, starts_on, production_mode, auto_fallback, graphics, audio, public_watch, chat_enabled, chat_slow_sec,
+                                    event_type, attribution_days, influencer_board, moment_gap_sec, prize_terms, prizes_per_viewer, yt_source,
+                                    read_key, engine_key, graphics_key, output_key)
+           SELECT org_id, $2, venue, $3, production_mode, auto_fallback, graphics, audio, public_watch, chat_enabled, chat_slow_sec,
+                  event_type, attribution_days, influencer_board, moment_gap_sec, prize_terms, prizes_per_viewer, CASE WHEN yt_source = 'key' THEN 'org' ELSE yt_source END,
+                  $4, $5, $6, $7
+             FROM tournaments WHERE id = $1 RETURNING *`,
+          [t.id, body.name, body.startsOn ?? null, randomSecret(16), randomSecret(24), randomSecret(16), randomSecret(16)],
+        )
+      ).rows[0];
+      await c.query('INSERT INTO holes (tournament_id, number, par, yardage) SELECT $2, number, par, yardage FROM holes WHERE tournament_id = $1', [t.id, n.id]);
+      if (body.players) {
+        await c.query('INSERT INTO players (tournament_id, name, club, category, group_no, sort_order) SELECT $2, name, club, category, group_no, sort_order FROM players WHERE tournament_id = $1', [t.id, n.id]);
+      }
+      if (body.games) {
+        await c.query(
+          `INSERT INTO moments (tournament_id, type, title, question, options, correct_option, clock, at_sec, repeat_every_sec, repeat_max, open_sec, audience, audience_ref,
+                                late_join, enabled, sort, pick, prize, sponsor, prize_stock, winners_per_run, reserves, claim_hours, min_watch_sec, need_unmuted, pace_per_hour, draw_at_sec)
+           SELECT $2, type, title, question, options, correct_option, clock, at_sec, repeat_every_sec, repeat_max, open_sec,
+                  CASE WHEN audience = 'influencer' THEN 'all' ELSE audience END, NULL,
+                  late_join, enabled, sort, pick, prize, sponsor, prize_stock, winners_per_run, reserves, claim_hours, min_watch_sec, need_unmuted, pace_per_hour, draw_at_sec
+             FROM moments WHERE tournament_id = $1`,
+          [t.id, n.id],
+        );
+      }
+      return n;
+    });
+    await ensureInviteCodes(copy.id, userOf(req).id);
+    reply.status(201);
+    return { tournament: tournamentDto(copy) };
+  });
+
   app.patch('/api/tournaments/:id', { preHandler: user }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, idParam(req), 'manage');
     const body = z
       .object({
         name: z.string().trim().min(1).max(120).optional(),
         venue: z.string().trim().max(120).nullable().optional(),
+        startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
         autoFallback: z.boolean().optional(),
         archived: z.boolean().optional(),
         mode: z.enum(['laptop', 'cloud']).optional(),

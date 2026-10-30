@@ -1,4 +1,5 @@
 import { state, get, post, el, table, day, dialog, toast, guard, go } from './core.js';
+import { copyEvent } from './event.js';
 
 export const title = 'Events';
 
@@ -14,11 +15,23 @@ export async function render(view) {
       el('strong', { text: t.name }), eventTypes.find((e) => e.id === t.eventType)?.label ?? t.eventType, day(t.startsOn), t.venue ?? '–', t.mode === 'cloud' ? 'Cloud' : 'Laptop',
       el('span', { class: 'row' },
         el('a', { class: 'btn small', href: `/web/e/${t.id}`, onclick: (e) => { e.preventDefault(); e.stopPropagation(); go(`/web/e/${t.id}`); }, text: 'Open' }),
+        el('button', { class: 'btn small', onclick: (e) => { e.stopPropagation(); copyEvent(t.id, t)(); }, text: 'Copy' }),
         el('a', { class: 'btn small primary', href: `/web/e/${t.id}/control`, onclick: (e) => e.stopPropagation(), text: 'Control room' }))]),
       { onclick: (i) => go(`/web/e/${rows[i].id}`), empty: 'No events here yet.' }));
   };
   show.onchange = draw;
-  view.append(
+  const ob = await get(`/api/orgs/${state.orgId}/onboarding`).catch(() => null);
+  const checklist = ob && !ob.done ? el('div', { class: 'card', style: 'margin-bottom:14px' },
+    el('strong', { text: 'Your first show' }), el('span', { class: 'small muted', text: ' · about 5 minutes' }),
+    el('ol', { class: 'checklist' }, [
+      [true, 'Create your account'],
+      [ob.hasEvent, 'Create an event'],
+      [ob.steps.channel, 'Choose where to stream (your YouTube, the Go Live channel, or a stream key)'],
+      [ob.steps.cameras, 'Add a camera: scan the event QR with a phone'],
+      [ob.steps.test, 'Do a test: pick the camera in the control room'],
+      [ob.steps.live, 'Go live'],
+    ].map(([done, text]) => el('li', { class: done ? 'done' : '' }, el('span', { class: 'tick', text: done ? '✓' : '' }), text)))) : null;
+  view.append(checklist,
     el('div', { class: 'row', style: 'margin-bottom:12px' },
       el('span', { class: 'muted', text: org ? `${org.name} · ${org.role}` : '' }), el('div', { class: 'sp' }),
       el('div', { style: 'width:180px' }, show),

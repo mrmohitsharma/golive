@@ -154,13 +154,29 @@ async function streaming(body, id, s) {
           if (!v) return; await patch(`/api/tournaments/${id}/outputs`, { instagram: v }); reloadTab(id, 'streaming');
         }), text: p.hint ? `Key …${p.hint}` : 'Paste key' }) : null,
         p.platform !== 'youtube' ? el('button', { class: 'btn small', onclick: guard(async () => { await patch(`/api/tournaments/${id}/outputs`, { [p.platform]: { enabled: !p.enabled } }); reloadTab(id, 'streaming'); }), text: p.enabled ? 'Turn off' : 'Turn on' }) : null)])
-      .concat(outputs.destinations.map((d) => [el('strong', { text: d.label ?? d.platform }), d.enabled ? 'Yes' : 'No', d.error ? pill('bad', d.error) : pill(d.state === 'live' ? 'ok' : '', d.state),
+      .concat(outputs.destinations.map((d) => [el('span', {}, el('strong', { text: d.label ?? d.platform }), el('div', { class: 'small muted', text: [d.kind === 'channel' ? `YouTube channel · ${d.privacy ?? 'unlisted'}` : `${d.platform} · stream key${d.hint ? ' …' + d.hint : ''}`, d.vertical ? 'vertical 9:16' : null].filter(Boolean).join(' · ') })), d.enabled ? 'Yes' : 'No', d.error ? pill('bad', d.error) : pill(d.state === 'live' ? 'ok' : '', d.state),
         el('span', { class: 'row' },
           el('button', { class: 'btn small', onclick: guard(async () => { await patch(`/api/tournaments/${id}/destinations/${d.id}`, { enabled: !d.enabled }); reloadTab(id, 'streaming'); }), text: d.enabled ? 'Turn off' : 'Turn on' }),
+          d.kind === 'key' ? el('button', { class: 'btn small', onclick: guard(async () => { await patch(`/api/tournaments/${id}/destinations/${d.id}`, { vertical: !d.vertical }); reloadTab(id, 'streaming'); }), text: d.vertical ? 'Make 16:9' : 'Make 9:16' }) : null,
           el('button', { class: 'btn small danger', onclick: guard(async () => { await del(`/api/tournaments/${id}/destinations/${d.id}`); reloadTab(id, 'streaming'); }), text: 'Remove' }))]))),
     el('div', { class: 'row', style: 'margin-top:8px' }, el('button', { class: 'btn small', onclick: guard(async () => {
-      const v = await dialog({ title: 'Add a destination', text: 'Any service that gives an RTMP stream URL and key (another YouTube channel, a website player…).', ok: 'Add', fields: [{ name: 'label', label: 'Name', required: true }, { name: 'streamUrl', label: 'Stream URL', required: true }, { name: 'streamKey', label: 'Stream key', required: true }, { name: 'vertical', label: 'Vertical (9:16) for phones', type: 'checkbox' }] });
-      if (!v) return; await post(`/api/tournaments/${id}/destinations`, { kind: 'key', ...v }); reloadTab(id, 'streaming');
+      const chans = (await get(`/api/orgs/${s.tournament.orgId}/youtube/channels`).catch(() => ({ channels: [] }))).channels.filter((c) => !c.main);
+      const v = await dialog({ title: 'Add a destination', text: 'Stream to one more place at the same time: another YouTube channel your club connected (Club > Channels), or any service that gives a stream URL and key.', ok: 'Add', fields: [
+        { name: 'where', label: 'Where', type: 'select', value: chans.length ? 'ch:' + chans[0].id : 'key:youtube', options: [
+          ...chans.map((c) => ({ value: 'ch:' + c.id, label: `YouTube channel: ${c.title}` })),
+          { value: 'key:youtube', label: 'YouTube (stream key)' }, { value: 'key:facebook', label: 'Facebook (stream key)' }, { value: 'key:instagram', label: 'Instagram (stream key)' }, { value: 'key:other', label: 'Other (RTMP)' }] },
+        { name: 'label', label: 'Name (optional)' },
+        { name: 'privacy', label: 'Who can watch (connected YouTube channels)', type: 'select', value: 'unlisted', options: [{ value: 'public', label: 'Public' }, { value: 'unlisted', label: 'Unlisted (link only)' }, { value: 'private', label: 'Private' }] },
+        { name: 'streamUrl', label: 'Stream URL (stream key only)' }, { name: 'streamKey', label: 'Stream key (stream key only)' },
+        { name: 'vertical', label: 'Vertical 9:16 for phones (stream key only)', type: 'checkbox' }] });
+      if (!v) return;
+      const [kind, ref] = v.where.split(':');
+      if (kind === 'ch') await post(`/api/tournaments/${id}/destinations`, { kind: 'channel', channelId: ref, privacy: v.privacy, label: v.label || undefined });
+      else {
+        if (!v.streamKey) throw new Error('Paste the stream key.');
+        await post(`/api/tournaments/${id}/destinations`, { kind: 'key', platform: ref, streamUrl: v.streamUrl || undefined, streamKey: v.streamKey, label: v.label || undefined, vertical: v.vertical });
+      }
+      reloadTab(id, 'streaming');
     }), text: 'Add destination' }),
       billing ? el('span', { class: 'small muted', text: `${billing.destinations.used} of ${billing.destinations.limit} destinations used${billing.destinations.price ? ` · extra ones ${billing.destinations.price} credits` : ''}` }) : null,
       billing?.enabled ? el('button', { class: 'btn small', onclick: buySlots(id, 'destinations', billing, 'streaming'), text: 'Add destination slots' }) : null),
@@ -251,6 +267,15 @@ async function engagement(body, id) {
   body.append(frame);
 }
 
+export const copyEvent = (id, t) => guard(async () => {
+  const v = await dialog({ title: 'Copy event', ok: 'Copy', fields: [
+    { name: 'name', label: 'New event name', value: `${t.name} (copy)`, required: true }, { name: 'startsOn', label: 'Date (optional)', type: 'date' },
+    { name: 'games', label: 'Copy games and prizes', type: 'checkbox', value: true }, { name: 'players', label: 'Copy players', type: 'checkbox', value: false }] });
+  if (!v) return;
+  const r = await post(`/api/tournaments/${id}/copy`, { name: v.name, startsOn: v.startsOn || null, games: v.games, players: v.players });
+  toast('Event copied'); go(`/web/e/${r.tournament.id}`);
+});
+
 // ------------------------------------------------------------------ settings
 async function settings(body, id, s) {
   const t = s.tournament;
@@ -259,19 +284,23 @@ async function settings(body, id, s) {
   const check = (k, label) => { const i = el('input', { type: 'checkbox', name: k }); i.checked = Boolean(t[k]); return el('label', { class: 'check', style: 'margin:6px 0' }, i, label); };
   const form = el('form', { class: 'card', onsubmit: guard(async (e) => {
     e.preventDefault(); const x = e.target.elements;
-    await patch(`/api/tournaments/${id}`, { name: x.name.value.trim(), venue: x.venue.value.trim() || null, eventType: x.eventType.value, mode: x.mode.value,
+    await patch(`/api/tournaments/${id}`, { name: x.name.value.trim(), venue: x.venue.value.trim() || null, startsOn: x.startsOn.value || null, eventType: x.eventType.value, mode: x.mode.value,
       publicWatch: x.publicWatch.checked, chatEnabled: x.chatEnabled.checked, chatSlowSec: Number(x.chatSlowSec.value), autoFallback: x.autoFallback.checked });
     toast('Saved'); reloadTab(id, 'settings');
   }) },
     el('div', { class: 'form' },
       f('name', 'Event name', el('input', { name: 'name', value: t.name, required: true })),
       f('venue', 'Venue', el('input', { name: 'venue', value: t.venue ?? '' })),
+      f('startsOn', 'Date', el('input', { name: 'startsOn', type: 'date', value: t.startsOn ? String(t.startsOn).slice(0, 10) : '' })),
       f('eventType', 'Type', el('select', { name: 'eventType' }, eventTypes.map((e) => el('option', { value: e.id, selected: e.id === t.eventType || undefined, text: e.label })))),
       f('mode', 'Production', el('select', { name: 'mode' }, [['cloud', 'Cloud (no laptop)'], ['laptop', 'Laptop with OBS']].map(([v, l]) => el('option', { value: v, selected: v === t.mode || undefined, text: l })))),
       f('chatSlowSec', 'Seconds between messages from one viewer', el('input', { name: 'chatSlowSec', type: 'number', min: 0, max: 300, value: t.chatSlowSec }))),
     el('div', { style: 'margin-top:10px' }, check('publicWatch', 'Public watch page'), check('chatEnabled', 'Viewers can chat on the watch page'), check('autoFallback', 'Show the fallback screen when the on-air camera drops')),
     el('button', { class: 'btn primary', text: 'Save' }));
   body.append(form,
+    el('h2', { text: 'Copy this event' }),
+    el('div', { class: 'card' }, el('p', { class: 'small muted', text: 'Makes a new event with the same settings, graphics, course and games. Cameras, broadcasts, stream keys and viewers are not copied.' }),
+      el('button', { class: 'btn', onclick: copyEvent(id, t), text: 'Copy event' })),
     el('h2', { text: 'Archive' }),
     el('div', { class: 'card' }, el('p', { class: 'small muted', text: 'Archived events leave your list; their clips and reports stay.' }),
       el('button', { class: 'btn danger', onclick: guard(async () => { if (!(await confirmBox('Archive this event?', 'Invite links stop working.', 'Archive'))) return; await patch(`/api/tournaments/${id}`, { archived: true }); go('/web/events'); }), text: 'Archive event' })));

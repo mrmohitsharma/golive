@@ -329,6 +329,7 @@ export class Repo {
       chatEnabled?: boolean;
       chatSlowSec?: number;
       eventType?: string;
+      startsOn?: string | null;
     },
   ): Promise<TournamentRow | null> {
     return (
@@ -343,7 +344,8 @@ export class Repo {
              public_watch = COALESCE($8, public_watch),
              chat_enabled = COALESCE($9, chat_enabled),
              chat_slow_sec = COALESCE($10, chat_slow_sec),
-             event_type = COALESCE($11, event_type)
+             event_type = COALESCE($11, event_type),
+             starts_on = CASE WHEN $12::boolean THEN $13::date ELSE starts_on END
            WHERE id = $1 RETURNING *`,
           [
             id,
@@ -357,6 +359,8 @@ export class Repo {
             patch.chatEnabled ?? null,
             patch.chatSlowSec ?? null,
             patch.eventType ?? null,
+            patch.startsOn !== undefined,
+            patch.startsOn ?? null,
           ],
         )
       ).rows[0] ?? null
