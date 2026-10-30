@@ -31,7 +31,10 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
   const q = repo.db;
   const by = (req: FastifyRequest) => `admin:${userOf(req).email}`;
 
-  app.get('/admin', async (_req, reply) => {
+  // V7: the admin panel is part of the web app.
+  app.get('/admin', async (_req, reply) => reply.redirect('/web/admin', 302));
+  /** The V6 admin page, kept for a while in case it is needed. */
+  app.get('/admin/classic', async (_req, reply) => {
     if (!publicDir) throw new HttpError(500, 'missing_assets', 'Admin page assets are missing.');
     reply.type('text/html; charset=utf-8');
     reply.header('Cache-Control', 'no-store');

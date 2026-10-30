@@ -48,6 +48,11 @@ Streaming continues with the screen off (foreground service, "camera is live" no
 | Watch-page counts | Only people watching on our watch page are counted per viewer (influencer links, shares). People watching inside the YouTube app show only in YouTube's total. Counting is anonymous per browser: one person on two browsers counts twice; private windows count as new viewers. | Compare with YouTube's number in Reports. |
 | Games and prizes | Prize games are run by the organiser, who must follow Indian promotion rules (no purchase needed, terms published). Meta does not allow requiring a share to win, so sharing is optional. | Publish prize terms in the Studio; get a legal check before big prizes. |
 | SMS | Needs MSG91 with DLT-approved templates; until then the test sender only records messages. After the included messages, SMS stop when the wallet is empty (claim codes still go). | Approve the 4 DLT templates (DEPLOYMENT §3j). |
+| Refunds | Refunds go through Cashfree to the original payment method (a few days). Payments added by hand (admin credits) are not refunded through the panel. Tested against a fake Cashfree, not yet the sandbox. | Do one sandbox refund before production. |
+| GST invoices | Built for a single GSTIN; place of supply is the buyer's GSTIN state, or the seller's state when the buyer has no GSTIN. SAC and rate are settings, not advice. | Have your accountant check the first invoices. |
+| Cost and margin | Estimates from the rates entered in Settings and the usage we measure; AWS and MSG91 bills are not read automatically. Usage is counted by the billing meter, so with billing off it is not recorded. | Compare with the real bills monthly. |
+| Log in as | Support sessions last 1 hour and cannot reach admin pages; the admin's own access is checked on every request. | — |
+| Web control room | Shows the program and preview cameras as WebRTC previews (video only, no program audio); other cameras as thumbnails every 5 s. Needs the same WebRTC ports as the app. | Use headphones on the commentary feed if needed. |
 | Scorer conflicts | Two scorers entering the same player+hole: the last one received wins. | Assign one scorer per group. |
 
 ## Verification status

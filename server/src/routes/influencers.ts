@@ -156,7 +156,8 @@ export function registerInfluencerRoutes(app: FastifyInstance, ctx: Ctx) {
     reply.header('Content-Security-Policy', "frame-ancestors 'self'");
     return reply.send(fs.readFileSync(studioFile));
   };
-  app.get('/studio', sendStudio);
+  // V7: the event list lives in the web app; the Studio opens inside each event there.
+  app.get('/studio', async (_req, reply) => reply.redirect('/web/events', 302));
   app.get('/studio/:id', sendStudio);
 
   // ---------------------------------------------------------------- short links

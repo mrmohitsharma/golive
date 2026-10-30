@@ -105,6 +105,41 @@ Watch page order: one card at a time, director first, then stream, then viewer c
 
 Clocks: **viewer clock** = seconds this viewer actually watched (video playing, tab visible; continues on return). **Stream clock** = seconds since `tournaments.first_live_at` (first Go live; never reset). Viewers are anonymous (random browser id; only a salted hash of the /24 network is stored, to cap one network at `VIEW_NET_CAP` = 25).
 
+### Web app and super admin (V7)
+
+The web app is `/web` (one page app; assets at `/web-assets/<file>`). Platform admins see the Admin section; club owners and directors see their clubs and events. `/admin` redirects to `/web/admin` (the V6 page is at `/admin/classic`); `/studio` redirects to `/web/events`, and `/studio/<id>?embed=1` is shown inside the event page.
+
+Sessions: every account token is checked against the database (10 s cache): disabled accounts, `users.token_ver` (sign out everywhere) and removed admin rights apply at once. Every change (not GET) by a platform admin, or while an admin is logged in as someone, is written to `audit_log` before the reply is sent; keys named like pass/secret/token/key/otp are hidden.
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /api/admin/audit?q&actor&org&before` | admin | Audit log, newest first |
+| `POST /api/admin/users/:id/impersonate` | admin | 1-hour token as that user (`impersonatedBy` in `/api/me`); never as another admin; no admin rights inside |
+| `POST /api/impersonation/stop` | logged-in-as | Ends support mode (logged) |
+| `POST /api/admin/users/:id/sign-out`, `POST /api/me/sign-out-everywhere` | admin / user | Bump `token_ver` |
+| `GET /api/admin/dashboard` | admin | Live now, today/week/month, 30-day series, alerts |
+| `GET /api/admin/live-monitor`, `POST /api/admin/events/:id/stop` | admin | Live events with engine health and viewers; emergency stop |
+| `GET /api/admin/events?q&status&org` | admin | Events across all clubs |
+| `PATCH /api/admin/orgs/:id {name, notes, features}`, `GET …/extra`, `POST …/members {email, role}`, `POST …/transfer {userId}`, `DELETE /api/admin/orgs/:id {confirmName}` | admin | Club edit, feature switches (`cloud`, `viewership`; refused with `feature_off`), ownership, delete |
+| `GET /api/admin/users?q&filter`, `GET/PATCH/DELETE /api/admin/users/:id`, `POST /api/admin/users`, `POST …/reset-password` | admin | Users; one-time passwords; delete refused while sole owner (`sole_owner`) |
+| `GET/PUT/DELETE /api/admin/gateway`, `POST /api/admin/gateway/test` | admin | Cashfree keys (tested before saving, encrypted in `platform_secrets`, masked); wins over `.env` |
+| `GET /api/admin/transactions[.csv]`, `GET /api/admin/payments/:id`, `POST …/refund {amountInr, credits, note}`, `GET /api/admin/refunds`, `POST /api/admin/refunds/:id/refresh` | admin | Payments, refunds (credits taken back; returned if the refund fails) |
+| `GET /api/admin/ledger[.csv]` | admin | Wallet ledger of all clubs |
+| `GET/POST /api/admin/coupons`, `PATCH /api/admin/coupons/:code` | admin | Coupons: `percent_off` or `bonus_credits`, uses, once per club, minimum pack, validity |
+| `POST /api/orgs/:id/billing/coupon {packId, coupon}`; `coupon` on `…/billing/checkout` | owner/director | Coupon preview and use |
+| `GET/PUT /api/admin/invoice-settings`, `GET /api/admin/invoices[.csv]`, `POST /api/admin/invoices/backfill`, `GET /admin/invoices/:id` | admin | GST invoices and credit notes (CGST+SGST in the seller's state, else IGST; numbers per financial year) |
+| `GET /api/orgs/:id/invoices`, `GET /invoices/:id?token=` | owner | The club's invoices (printable) |
+| `GET /api/admin/payment-events?order` | admin | Every gateway webhook, signed or not, with the result |
+| `GET/PUT/DELETE /api/admin/sms`, `POST /api/admin/sms/test {phone}`, `GET /api/admin/messages` | admin | MSG91 key and template ids (encrypted, wins over `.env`), test SMS, message log and stats |
+| `GET /api/admin/viewership?days`, `GET /api/admin/wins?status` | admin | Platform viewership, games, prizes; prize audit (contacts masked) |
+| `GET /api/admin/chat?q&hidden`, `GET /api/admin/chat-bans`, `POST /api/admin/chat-bans/remove` | admin | Chat across events; unban |
+| `POST /api/public/data-requests {email, kind, details}`, `GET/PATCH /api/admin/data-requests` | public / admin | Data protection requests (3 per email per day) |
+| `GET/PUT /api/admin/platform {signupEnabled, costs}` | admin | Sign-up switch (applies at once), running costs |
+| `GET /api/admin/system` | admin | Health, disks, database, integrations, cost against revenue by month (`usage_daily`) |
+| `GET /api/admin/reports/:kind[.csv]?months` | admin | `revenue`, `usage`, `growth`, `viewership`, `sms`, `margin` |
+
+The web control room (`/web/e/<id>/control`) uses the same WebSocket (`subscribe`, `command`) and WHEP previews as the app.
+
 ## WebSocket
 
 Every frame is JSON with a `type`. Server → any client: `hello`, `error {code,message}`, `pong`.

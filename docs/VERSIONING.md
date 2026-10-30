@@ -14,7 +14,7 @@ v5.0, v6.0…   tags: frozen snapshots of each released version
 | V1 to V4 | (before this repo) | Multi-camera director, cloud OBS, multistreaming, billing |
 | V5 | `v5.0` | Viewer comments, admin panel, Cashfree, public website and legal pages, Go Live rename |
 | V6 | `v6.0` when released | On `v6-dev`: 5-minute onboarding and the viewership engine (influencers, games, prizes, reports) |
-| V7 | `v7.0` when released | In progress on `v7-dev` |
+| V7 | `v7.0` when released | On `v7-dev`: the web app — super admin (clubs, users, events, money, SMS, safety, system, reports, audit log, log in as) and the owner/director web with the control room |
 
 ## Working on the next version
 

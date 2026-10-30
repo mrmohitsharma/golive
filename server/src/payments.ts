@@ -415,7 +415,16 @@ export class PaymentsService {
       await this.repo.db.query('UPDATE refunds SET provider_ref = $2 WHERE id = $1', [row.id, String(r.cf_refund_id ?? '')]);
       return this.applyRefundStatus(row, r.refund_status ?? 'PENDING', null);
     } catch (err) {
-      return this.applyRefundStatus(row, 'FAILED', (err as Error).message);
+      // The request may have reached Cashfree even if we got no answer: ask before giving credits back.
+      const message = (err as Error).message;
+      try {
+        const r = await this.call<{ refund_status?: string; status_description?: string }>('GET', `/orders/${encodeURIComponent(p.order_id)}/refunds/${encodeURIComponent(refundId)}`);
+        return this.applyRefundStatus(row, r.refund_status ?? 'PENDING', r.status_description ?? message);
+      } catch (check) {
+        if (/not found/i.test((check as Error).message)) return this.applyRefundStatus(row, 'FAILED', message);
+        await this.repo.db.query('UPDATE refunds SET error = $2 WHERE id = $1', [row.id, `Not confirmed yet: ${message}`]);
+        return (await this.repo.db.query<RefundRow>('SELECT * FROM refunds WHERE id = $1', [row.id])).rows[0];
+      }
     }
   }
 

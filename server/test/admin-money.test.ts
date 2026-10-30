@@ -22,11 +22,12 @@ function fakeCashfree() {
     let m = url.pathname.match(/^\/pg\/orders\/([^/]+)\/refunds$/);
     if (m && init?.method === 'POST') {
       const b = JSON.parse(String(init.body));
+      if (b.refund_note === 'reject me') return json(400, { message: 'refund amount is greater than refundable amount' });
       refunds.set(b.refund_id, { amount: b.refund_amount, status: 'PENDING', order: m[1] });
       return json(200, { cf_refund_id: 77, refund_status: 'PENDING' });
     }
     m = url.pathname.match(/^\/pg\/orders\/([^/]+)\/refunds\/([^/]+)$/);
-    if (m) return json(200, { refund_status: refunds.get(m[2])?.status ?? 'PENDING' });
+    if (m) return refunds.has(m[2]) ? json(200, { refund_status: refunds.get(m[2])!.status }) : json(404, { message: 'refund not found' });
     m = url.pathname.match(/^\/pg\/orders\/([^/]+)$/);
     if (m) {
       const o = orders.get(m[1]);
@@ -175,8 +176,12 @@ describe('V7 money: gateway from admin, transactions, refunds, coupons, GST invo
     await fetch(`${h.baseUrl}/api/payments/cashfree/webhook`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-webhook-timestamp': ts, 'x-webhook-signature': sig }, body });
     await fetch(`${h.baseUrl}/api/payments/cashfree/webhook`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-webhook-timestamp': ts, 'x-webhook-signature': 'forged' }, body });
     assert.equal(await balance(), before - 200, 'failed refund: 300 credits returned');
+    // Cashfree refuses the request outright: nothing was refunded there, so the credits come straight back.
+    const r3 = (await expectOk(api(h, 'POST', `/api/admin/payments/${p.id}/refund`, { amountInr: 10, credits: 10, note: 'reject me' }, admin.token))).refund;
+    assert.equal(r3.status, 'failed');
+    assert.equal(await balance(), before - 200);
     const d = await expectOk(api(h, 'GET', `/api/admin/payments/${p.id}`, undefined, admin.token));
-    assert.deepEqual(d.refunds.map((r: any) => r.status), ['failed', 'success']);
+    assert.deepEqual(d.refunds.map((r: any) => r.status), ['failed', 'failed', 'success']);
     assert.equal(d.payment.refundedInr, 200);
     const ev = await expectOk(api(h, 'GET', `/api/admin/payment-events?order=${p.orderId}`, undefined, admin.token));
     assert.deepEqual(ev.events.map((e: any) => `${e.signatureOk}:${e.result}`), ['false:rejected: bad signature', 'true:refund failed']);

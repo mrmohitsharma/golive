@@ -274,6 +274,18 @@ MSG91_TEMPLATE_DRAW=...
 
 Influencers, games, prizes and "Remind me" are a paid add-on per event when billing is on: 500 credits with 500 SMS included, then 1 credit per SMS (set `viewershipPrice`, `viewershipMessages`, `messagePrice` in /admin > Pricing). Organisers turn it on in the Studio (banner on every tab). Viewer counts and Reports are always free.
 
+## 3k. The web app and super admin (V7)
+
+Everything is at `https://<your server>/web`, with the same login as the app.
+
+- **Make yourself admin** once: set `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` before the first start, or run `UPDATE users SET is_platform_admin = true WHERE email = '<you>';`. After that, add admins in Users > Make admin.
+- **Payments:** Admin > Money > Payment gateway. Paste the Cashfree App ID and Secret, choose Sandbox or Production, Save (the keys are tested first). Add the webhook URL shown there in the Cashfree dashboard (payment and refund events). Keys in `.env` still work; keys saved in the panel win.
+- **GST invoices:** Admin > Money > GST invoices. Fill in the legal name, address, GSTIN, state code, SAC and rate (check with your accountant), switch on, then "Issue for earlier payments".
+- **SMS:** Admin > SMS. Paste the MSG91 auth key and the 4 template ids (the DLT texts are listed there), send a test SMS.
+- **Sign-up:** Admin > Settings. Close it for an invite-only launch (then create clubs in Users > Add user).
+- **Costs:** Admin > Settings > Running costs (servers per month, cloud engine per hour, bandwidth per camera-hour, SMS). Admin > System shows margin by month.
+- **Migrations 016–019** run on start (sessions and audit log, club features, money, platform settings and usage).
+
 ## 4. Cloud mode (OBS on the server)
 
 ```bash

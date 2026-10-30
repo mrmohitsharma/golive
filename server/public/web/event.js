@@ -45,7 +45,7 @@ async function overview(body, id, s) {
     el('h2', { text: 'Get on air' }),
     el('div', { class: 'card' },
       el('ol', { style: 'margin:0;padding-left:20px;line-height:1.9' },
-        el('li', {}, 'Add cameras: phones scan the camera QR on the right (or open the invite link).'),
+        el('li', {}, 'Add cameras: phones scan the camera QR below (or open the invite link).'),
         el('li', {}, prod.mode === 'cloud' ? 'Start the show: we start the cloud mixer and the YouTube broadcast.' : 'Run the Go Live agent with OBS on your laptop (Streaming tab), then start the show.'),
         el('li', {}, 'Open the control room, pick a camera and press Go live.')),
       el('div', { class: 'row', style: 'margin-top:12px' },
