@@ -28,6 +28,7 @@ const ROUTES = [
   { path: '/web/channels', page: 'club-channels', role: 'owner', nav: ['Club', 'Channels'] },
   { path: '/web/wallet', page: 'club-wallet', role: 'club', nav: ['Club', 'Wallet'] },
   { path: '/web/e/:id', page: 'event', role: 'any' },
+  { path: '/web/e/:id/control', page: 'control', role: 'any' },
   { path: '/web/e/:id/:tab', page: 'event', role: 'any' },
   { path: '/web/profile', page: 'profile', role: 'any', nav: ['Account', 'Profile'] },
 ];
