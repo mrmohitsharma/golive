@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../context.js';
+import { requireClubFeature } from './admin-web.js';
 import { requireAuth } from '../auth.js';
 import { requireTournament } from '../authz.js';
 import { HttpError } from '../errors.js';
@@ -138,6 +139,7 @@ export function registerInfluencerRoutes(app: FastifyInstance, ctx: Ctx) {
   /** Turns on Influencers & games for one event (credits from the club's wallet). */
   app.post('/api/tournaments/:id/billing/viewership', { preHandler: user }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, tid(req), 'manage');
+    await requireClubFeature(repo, t.org_id, 'viewership');
     await ctx.billing.buyViewership(t, (req.principal as { email?: string }).email ?? 'organiser');
     const fresh = (await repo.tournamentById(t.id))!;
     return ctx.billing.viewershipState(fresh, await ctx.messenger.countForEvent(t.id));

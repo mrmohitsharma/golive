@@ -5,6 +5,7 @@ import { EVENT_TYPE_IDS, EVENT_TYPES, eventProfile, initialGraphics } from '../e
 import { playableVideo } from '../viewership.js';
 import { z } from 'zod';
 import type { Ctx } from '../context.js';
+import { requireClubFeature } from './admin-web.js';
 import { HttpError } from '../errors.js';
 import { GUEST_ROLES, requireAuth, userOf } from '../auth.js';
 import { requireOrg, requireTournament, roleInTournament } from '../authz.js';
@@ -101,6 +102,7 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
         chatSlowSec: z.number().int().min(0).max(300).optional(),
       })
       .parse(req.body);
+    if (body.mode === 'cloud' && t.production_mode !== 'cloud') await requireClubFeature(repo, t.org_id, 'cloud');
     if (body.mode && body.mode !== t.production_mode) {
       const cs = cloud.state(t).cloud.status;
       if (cs === 'running' || cs === 'starting') throw new HttpError(409, 'engine_running', 'Stop the cloud engine before changing production mode.');
@@ -361,6 +363,7 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
   // ---------------------------------------------------------------- cloud production
   app.post('/api/tournaments/:id/cloud-engine/start', { preHandler: user }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
+    await requireClubFeature(repo, t.org_id, 'cloud');
     const allowed = await ctx.billing.checkGoLive(t);
     if (!allowed.ok) throw new HttpError(402, 'billing_blocked', allowed.error);
     return { production: await cloud.startEngine(t) };
@@ -381,6 +384,7 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/tournaments/:id/start-show', { preHandler: user }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
     const body = z.object({ privacy: z.enum(['public', 'unlisted', 'private']).default('unlisted') }).parse(req.body ?? {});
+    if (t.production_mode === 'cloud') await requireClubFeature(repo, t.org_id, 'cloud');
     const allowed = await ctx.billing.checkGoLive(t);
     if (!allowed.ok) throw new HttpError(402, 'billing_blocked', allowed.error);
     const problems: string[] = [];

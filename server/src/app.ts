@@ -48,6 +48,7 @@ import { PrizesService } from './prizes.js';
 import { registerPrizeRoutes } from './routes/prizes.js';
 import { registerReportRoutes } from './routes/reports.js';
 import { registerWebRoutes } from './routes/web.js';
+import { registerAdminWebRoutes } from './routes/admin-web.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -192,6 +193,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerPrizeRoutes(fastify, ctx);
   registerReportRoutes(fastify, ctx);
   registerWebRoutes(fastify, ctx);
+  registerAdminWebRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook

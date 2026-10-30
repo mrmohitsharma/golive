@@ -1,4 +1,10 @@
 // Shared helpers for the Go Live web app: session, API calls, DOM, formatting, dialogs.
+// Pages pass optional parts as null/false; never let them render as the text "null".
+for (const m of ['append', 'replaceChildren', 'prepend']) {
+  const orig = Element.prototype[m];
+  Element.prototype[m] = function (...kids) { return orig.apply(this, kids.filter((k) => k != null && k !== false)); };
+}
+
 export const state = { token: null, me: null, orgs: [], orgId: null, impersonating: null };
 
 const store = {
@@ -116,6 +122,8 @@ export const ago = (iso) => {
   if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago';
   if (s < 86400) return Math.floor(s / 3600) + ' h ago'; return Math.floor(s / 86400) + ' d ago';
 };
+/** Label/value pairs in a card, for text that is too long for a stat tile. */
+export const facts = (pairs) => el('div', { class: 'card facts' }, pairs.map(([k, v]) => el('div', {}, el('label', { text: k }), el('div', {}, v))));
 export const stat = (v, l, alert = false) => el('div', { class: 'stat' + (alert ? ' alert' : '') }, el('div', { class: 'v', text: v }), el('div', { class: 'l', text: l }));
 
 /** table(['Name', {t:'Amount', n:true}], rows.map(r => [cells...]), {onclick: i => ...}) */
@@ -128,3 +136,37 @@ export function table(head, rows, opts = {}) {
 }
 
 export const go = (path) => { history.pushState({}, '', path); window.dispatchEvent(new Event('gl:route')); };
+
+/** Admin support: open the web app as this user for 1 hour (recorded in the audit log). */
+export async function logInAs(userId) {
+  const r = await post(`/api/admin/users/${userId}/impersonate`);
+  store.set('gl.adminToken', state.token);
+  store.set('baas.token', r.token);
+  store.set('gl.impEnds', r.expiresAt);
+  const club = r.orgs.find((o) => ['owner', 'director'].includes(o.role));
+  if (club) store.set('gl.org', club.id);
+  location.href = '/web/events';
+}
+
+/** A small bar chart (SVG) of one measure over days; the last value is highlighted. */
+export function barChart(rows, { value, label, fmt = (v) => v, height = 160 }) {
+  const W = 760, H = height, pad = 24, max = Math.max(1, ...rows.map(value));
+  const bw = (W - pad * 2) / rows.length;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H + 22}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('role', 'img');
+  const mk = (tag, a, text) => { const n = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(a)) n.setAttribute(k, v); if (text != null) n.textContent = text; return n; };
+  svg.append(mk('line', { x1: pad, x2: W - pad, y1: H, y2: H, stroke: '#2b3237' }));
+  rows.forEach((r, i) => {
+    const v = value(r), h = (v / max) * (H - 20);
+    const rect = mk('rect', { x: pad + i * bw + 2, y: H - h, width: Math.max(2, bw - 4), height: h, rx: 2, fill: i === rows.length - 1 ? '#c9a227' : '#3a444b' });
+    rect.append(mk('title', {}, `${label(r)}: ${fmt(v)}`));
+    svg.append(rect);
+  });
+  svg.append(mk('text', { x: pad, y: H + 16, fill: '#98a39e', 'font-size': 11 }, label(rows[0])));
+  svg.append(mk('text', { x: W - pad, y: H + 16, fill: '#98a39e', 'font-size': 11, 'text-anchor': 'end' }, label(rows.at(-1))));
+  svg.append(mk('text', { x: pad, y: 12, fill: '#98a39e', 'font-size': 11 }, 'max ' + fmt(max)));
+  return svg;
+}

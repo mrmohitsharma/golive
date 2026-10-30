@@ -1,25 +1,39 @@
-import { get, el, stat, inr, num } from './core.js';
+import { get, el, stat, inr, num, go, barChart } from './core.js';
 
 export const title = 'Dashboard';
 
 export async function render(view) {
-  const o = await get('/api/admin/overview');
-  view.append(
-    el('div', { class: 'grid' },
-      stat(o.liveNow, 'Live now'),
-      stat(o.clubs, 'Clubs'),
-      stat(o.suspended, 'Suspended clubs', o.suspended > 0),
-      stat(o.tournamentsThisMonth, 'Events this month'),
-      stat(inr(o.revenueThisMonthInr), 'Revenue this month'),
-      stat(inr(o.revenueTotalInr), 'Revenue all time'),
-      stat(num(o.creditsSpentThisMonth), 'Credits spent this month'),
-      stat(num(o.creditsHeldByClubs), 'Credits held by clubs')),
-    el('h2', { text: 'Sign-up to first live (last 90 days)' }),
-    el('div', { class: 'grid' },
-      stat(o.onboarding.signups, 'Sign-ups'),
-      stat(o.onboarding.reached.event, 'Created an event'),
-      stat(o.onboarding.reached.camera, 'Added a camera'),
-      stat(o.onboarding.reached.live, 'Went live'),
-      stat(o.onboarding.medianMinutes.live == null ? '–' : o.onboarding.medianMinutes.live + ' min', 'Median time to first live')),
-    el('p', { class: 'small muted', text: `Billing ${o.billingEnabled ? 'on' : 'off'} · Payments ${o.paymentsEnabled ? 'on (' + o.cashfreeMode + ')' : 'off'}` }));
+  const load = async () => {
+    const d = await get('/api/admin/dashboard');
+    const a = d.alerts;
+    const alerts = [
+      a.failedPayments24h && [`${a.failedPayments24h} failed payment${a.failedPayments24h > 1 ? 's' : ''} in the last 24 h`, '/web/admin/money'],
+      a.stuckPayments && [`${a.stuckPayments} payment${a.stuckPayments > 1 ? 's' : ''} started but not confirmed (over 30 min)`, '/web/admin/money'],
+      a.failedMessages24h && [`${a.failedMessages24h} SMS failed in the last 24 h`, null],
+      a.suspendedClubs && [`${a.suspendedClubs} club${a.suspendedClubs > 1 ? 's' : ''} suspended`, '/web/admin/clubs'],
+      a.lowBalanceActiveClubs && [`${a.lowBalanceActiveClubs} active club${a.lowBalanceActiveClubs > 1 ? 's' : ''} with under 100 credits`, '/web/admin/clubs'],
+      ...a.engineWarnings.map((w) => [`${w.name}: ${w.text}`, '/web/admin/live']),
+    ].filter(Boolean);
+    const period = (p, label) => el('div', {},
+      el('h2', { text: label }),
+      el('div', { class: 'grid' }, stat(inr(p.revenueInr), 'Revenue'), stat(p.payments, 'Payments'), stat(p.newClubs, 'New clubs'), stat(p.newEvents, 'New events'),
+        stat(p.eventsWentLive, 'Events that went live'), stat(num(p.creditsSpent), 'Credits used'), stat(num(p.watchMinutes), 'Watch-page minutes')));
+    view.replaceChildren(
+      el('div', { class: 'grid' },
+        stat(d.now.liveEvents, 'Live now'), stat(d.now.cameras, 'Cameras on live events'),
+        stat(num(d.now.watchingOnPage), 'Watching on our pages'), stat(num(d.now.watchingOnYoutube), 'Watching on YouTube')),
+      alerts.length
+        ? el('div', { class: 'banner warn' }, el('strong', { text: 'Needs attention' }), el('ul', { style: 'margin:6px 0 0;padding-left:18px' },
+            alerts.map(([t, href]) => el('li', {}, href ? el('a', { href, onclick: (e) => { e.preventDefault(); go(href); }, text: t }) : t))))
+        : el('div', { class: 'banner', style: 'border:1px solid var(--line)', text: 'All clear: no failed payments, SMS failures or engine warnings.' }),
+      period(d.today, 'Today'),
+      period(d.month, 'This month'),
+      el('h2', { text: 'Revenue, last 30 days' }),
+      el('div', { class: 'card' }, barChart(d.series, { value: (r) => r.revenueInr, label: (r) => r.day.slice(5), fmt: inr })),
+      el('h2', { text: 'New events, last 30 days' }),
+      el('div', { class: 'card' }, barChart(d.series, { value: (r) => r.newEvents, label: (r) => r.day.slice(5), height: 110 })));
+  };
+  await load();
+  const t = setInterval(() => load().catch(() => {}), 30000);
+  return () => clearInterval(t);
 }

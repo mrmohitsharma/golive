@@ -7,6 +7,12 @@ import { state, store, get, post, el, go, toast, signOut, when } from './core.js
  */
 const ROUTES = [
   { path: '/web/admin', page: 'admin-dashboard', role: 'admin', nav: ['Admin', 'Dashboard'] },
+  { path: '/web/admin/live', page: 'admin-live', role: 'admin', nav: ['Admin', 'Live monitor'] },
+  { path: '/web/admin/clubs', page: 'admin-clubs', role: 'admin', nav: ['Admin', 'Clubs'] },
+  { path: '/web/admin/clubs/:id', page: 'admin-club', role: 'admin' },
+  { path: '/web/admin/users', page: 'admin-users', role: 'admin', nav: ['Admin', 'Users'] },
+  { path: '/web/admin/users/:id', page: 'admin-user', role: 'admin' },
+  { path: '/web/admin/events', page: 'admin-events', role: 'admin', nav: ['Admin', 'Events'] },
   { path: '/web/admin/audit', page: 'admin-audit', role: 'admin', nav: ['Admin', 'Audit log'] },
   { path: '/web/events', page: 'club-events', role: 'club', nav: ['Club', 'Events'] },
   { path: '/web/profile', page: 'profile', role: 'any', nav: ['Account', 'Profile'] },
