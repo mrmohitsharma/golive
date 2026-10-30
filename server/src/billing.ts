@@ -272,6 +272,15 @@ export class BillingService {
     return ok;
   }
 
+  /** Takes credits back for a refund (only if the wallet has them). Returns false if not enough. */
+  async takeBack(c: pg.PoolClient, orgId: string, cc: number, tx: { ref: string; note: string; by: string }): Promise<boolean> {
+    return (await this.debit(c, orgId, cc, { kind: 'refund', ref: tx.ref, note: tx.note, by: tx.by })) !== null;
+  }
+
+  async walletChangedPublic(orgId: string): Promise<void> {
+    await this.walletChanged(orgId);
+  }
+
   /** CoGolfers staff add (or remove, negative) credits by hand. */
   async adminAdjust(orgId: string, credits: number, note: string, by: string): Promise<number> {
     const cc = toCc(credits);

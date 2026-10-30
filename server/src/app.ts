@@ -11,6 +11,8 @@ import { Thumbnailer } from './thumbnails.js';
 import { HttpError, errorBody } from './errors.js';
 import { bearerFrom, hashPassword, setSessionCheck, verifyPrincipal } from './auth.js';
 import { Sessions } from './sessions.js';
+import { PlatformSecrets } from './secrets.js';
+import { InvoiceService } from './invoices.js';
 import { decideMediaAuth } from './media.js';
 import { Sealer, constantTimeEqual } from './crypto.js';
 import { YouTubeService } from './youtube.js';
@@ -49,6 +51,7 @@ import { registerPrizeRoutes } from './routes/prizes.js';
 import { registerReportRoutes } from './routes/reports.js';
 import { registerWebRoutes } from './routes/web.js';
 import { registerAdminWebRoutes } from './routes/admin-web.js';
+import { registerAdminMoneyRoutes } from './routes/admin-money.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -103,7 +106,11 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const destinations = new DestinationsService(config, repo, sealer, youtube);
   const outputs = new OutputsService(config, repo, sealer, youtube, facebook, relay, log, destinations, billing);
   billing.destinationCounter = (t) => outputs.destinationCount(t);
-  const payments = new PaymentsService(config, repo, billing, cashfreeFetch);
+  const secrets = new PlatformSecrets(repo, sealer);
+  const invoices = new InvoiceService(repo);
+  const payments = new PaymentsService(config, repo, billing, cashfreeFetch, secrets);
+  payments.invoices = invoices;
+  await payments.reload();
   billing.hooks = {
     streaming: () => hub.streamingTournaments(),
     alert: (tid, level, message) => hub.alert(tid, level, message),
@@ -151,7 +158,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
   const googleSignIn = new GoogleSignIn(config, googleFetch);
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions, secrets, invoices };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -194,6 +201,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerReportRoutes(fastify, ctx);
   registerWebRoutes(fastify, ctx);
   registerAdminWebRoutes(fastify, ctx);
+  registerAdminMoneyRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook

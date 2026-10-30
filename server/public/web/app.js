@@ -13,6 +13,8 @@ const ROUTES = [
   { path: '/web/admin/users', page: 'admin-users', role: 'admin', nav: ['Admin', 'Users'] },
   { path: '/web/admin/users/:id', page: 'admin-user', role: 'admin' },
   { path: '/web/admin/events', page: 'admin-events', role: 'admin', nav: ['Admin', 'Events'] },
+  { path: '/web/admin/money', page: 'admin-money', role: 'admin', nav: ['Admin', 'Money'] },
+  { path: '/web/admin/money/:tab', page: 'admin-money', role: 'admin' },
   { path: '/web/admin/audit', page: 'admin-audit', role: 'admin', nav: ['Admin', 'Audit log'] },
   { path: '/web/events', page: 'club-events', role: 'club', nav: ['Club', 'Events'] },
   { path: '/web/profile', page: 'profile', role: 'any', nav: ['Account', 'Profile'] },

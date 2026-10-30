@@ -6,6 +6,7 @@ import { requireAuth, userOf } from '../auth.js';
 import { requireOrg, requireTournament } from '../authz.js';
 import { fromCc, txDto } from '../billing.js';
 import { paymentDto, type PaymentRow } from '../payments.js';
+import { invoiceDto, invoiceHtml } from '../invoices.js';
 
 const uuid = z.string().uuid();
 const idParam = (req: { params: unknown }) => uuid.parse((req.params as { id: string }).id);
@@ -83,14 +84,39 @@ export function registerBillingRoutes(app: FastifyInstance, ctx: Ctx) {
     const orgId = idParam(req);
     await requireOrg(repo, req.principal!, orgId, 'create');
     const u = userOf(req);
-    const body = z.object({ packId: z.string().min(1).max(32), phone: phone.optional() }).parse(req.body);
+    const body = z.object({ packId: z.string().min(1).max(32), phone: phone.optional(), coupon: z.string().trim().max(40).nullish() }).parse(req.body);
     const b = await billing.orgBilling(orgId);
     const mobile = body.phone ?? b.billing_phone;
     if (!mobile) throw new HttpError(400, 'phone_required', 'Enter a mobile number for the payment receipt.');
     if (body.phone && !b.billing_phone) await billing.updateOrgBilling(orgId, { phone: body.phone });
-    const r = await payments.checkout(orgId, u, body.packId, mobile);
+    const r = await payments.checkout(orgId, u, body.packId, mobile, body.coupon);
     reply.status(201);
     return { payment: paymentDto(r.payment), checkoutUrl: r.checkoutUrl };
+  });
+
+  /** Checks a coupon against a pack before paying: the price and credits it gives. */
+  app.post('/api/orgs/:id/billing/coupon', { preHandler: user }, async (req) => {
+    const orgId = idParam(req);
+    await requireOrg(repo, req.principal!, orgId, 'create');
+    const body = z.object({ packId: z.string().min(1).max(32), coupon: z.string().trim().min(1).max(40) }).parse(req.body);
+    const q = await payments.quote(orgId, body.packId, body.coupon);
+    return { listInr: q.listInr, amountInr: q.amountInr, discountInr: q.discountInr, credits: q.credits, bonusCredits: q.bonusCredits, description: q.coupon?.description ?? null };
+  });
+
+  /** GST invoices and credit notes of the club (owners). */
+  app.get('/api/orgs/:id/invoices', { preHandler: user }, async (req) => {
+    const orgId = idParam(req);
+    await requireOrg(repo, req.principal!, orgId, 'admin');
+    return { invoices: (await ctx.invoices.list({ orgId, limit: 200 })).map(invoiceDto) };
+  });
+
+  /** A printable invoice. Opened in a browser tab, so the session token may come as ?token=. */
+  app.get('/invoices/:id', { preHandler: user }, async (req, reply) => {
+    const inv = await ctx.invoices.byId(idParam(req));
+    if (!inv) throw new HttpError(404, 'not_found', 'Invoice not found.');
+    await requireOrg(repo, req.principal!, inv.org_id, 'admin');
+    reply.type('text/html; charset=utf-8').header('Cache-Control', 'no-store');
+    return invoiceHtml(inv);
   });
 
   /** The app polls this after the browser checkout, to refresh the balance. */
@@ -124,7 +150,7 @@ export function registerBillingRoutes(app: FastifyInstance, ctx: Ctx) {
     const summary = `<h1>Buy credits</h1><div class="sub">${esc(org?.name ?? '')}</div><div class="amt">₹${Number(p.amount_inr).toLocaleString('en-IN')}</div><div class="sub">${fromCc(p.credits_cc).toLocaleString('en-IN')} credits</div>`;
     if (p.status === 'paid') return page(reply, 'Paid', `${summary}<p class="ok">Already paid. You can close this page.</p>`);
     if (p.status !== 'created' || !p.session_id) return page(reply, 'Payment', `${summary}<p class="bad">This payment link has expired. Start again from the app.</p>`);
-    const mode = config.CASHFREE_ENV === 'production' ? 'production' : 'sandbox';
+    const mode = payments.mode;
     return page(
       reply,
       'Buy credits',
@@ -166,18 +192,41 @@ document.getElementById('pay').onclick = function () {
     inst.post('/api/payments/cashfree/webhook', async (req, reply) => {
       const raw = typeof req.body === 'string' ? req.body : '';
       const h = req.headers;
-      if (!payments.verifyWebhook(raw, h['x-webhook-timestamp'] as string | undefined, h['x-webhook-signature'] as string | undefined)) {
-        req.log.warn('cashfree webhook with a bad signature');
-        return reply.status(401).send({ ok: false });
-      }
-      let orderId: string | undefined;
+      let parsed: any = null;
       try {
-        orderId = JSON.parse(raw)?.data?.order?.order_id;
+        parsed = JSON.parse(raw);
       } catch {
         /* ignore */
       }
-      const p = orderId ? await payments.byOrder(orderId) : null;
-      if (p) await payments.confirm(p).catch((err) => req.log.warn({ err: (err as Error).message, orderId }, 'payment confirm failed'));
+      const type: string | null = parsed?.type ?? null;
+      const orderId: string | undefined = parsed?.data?.order?.order_id ?? parsed?.data?.refund?.order_id;
+      const sigOk = payments.verifyWebhook(raw, h['x-webhook-timestamp'] as string | undefined, h['x-webhook-signature'] as string | undefined);
+      // Every webhook is logged, signed or not, so support can see what Cashfree sent.
+      const log = (result: string) =>
+        repo.db
+          .query('INSERT INTO payment_events (type, order_id, signature_ok, result, body) VALUES ($1, $2, $3, $4, $5)', [type, orderId ?? null, sigOk, result, parsed ? JSON.stringify(parsed) : null])
+          .catch((err) => req.log.warn({ err }, 'payment event log failed'));
+      if (!sigOk) {
+        req.log.warn('cashfree webhook with a bad signature');
+        await log('rejected: bad signature');
+        return reply.status(401).send({ ok: false });
+      }
+      let result = 'ignored';
+      try {
+        const refundId: string | undefined = parsed?.data?.refund?.refund_id;
+        if (refundId) {
+          const r = await payments.refundByRefundId(refundId);
+          if (r) result = `refund ${(await payments.refreshRefund(r)).status}`;
+        } else {
+          const p = orderId ? await payments.byOrder(orderId) : null;
+          if (p) result = `payment ${(await payments.confirm(p)).status}`;
+          else result = 'unknown order';
+        }
+      } catch (err) {
+        result = `error: ${(err as Error).message}`;
+        req.log.warn({ err: (err as Error).message, orderId }, 'payment confirm failed');
+      }
+      await log(result);
       return { ok: true };
     });
   });
