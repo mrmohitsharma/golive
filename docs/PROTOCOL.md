@@ -137,8 +137,20 @@ Sessions: every account token is checked against the database (10 s cache): disa
 | `GET/PUT /api/admin/platform {signupEnabled, costs}` | admin | Sign-up switch (applies at once), running costs |
 | `GET /api/admin/system` | admin | Health, disks, database, integrations, cost against revenue by month (`usage_daily`) |
 | `GET /api/admin/reports/:kind[.csv]?months` | admin | `revenue`, `usage`, `growth`, `viewership`, `sms`, `margin` |
+| `PATCH /api/me {name}`, `POST /api/me/password {currentPassword, newPassword}` | user | Own name; password change returns a new token and signs out other devices |
+| `POST /api/auth/forgot {email}`, `POST /api/auth/reset {token, password}` | public | Reset link by email (1 hour, single use, 3 per hour; same answer whether the email exists or not). Page: `/reset-password` |
+| `GET/PUT /api/admin/email`, `POST /api/admin/email/test {to}`, `GET /api/admin/emails?kind&status` | admin | SMTP settings (password encrypted), test email, email log (sent, failed, not sent) |
+| `POST /api/orgs/:id/billing/checkout {…, returnTo}` | owner/director | `returnTo` is a `/web/...` path; after paying, `/pay/:id/done` goes back there with `?paid=<id>` |
+| `POST /api/tournaments/:id/copy {name, startsOn?, players, games}` | owner/director | Copy an event: settings, holes, optionally players and games; new keys, join codes and invite codes |
+| `POST /api/tournaments/:id/destinations {kind: 'channel', channelId, privacy}` | owner/director | Add a connected YouTube channel as a destination (besides stream keys) |
+| `POST /api/support/tickets {name?, email?, subject, category, priority, message, eventId?, files[]}` | anyone | Raise a ticket. Signed-in members skip name/email and may link one of their events. Visitors: max 5 a day per email or address, `urgent` becomes `high`. Files: data URLs, png/jpeg/webp/gif/pdf, 5 × 5 MB |
+| `GET /api/support/t/:key`, `POST /api/support/t/:key/messages {body, files}`, `GET /api/support/t/:key/files/:fid` | link holder | The requester's private view and replies (a reply reopens it; refused when closed) |
+| `GET /api/support/mine` | user | My tickets |
+| `GET /api/admin/tickets?status&priority&category&assigned&q`, `GET /api/admin/tickets/:id`, `POST …/messages {body, internal, files, status}`, `PATCH …/:id {status, priority, category, assignedTo}`, `GET …/files/:fid` | admin | Ticket inbox and thread; internal notes; changes logged as internal system notes; emails on reply, assignment, resolve and close |
 
-The web control room (`/web/e/<id>/control`) uses the same WebSocket (`subscribe`, `command`) and WHEP previews as the app.
+The web control room (`/web/e/<id>/control`) uses the same WebSocket (`subscribe`, `command`) and WHEP previews as the app. It can also send the browser's microphone as a commentator over WHIP (`POST /api/tournaments/:id/commentators/register` for the bearer), set per-camera levels, commentary delay and ducking, leaderboard size and category, and the hole card.
+
+Emails (`emails` table): welcome, password reset, payment receipt, refund, low balance (under 100 credits, at most daily, again only after a top-up), club suspended, and ticket updates. Without SMTP settings they are logged as `not_sent`.
 
 ## WebSocket
 

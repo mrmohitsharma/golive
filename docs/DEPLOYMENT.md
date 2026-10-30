@@ -286,6 +286,18 @@ Everything is at `https://<your server>/web`, with the same login as the app.
 - **Costs:** Admin > Settings > Running costs (servers per month, cloud engine per hour, bandwidth per camera-hour, SMS). Admin > System shows margin by month.
 - **Migrations 016–019** run on start (sessions and audit log, club features, money, platform settings and usage).
 
+## 3l. Email (SMTP) and support tickets (V7)
+
+Emails need any SMTP service. The cheapest good one is **Amazon SES** (about $0.10 per 1,000 emails; you are on AWS already). Brevo (300 a day free) or Zoho ZeptoMail also work.
+
+1. SES console (Mumbai region, `ap-south-1`) > Identities > Create identity > Domain. Add the DKIM CNAME records it shows to your DNS, and an SPF record (`v=spf1 include:amazonses.com ~all`) plus a simple DMARC record (`v=DMARC1; p=none`).
+2. Request production access (new SES accounts can only email verified addresses until then; approval usually takes a day).
+3. SES > SMTP settings > Create SMTP credentials. Note the host (`email-smtp.ap-south-1.amazonaws.com`), port 587, user and password.
+4. In the web app: Admin > Email. Paste host, port, user, password, from name and from address (e.g. `no-reply@yourdomain`), reply-to (e.g. your support inbox), switch on, Save, and send a test email.
+5. Set `SUPPORT_EMAIL` in `.env` to the inbox that should also get new-ticket emails (all platform admins get them too).
+
+Support: visitors raise tickets at `https://<your server>/support` (linked in the website footer); members use Help in the web app. Answer them in Admin > Support. Attachments are stored under `MEDIA_DIR/tickets/`, so include that folder in backups. Migrations 020–021 run on start.
+
 ## 4. Cloud mode (OBS on the server)
 
 ```bash
