@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reset password | {{BRAND}}</title>
+<meta name="theme-color" content="#0f1a28">
+<link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/site/site.css">
+</head>
+<body>
+{{> header}}
+<main id="main" class="auth">
+  <div class="auth-form">
+    <h1 id="rp-title">Reset your password</h1>
+    <p class="lede" id="rp-lede">Enter the email of your account. We will email you a link to choose a new password.</p>
+    <form id="rp-ask" novalidate>
+      <div class="form-error" id="rp-error" role="alert"></div>
+      <div class="field"><label for="rp-email">Email</label><input id="rp-email" type="email" autocomplete="email" required maxlength="200"></div>
+      <button class="btn btn-live" type="submit" style="margin-top:8px"><span class="dot" aria-hidden="true"></span><span>Email me a link</span></button>
+    </form>
+    <form id="rp-set" novalidate hidden>
+      <div class="field"><label for="rp-pw">New password (8+ characters)</label><input id="rp-pw" type="password" autocomplete="new-password" required minlength="8" maxlength="200"></div>
+      <div class="field"><label for="rp-pw2">Repeat it</label><input id="rp-pw2" type="password" autocomplete="new-password" required minlength="8" maxlength="200"></div>
+      <button class="btn btn-live" type="submit" style="margin-top:8px"><span class="dot" aria-hidden="true"></span><span>Save new password</span></button>
+    </form>
+    <p class="switch-link" id="rp-msg" role="status"></p>
+    <p class="switch-link"><a href="/login">Back to log in</a></p>
+  </div>
+</main>
+{{> footer}}
+<script>
+(function () {
+  var token = new URLSearchParams(location.search).get('token');
+  var ask = document.getElementById('rp-ask'), set = document.getElementById('rp-set'), msg = document.getElementById('rp-msg'), err = document.getElementById('rp-error');
+  function post(url, body) { return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); }); }
+  if (token) {
+    ask.hidden = true; set.hidden = false;
+    document.getElementById('rp-title').textContent = 'Choose a new password';
+    document.getElementById('rp-lede').textContent = 'You will be signed out on other devices.';
+  }
+  ask.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = document.getElementById('rp-email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Enter a valid email address.'; err.classList.add('show'); return; }
+    post('/api/auth/forgot', { email: email }).then(function (x) { msg.textContent = x.d.message || 'Check your inbox.'; ask.hidden = true; });
+  });
+  set.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var a = document.getElementById('rp-pw').value, b = document.getElementById('rp-pw2').value;
+    if (a.length < 8) { msg.textContent = 'Use at least 8 characters.'; return; }
+    if (a !== b) { msg.textContent = 'The two passwords are different.'; return; }
+    post('/api/auth/reset', { token: token, password: a }).then(function (x) {
+      if (x.ok) { set.hidden = true; msg.innerHTML = 'Password changed. <a href="/login">Log in</a>'; }
+      else msg.textContent = (x.d.error && x.d.error.message) || 'Could not change the password.';
+    });
+  });
+})();
+</script>
+</body>
+</html>

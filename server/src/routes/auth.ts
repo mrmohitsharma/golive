@@ -25,6 +25,22 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
     };
   };
 
+  const welcome = (u: { email: string; name: string }, club: string | null | undefined) =>
+    ctx.mailer
+      .send({
+        to: u.email,
+        kind: 'welcome',
+        subject: `Welcome to ${config.BRAND_NAME}`,
+        body: [
+          `Hi ${u.name.split(' ')[0]},`,
+          `Your ${config.BRAND_NAME} account is ready${club ? ` and ${club} is set up` : ''}. Create an event, add phones as cameras with a QR code, and go live on YouTube in minutes.`,
+          'Your first 2 cameras and 10 minutes of every event are free.',
+        ],
+        button: { text: `Open ${config.BRAND_NAME}`, url: `${config.PUBLIC_BASE_URL.replace(/\/$/, '')}/web` },
+        ref: `welcome:${u.email.toLowerCase()}`,
+      })
+      .catch(() => {});
+
   /** Self-serve: an organiser creates an account and their club in one step. */
   app.post('/api/auth/signup', async (req, reply) => {
     if (!ctx.platform.signupEnabled) throw new HttpError(403, 'signup_disabled', 'Sign-up is closed on this server. Ask an organiser to add you.');
@@ -40,6 +56,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
       return u;
     });
     reply.status(201);
+    void welcome(user, body.orgName);
     return sessionFor(user);
   });
 
@@ -89,7 +106,10 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx) {
       return u;
     });
     if (user.disabled) throw new HttpError(401, 'account_disabled', 'This account is disabled. Contact support.');
-    if (newUser) reply.status(201);
+    if (newUser) {
+      reply.status(201);
+      void welcome(user, body.orgName ?? null);
+    }
     return { ...(await sessionFor(user)), newUser };
   });
 

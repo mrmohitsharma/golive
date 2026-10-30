@@ -27,6 +27,7 @@ import type { Sessions } from './sessions.js';
 import type { PlatformSecrets } from './secrets.js';
 import type { InvoiceService } from './invoices.js';
 import type { PlatformSettings } from './platform.js';
+import type { Mailer } from './email.js';
 
 /** Everything route modules need. */
 export interface Ctx {
@@ -59,4 +60,5 @@ export interface Ctx {
   secrets: PlatformSecrets;
   invoices: InvoiceService;
   platform: PlatformSettings;
+  mailer: Mailer;
 }

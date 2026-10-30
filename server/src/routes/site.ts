@@ -15,6 +15,7 @@ const PAGES: Record<string, string> = {
   '/': 'index.html',
   '/signup': 'signup.html',
   '/login': 'login.html',
+  '/reset-password': 'reset.html',
   '/account': 'account.html',
   '/terms': 'terms.html',
   '/privacy': 'privacy.html',
@@ -89,7 +90,7 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: Ctx) {
   };
 
   for (const [route, file] of Object.entries(PAGES)) {
-    const cacheable = !['/signup', '/login', '/account'].includes(route);
+    const cacheable = !['/signup', '/login', '/account', '/reset-password'].includes(route);
     app.get(route, async (_req, reply) => send(reply, file, cacheable));
   }
   // Common aliases people and app stores type.

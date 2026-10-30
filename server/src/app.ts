@@ -14,6 +14,7 @@ import { Sessions } from './sessions.js';
 import { PlatformSecrets } from './secrets.js';
 import { PlatformSettings } from './platform.js';
 import { InvoiceService } from './invoices.js';
+import { Mailer } from './email.js';
 import { decideMediaAuth } from './media.js';
 import { Sealer, constantTimeEqual } from './crypto.js';
 import { YouTubeService } from './youtube.js';
@@ -54,6 +55,7 @@ import { registerWebRoutes } from './routes/web.js';
 import { registerAdminWebRoutes } from './routes/admin-web.js';
 import { registerAdminMoneyRoutes } from './routes/admin-money.js';
 import { registerAdminOpsRoutes } from './routes/admin-ops.js';
+import { registerAccountRoutes } from './routes/account.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -125,6 +127,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const chatReaders = new ChatReaders(config, repo, chat, youtube, facebook, log);
   chat.onChange = (tid) => hub.chatChanged(tid);
   const viewership = new ViewershipService(config, repo, (tid) => hub.engineState(tid).streaming.active);
+  const mailer = new Mailer(config, repo, secrets, log);
+  await mailer.reload();
   const messenger = new Messenger(config, repo, msg91Fetch, log);
   messenger.saved = await secrets.get('msg91');
   // Messages: the add-on's included ones first, then paid per message from the wallet.
@@ -163,7 +167,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
   const googleSignIn = new GoogleSignIn(config, googleFetch);
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions, secrets, invoices, platform };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions, secrets, invoices, platform, mailer };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -208,6 +212,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerAdminWebRoutes(fastify, ctx);
   registerAdminMoneyRoutes(fastify, ctx);
   registerAdminOpsRoutes(fastify, ctx);
+  registerAccountRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook
