@@ -94,6 +94,8 @@ export function registerAdminWebRoutes(app: FastifyInstance, ctx: Ctx) {
            (SELECT count(*) FROM payments WHERE status = 'created' AND created_at < now() - interval '30 minutes' AND created_at >= now() - interval '2 days')::text AS stuck_payments,
            (SELECT count(*) FROM messages WHERE status = 'failed' AND created_at >= now() - interval '24 hours')::text AS failed_messages,
            (SELECT count(*) FROM org_billing WHERE suspended)::text AS suspended,
+           (SELECT count(*) FROM tickets WHERE status = 'open')::text AS open_tickets,
+           (SELECT count(*) FROM tickets WHERE status IN ('open', 'pending') AND priority = 'urgent')::text AS urgent_tickets,
            (SELECT count(*) FROM org_billing b WHERE b.balance_cc < 100 * 100 AND EXISTS (SELECT 1 FROM tournaments t WHERE t.org_id = b.org_id AND NOT t.archived AND t.created_at >= now() - interval '30 days'))::text AS low_balance`,
       )
     ).rows[0];
@@ -108,6 +110,8 @@ export function registerAdminWebRoutes(app: FastifyInstance, ctx: Ctx) {
         stuckPayments: Number(alerts.stuck_payments),
         failedMessages24h: Number(alerts.failed_messages),
         suspendedClubs: Number(alerts.suspended),
+        openTickets: Number(alerts.open_tickets),
+        urgentTickets: Number(alerts.urgent_tickets),
         lowBalanceActiveClubs: Number(alerts.low_balance),
         engineWarnings: warnings,
       },

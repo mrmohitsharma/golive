@@ -15,6 +15,8 @@ const ROUTES = [
   { path: '/web/admin/events', page: 'admin-events', role: 'admin', nav: ['Admin', 'Events'] },
   { path: '/web/admin/money', page: 'admin-money', role: 'admin', nav: ['Admin', 'Money'] },
   { path: '/web/admin/money/:tab', page: 'admin-money', role: 'admin' },
+  { path: '/web/admin/support', page: 'admin-support', role: 'admin', nav: ['Admin', 'Support'] },
+  { path: '/web/admin/support/:id', page: 'admin-support', role: 'admin' },
   { path: '/web/admin/viewership', page: 'admin-viewership', role: 'admin', nav: ['Admin', 'Viewership'] },
   { path: '/web/admin/sms', page: 'admin-sms', role: 'admin', nav: ['Admin', 'SMS'] },
   { path: '/web/admin/email', page: 'admin-email', role: 'admin', nav: ['Admin', 'Email'] },
@@ -32,6 +34,8 @@ const ROUTES = [
   { path: '/web/e/:id/control', page: 'control', role: 'any' },
   { path: '/web/e/:id/:tab', page: 'event', role: 'any' },
   { path: '/web/profile', page: 'profile', role: 'any', nav: ['Account', 'Profile'] },
+  { path: '/web/help', page: 'help', role: 'any', nav: ['Account', 'Help'] },
+  { path: '/web/help/:key', page: 'help', role: 'any' },
 ];
 export function addRoutes(list) { ROUTES.push(...list); }
 
@@ -130,7 +134,7 @@ async function boot() {
   document.getElementById('menu').onclick = () => document.getElementById('side').classList.toggle('open');
   renderOrgSwitch();
   renderImpersonation();
-  if (!isAdmin() && !manageable.length) {
+  if (!isAdmin() && !manageable.length && !location.pathname.startsWith('/web/help') && location.pathname !== '/web/profile') {
     main.replaceChildren(el('div', { class: 'banner warn' }, 'Your account is a camera, scorer or commentator. Use the Go Live app on your phone, or ask your club owner to make you a director.'));
     titleEl.textContent = 'Go Live';
     return;

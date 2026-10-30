@@ -120,3 +120,7 @@ body.wide main { max-width:none; }
 .cr-ch input[type=range] { padding:0; }
 .cr-meter { height:5px; background:#20262a; border-radius:3px; overflow:hidden; margin-top:4px; }
 .cr-meter i { display:block; height:100%; width:0; background:linear-gradient(90deg,#2ecc71,#2ecc71 75%,#f2b33d 90%,#e53935); transition:width .15s; }
+.tk-msg { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; margin-bottom:10px; }
+.tk-msg.team { border-left:4px solid var(--gold); } .tk-msg.internal { background:rgba(242,179,61,.07); border-color:rgba(242,179,61,.45); }
+.tk-msg.system { padding:6px 12px; background:transparent; border-style:dashed; font-size:12.5px; }
+.tk-body { white-space:pre-wrap; margin-top:6px; }

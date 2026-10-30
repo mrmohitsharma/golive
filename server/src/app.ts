@@ -57,6 +57,7 @@ import { registerAdminWebRoutes } from './routes/admin-web.js';
 import { registerAdminMoneyRoutes } from './routes/admin-money.js';
 import { registerAdminOpsRoutes } from './routes/admin-ops.js';
 import { registerAccountRoutes } from './routes/account.js';
+import { registerSupportRoutes } from './routes/support.js';
 import { registerBillingRoutes } from './routes/billing.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerChatRoutes } from './routes/chat.js';
@@ -217,6 +218,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerAdminMoneyRoutes(fastify, ctx);
   registerAdminOpsRoutes(fastify, ctx);
   registerAccountRoutes(fastify, ctx);
+  registerSupportRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook

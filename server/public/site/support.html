@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support | {{BRAND}}</title>
+<meta name="theme-color" content="#0f1a28">
+<link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/site/site.css">
+</head>
+<body>
+{{> header}}
+<main id="main" class="legal support-page" style="max-width:760px;margin:0 auto;padding:32px 20px 60px">
+  <div id="sp-new">
+    <h1>Get help</h1>
+    <p class="lede">Tell us what is happening. We reply by email, usually within a working day; for a problem during a live event, choose “Urgent”.</p>
+    <form id="sp-form" novalidate style="display:grid;gap:12px">
+      <div class="form-error" id="sp-error" role="alert"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <label>Your name<br><input name="name" required maxlength="80" style="width:100%;padding:10px"></label>
+        <label>Email<br><input name="email" type="email" required maxlength="200" style="width:100%;padding:10px"></label>
+      </div>
+      <label>Subject<br><input name="subject" required maxlength="140" style="width:100%;padding:10px"></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <label>About<br><select name="category" style="width:100%;padding:10px">
+          <option value="question">A question</option><option value="streaming">Streaming or cameras</option><option value="billing">Payments and credits</option>
+          <option value="account">My account</option><option value="bug">Something is broken</option><option value="other">Something else</option></select></label>
+        <label>How urgent<br><select name="priority" style="width:100%;padding:10px">
+          <option value="normal">Normal</option><option value="high">High: I am stuck</option><option value="low">Low</option></select></label>
+      </div>
+      <label>What happened<br><textarea name="message" required rows="6" maxlength="10000" style="width:100%;padding:10px"></textarea></label>
+      <label>Screenshots or PDFs (up to 5, 5 MB each)<br><input name="files" type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"></label>
+      <input name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+      <button class="btn btn-live" type="submit"><span class="dot" aria-hidden="true"></span><span>Send</span></button>
+    </form>
+    <p class="switch-link">Have an account? <a href="/web/help">See your tickets</a> (choose “Urgent” there for live events).</p>
+  </div>
+  <div id="sp-view" hidden>
+    <h1 id="sp-title"></h1>
+    <p class="lede" id="sp-meta"></p>
+    <div id="sp-thread"></div>
+    <form id="sp-reply" novalidate style="display:grid;gap:10px;margin-top:20px">
+      <label>Add a reply<br><textarea name="body" rows="4" maxlength="10000" required style="width:100%;padding:10px"></textarea></label>
+      <label>Files (optional)<br><input name="files" type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"></label>
+      <button class="btn btn-live" type="submit"><span class="dot" aria-hidden="true"></span><span>Send reply</span></button>
+    </form>
+  </div>
+  <p id="sp-msg" role="status" class="switch-link"></p>
+</main>
+{{> footer}}
+<script>
+(function () {
+  var msg = document.getElementById('sp-msg');
+  var key = (location.pathname.match(/^\/support\/t\/([\w-]+)/) || [])[1];
+  function read(input) {
+    return Promise.all(Array.prototype.slice.call(input.files || [], 0, 5).map(function (f) {
+      if (f.size > 5 * 1024 * 1024) return Promise.reject(new Error(f.name + ' is over 5 MB.'));
+      return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res({ name: f.name, type: f.type, data: r.result }); }; r.onerror = rej; r.readAsDataURL(f); });
+    }));
+  }
+  function post(url, body) { return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); }); }
+  function el(tag, text, cls) { var n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; }
+  if (!key) {
+    var form = document.getElementById('sp-form');
+    form.addEventListener('submit', function (e) {
+      e.preventDefault(); var x = form.elements;
+      if (!x.name.value.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.email.value.trim()) || x.subject.value.trim().length < 3 || x.message.value.trim().length < 5) { msg.textContent = 'Fill in your name, a valid email, a subject and what happened.'; return; }
+      msg.textContent = 'Sending…';
+      read(x.files).then(function (files) {
+        return post('/api/support/tickets', { name: x.name.value.trim(), email: x.email.value.trim(), subject: x.subject.value.trim(), category: x.category.value, priority: x.priority.value, message: x.message.value.trim(), files: files, website: x.website.value });
+      }).then(function (r) {
+        if (!r.ok) { msg.textContent = (r.d.error && r.d.error.message) || 'Could not send.'; return; }
+        location.href = r.d.link.replace(/^https?:\/\/[^/]+/, '');
+      }).catch(function (err) { msg.textContent = err.message; });
+    });
+    return;
+  }
+  document.getElementById('sp-new').hidden = true;
+  document.getElementById('sp-view').hidden = false;
+  var STATUS = { open: 'Open: waiting for our team', pending: 'Waiting for your reply', resolved: 'Resolved', closed: 'Closed' };
+  function load() {
+    fetch('/api/support/t/' + key).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); }).then(function (x) {
+      if (!x.ok) { document.getElementById('sp-title').textContent = 'Ticket not found'; document.getElementById('sp-reply').hidden = true; return; }
+      var t = x.d.ticket;
+      document.getElementById('sp-title').textContent = '#' + t.number + ' ' + t.subject;
+      document.getElementById('sp-meta').textContent = STATUS[t.status] + ' · ' + t.category + ' · keep this page\'s link to come back';
+      document.getElementById('sp-reply').hidden = t.status === 'closed';
+      var box = document.getElementById('sp-thread'); box.textContent = '';
+      x.d.messages.forEach(function (m) {
+        var card = el('div', null, 'sp-msg ' + m.kind);
+        card.style.cssText = 'border:1px solid rgba(127,127,127,.3);border-radius:10px;padding:12px 14px;margin:10px 0;' + (m.kind === 'team' ? 'border-left:4px solid #c9a227' : '');
+        card.appendChild(el('div', (m.kind === 'team' ? m.author + ' · Go Live team' : m.author) + ' · ' + new Date(m.at).toLocaleString('en-IN'), 'small')).style.opacity = '.7';
+        var p = el('p', m.body); p.style.whiteSpace = 'pre-wrap'; card.appendChild(p);
+        m.files.forEach(function (f) { var a = el('a', '📎 ' + f.name); a.href = '/api/support/t/' + key + '/files/' + f.id; a.target = '_blank'; a.style.marginRight = '12px'; card.appendChild(a); });
+        box.appendChild(card);
+      });
+    });
+  }
+  var reply = document.getElementById('sp-reply');
+  reply.addEventListener('submit', function (e) {
+    e.preventDefault(); if (!reply.elements.body.value.trim()) return;
+    msg.textContent = 'Sending…';
+    read(reply.elements.files).then(function (files) { return post('/api/support/t/' + key + '/messages', { body: reply.elements.body.value.trim(), files: files }); })
+      .then(function (r) { msg.textContent = r.ok ? 'Sent. We will reply by email.' : ((r.d.error && r.d.error.message) || 'Could not send.'); if (r.ok) { reply.reset(); load(); } })
+      .catch(function (err) { msg.textContent = err.message; });
+  });
+  load();
+})();
+</script>
+</body>
+</html>

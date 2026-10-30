@@ -16,6 +16,7 @@ const PAGES: Record<string, string> = {
   '/signup': 'signup.html',
   '/login': 'login.html',
   '/reset-password': 'reset.html',
+  '/support': 'support.html',
   '/account': 'account.html',
   '/terms': 'terms.html',
   '/privacy': 'privacy.html',
@@ -90,9 +91,11 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: Ctx) {
   };
 
   for (const [route, file] of Object.entries(PAGES)) {
-    const cacheable = !['/signup', '/login', '/account', '/reset-password'].includes(route);
+    const cacheable = !['/signup', '/login', '/account', '/reset-password', '/support'].includes(route);
     app.get(route, async (_req, reply) => send(reply, file, cacheable));
   }
+  // A requester's ticket page: the same page shows the thread for the key in the address.
+  app.get('/support/t/:key', async (_req, reply) => send(reply, 'support.html', false));
   // Common aliases people and app stores type.
   app.get('/privacy-policy', async (_req, reply) => reply.redirect('/privacy', 301));
   app.get('/terms-of-service', async (_req, reply) => reply.redirect('/terms', 301));
