@@ -4,7 +4,8 @@ One repository, one codebase. Each version is developed on its own branch, merge
 
 ```
 main          what the live server runs; only finished, tested versions are merged here
-v6-dev        work on the next version (V6); create v7-dev from main after V6 ships
+v6-dev        V6: onboarding + viewership engine (done, not yet merged to main)
+v7-dev        work on the next version (V7), branched from v6-dev so it carries all of V6
 v5.0, v6.0…   tags: frozen snapshots of each released version
 ```
 
@@ -12,7 +13,8 @@ v5.0, v6.0…   tags: frozen snapshots of each released version
 | --- | --- | --- |
 | V1 to V4 | (before this repo) | Multi-camera director, cloud OBS, multistreaming, billing |
 | V5 | `v5.0` | Viewer comments, admin panel, Cashfree, public website and legal pages, Go Live rename |
-| V6 | `v6.0` when released | In progress on `v6-dev`: 5-minute onboarding (see the developer to-do) |
+| V6 | `v6.0` when released | On `v6-dev`: 5-minute onboarding and the viewership engine (influencers, games, prizes, reports) |
+| V7 | `v7.0` when released | In progress on `v7-dev` |
 
 ## Working on the next version
 
