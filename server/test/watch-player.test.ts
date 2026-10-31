@@ -6,9 +6,9 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { api, createTournament, engineToken, expectOk, signup, startHarness, TestSocket, type Harness } from './helpers.js';
+import { api, createTournament, engineToken, expectOk, signup, startHarness, testConfig, TestSocket, type Harness } from './helpers.js';
 import { RelayManager } from '../src/relay.js';
-import { finalize } from '../src/hls.js';
+import { finalize, HlsService } from '../src/hls.js';
 
 /** Stands in for FFmpeg. For an HLS run it writes what FFmpeg would: master, playlists, segments. */
 class FakeProc extends EventEmitter {
@@ -85,6 +85,20 @@ describe('V7 watch player: our own HLS through a CDN (Bunny), replays, embed, ad
   after(async () => {
     await h.close();
     fs.rmSync(hlsDir, { recursive: true, force: true });
+  });
+
+  it('.env can give the starting CDN values; the panel wins once saved', async () => {
+    let saved: any = null;
+    const secrets = { get: async () => saved, set: async (_k: string, v: object) => { saved = v; } } as any;
+    const cfg = testConfig({ HLS_ENABLED: 'true', CDN_HOST: 'https://GoGetsLive.b-cdn.net/', BUNNY_PULL_ZONE_ID: '6902506', BUNNY_API_KEY: 'env-key-9999' });
+    const svc = new HlsService(cfg, {} as any, secrets, h.app.fastify.log);
+    await svc.reload();
+    assert.deepEqual([svc.settings.host, svc.settings.pullZoneId, svc.settings.apiKey], ['gogetslive.b-cdn.net', 6902506, 'env-key-9999']);
+    await svc.save({ host: 'cdn.gogetslive.com' }, null);
+    assert.deepEqual([svc.settings.host, svc.settings.apiKey], ['cdn.gogetslive.com', 'env-key-9999']);
+    saved = { ...saved, apiKey: '' };
+    await svc.reload();
+    assert.equal(svc.settings.apiKey, 'env-key-9999', 'an empty saved key falls back to .env');
   });
 
   it('the admin sets up Bunny: hostname, pull zone, key (masked), test and bandwidth bill', async () => {

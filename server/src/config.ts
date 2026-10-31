@@ -135,6 +135,10 @@ const schema = z.object({
   HLS_PRESET: z.enum(['ultrafast', 'superfast', 'veryfast', 'faster', 'fast']).default('veryfast'),
   HLS_SEGMENT_SEC: z.coerce.number().int().min(1).max(6).default(2),
   HLS_RETENTION_DAYS: z.coerce.number().min(1).default(14),
+  // Bunny CDN starting values (Admin > Streaming overrides them once saved there).
+  CDN_HOST: optional,
+  BUNNY_PULL_ZONE_ID: z.coerce.number().int().positive().optional(),
+  BUNNY_API_KEY: optional,
 
   // Public watch page and API (for the CoGolfers website). Comma-separated origins allowed
   // to call /api/public/* from a browser, and to embed /watch/<id> in an iframe.

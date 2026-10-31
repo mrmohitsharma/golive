@@ -68,7 +68,15 @@ export class HlsService {
   }
 
   async reload(): Promise<void> {
-    this.cached = { ...DEFAULTS, ...((await this.secrets.get<Partial<CdnSettings>>('cdn')) ?? {}) };
+    const c = this.config;
+    const env: Partial<CdnSettings> = {
+      ...(c.CDN_HOST ? { host: c.CDN_HOST.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase() } : {}),
+      ...(c.BUNNY_PULL_ZONE_ID ? { pullZoneId: c.BUNNY_PULL_ZONE_ID } : {}),
+      ...(c.BUNNY_API_KEY ? { apiKey: c.BUNNY_API_KEY } : {}),
+    };
+    const saved = (await this.secrets.get<Partial<CdnSettings>>('cdn')) ?? {};
+    // Saved in the panel wins; an empty saved key falls back to the .env one.
+    this.cached = { ...DEFAULTS, ...env, ...saved, apiKey: saved.apiKey || env.apiKey || '' };
   }
 
   async save(patch: Partial<CdnSettings>, by: string | null): Promise<CdnSettings> {

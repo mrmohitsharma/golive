@@ -310,7 +310,7 @@ The watch page plays the show with our own player instead of YouTube's. YouTube 
    - the API key (Bunny > Account settings);
    - the price.
 
-   Then Save, and press "Test the setup".
+   Then Save, and press "Test the setup". Or put `CDN_HOST`, `BUNNY_PULL_ZONE_ID` and `BUNNY_API_KEY` in the server's `.env` (never in git); values saved in the panel win.
 4. Optional, "Only the CDN may read the stream": switch it on and copy the secret shown. In Bunny, add an Edge rule to the zone with the action "Set Request Header", header `X-Origin-Secret` and that value, matching every URL. This stops people pulling the stream straight from your server.
 5. Clubs get an embed code on the event's Streaming tab: `<iframe src="https://<server>/embed/<event>">`.
 
