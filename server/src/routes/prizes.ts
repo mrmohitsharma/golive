@@ -23,7 +23,7 @@ export function registerPrizeRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/public/moments/:mid/enter', async (req, reply) => {
     const b = z.object({ token: z.string().max(200), runKey: z.string().max(40), phone: z.string().trim().min(8).max(20), consent: z.literal(true) }).parse(req.body);
     const v = viewership.verify(b.token);
-    if (v.flagged) throw new HttpError(403, 'not_counted', 'The draw is not available here.');
+    if (v.flagged) throw new HttpError(403, 'not_counted', 'Lucky draws can’t be entered from this network: too many viewers are on it. Try with mobile data or another Wi-Fi.');
     const r = await prizes.enter(v.viewerId, v.tournamentId, uuid.parse((req.params as { mid: string }).mid), b.runKey, b.phone);
     reply.status(r.created ? 201 : 200);
     return { entered: true, already: !r.created };

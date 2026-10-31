@@ -156,6 +156,9 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
       done: await ctx.moments.doneFor(v.viewer.id),
       // Prizes this viewer won and can still claim (a returning winner sees the claim link).
       wins: await ctx.prizes.winsOf(v.viewer.id),
+      // Games points and the name on Top players (watch page).
+      points: await ctx.moments.pointsOf(v.viewer.id),
+      nickname: (await repo.db.query<{ nickname: string | null }>('SELECT nickname FROM viewers WHERE id = $1', [v.viewer.id])).rows[0]?.nickname ?? null,
       ...clocks(t),
     };
   });

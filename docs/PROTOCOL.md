@@ -83,7 +83,10 @@ Errors are `{"error":{"code","message"}}` with a human-readable message the apps
 | `POST …/moments/:mid/fire`, `POST …/moments/:mid/resolve {correctOption}` | director | Fire now for everyone watching; settle a prediction |
 | `GET …/moments/report` | director | Per game: runs, shown, played (rate), closed, right %, answers, watch time after (players vs skippers) |
 | `GET /api/public/tournaments/:id/moments` | watch page | Games (no right answers) and shared runs; cached 2 s |
-| `POST /api/public/moments/:mid/seen {token, runKey, kind}`, `…/play {token, runKey, answer?}` | watch page | Shown/closed; play: server checks the run is open, the viewer clock got there, the audience, one play each, and decides the result (spin drawn server-side) |
+| `POST /api/public/moments/:mid/seen {token, runKey, kind}`, `…/play {token, runKey, answer?}` | watch page | Shown/closed; play: server checks the run is open, the viewer clock got there, the audience, one play each, and decides the result (spin drawn server-side). The result adds `points` (this play) and `totalPoints`. Viewers over the per-network cap still play and earn points but can't win prizes; only bot user agents get 403 `not_counted` |
+| `GET /api/public/tournaments/:id/fans[?token=]` | watch page | Games tab: `{top:[{rank,name,points,correct,me}], me, players}`. Points: right answer (quiz, settled prediction) 100, winning spin 50, any other play 10. Viewers without a name show as "Fan 4F2A" |
+| `POST /api/public/view/nickname {token, name}` | watch page | Name on Top players (2–24 letters, cleaned like chat names). `POST …/view` also returns `points` and `nickname` |
+| `POST /api/public/tournaments/:id/react {kind: clap\|fire\|golf}` | watch page | Live reactions, no login; 20 per 10 s per connection (429 after). Running totals come back in the games feed as `reactions`, and every page floats the new ones up |
 
 | Game prize fields | manage | `pick` (draw / first_correct / spin), `prize`, `sponsor`, `prizeStock`, `winnersPerRun`, `reserves`, `claimHours`, `minWatchSec`, `needUnmuted`, `pacePerHour` (spin), `drawAtSec` (lucky draw, stream clock). Type `draw` = lucky draw (phone entry) |
 | `POST /api/public/moments/:mid/enter {token, runKey, phone, consent: true}` | watch page | Lucky draw entry: one per number and per viewer; SMS confirmation |

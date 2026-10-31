@@ -99,6 +99,13 @@ export interface PrizeHooks {
 
 /** Grace for a late answer (network delay) after a run closes. */
 const CLOSE_GRACE_MS = 5000;
+
+/** Watch-page points: a right answer (quiz, settled prediction) 100, a winning spin 50, any other play 10. */
+export const POINTS = { correct: 100, spinWin: 50, played: 10 } as const;
+const POINTS_SQL = `CASE WHEN p.correct THEN ${POINTS.correct} WHEN (p.result->>'win') = 'true' THEN ${POINTS.spinWin} ELSE ${POINTS.played} END`;
+
+/** "Fan 4F2A": the leaderboard name of a viewer who has not chosen one. */
+export const fanName = (viewerId: string, nickname: string | null) => nickname || 'Fan ' + viewerId.replace(/-/g, '').slice(-4).toUpperCase();
 /** A viewer-clock moment may be played this many seconds before its time (reports lag). */
 const VIEWER_CLOCK_SLACK_SEC = 45;
 
@@ -464,7 +471,35 @@ export class MomentsService {
       const p = await this.prizes.afterPlay(m, viewerId, runKey, { answer, correct, segment });
       if (p?.win) result = { ...result, prize: p.win };
     }
-    return { type: m.type, answer, ...result };
+    const earned = correct ? POINTS.correct : result.win === true ? POINTS.spinWin : POINTS.played;
+    return { type: m.type, answer, ...result, points: earned, totalPoints: await this.pointsOf(viewerId) };
+  }
+
+  // ---------------------------------------------------------------- points and Top players
+  async pointsOf(viewerId: string): Promise<number> {
+    const r = await this.repo.db.query<{ n: string | null }>(`SELECT sum(${POINTS_SQL})::text AS n FROM moment_plays p WHERE p.viewer_id = $1 AND p.played_at IS NOT NULL`, [viewerId]);
+    return Number(r.rows[0]?.n ?? 0);
+  }
+
+  /** Top players of an event (games points), and where this viewer stands. */
+  async fans(tournamentId: string, viewerId: string | null, limit = 10) {
+    const r = await this.repo.db.query<{ viewer_id: string; nickname: string | null; points: string; correct: string; rank: string }>(
+      `WITH s AS (
+         SELECT p.viewer_id, sum(${POINTS_SQL}) AS points, count(*) FILTER (WHERE p.correct) AS correct, max(p.played_at) AS last_at
+           FROM moment_plays p WHERE p.tournament_id = $1 AND p.played_at IS NOT NULL GROUP BY p.viewer_id),
+       r AS (SELECT s.*, rank() OVER (ORDER BY points DESC) AS rank, row_number() OVER (ORDER BY points DESC, last_at ASC) AS n FROM s)
+       SELECT r.viewer_id, v.nickname, r.points::text, r.correct::text, r.rank::text FROM r JOIN viewers v ON v.id = r.viewer_id
+        WHERE r.n <= $2 OR r.viewer_id = $3 ORDER BY r.n`,
+      [tournamentId, limit, viewerId],
+    );
+    const rows = r.rows.map((x) => ({ rank: Number(x.rank), name: fanName(x.viewer_id, x.nickname), points: Number(x.points), correct: Number(x.correct), me: x.viewer_id === viewerId }));
+    const me = rows.find((x) => x.me) ?? null;
+    const players = (await this.repo.db.query<{ n: string }>('SELECT count(DISTINCT viewer_id)::text AS n FROM moment_plays WHERE tournament_id = $1 AND played_at IS NOT NULL', [tournamentId])).rows[0];
+    return { top: rows.slice(0, limit), me, players: Number(players?.n ?? 0) };
+  }
+
+  async setNickname(viewerId: string, name: string | null): Promise<void> {
+    await this.repo.db.query('UPDATE viewers SET nickname = $2 WHERE id = $1', [viewerId, name]);
   }
 
   /** Can this landing win? If not (no prize left, too fast, not eligible), land on a losing segment. */

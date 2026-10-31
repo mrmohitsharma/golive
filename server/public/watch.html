@@ -2,85 +2,86 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0e10">
 <title>Go Live</title>
 <style>
-  :root { --bg:#0b0e10; --panel:#15191c; --line:#252b30; --ink:#f3f5f4; --muted:#9aa5a0; --live:#e53935; --green:#2e7d4f; --gold:#c9a227; --under:#ff6b6b; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  :root { --bg:#0b0e10; --panel:#15191c; --panel2:#1b2024; --line:#252b30; --ink:#f3f5f4; --muted:#9aa5a0; --live:#e53935; --green:#2e9d5f; --gold:#e0b532; --under:#ff6b6b; --stage-b:40vh; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html, body { background:var(--bg); }
+  body { margin:0; color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-tap-highlight-color:transparent; }
   a { color:inherit; }
-  .wrap { max-width:1180px; margin:0 auto; padding:16px; }
-  header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
-  .brand { font-weight:800; letter-spacing:.06em; font-size:12px; color:var(--gold); text-transform:uppercase; }
-  h1 { font-size:22px; margin:2px 0 0; }
-  .sub { color:var(--muted); font-size:14px; }
-  .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:6px; font-size:12px; font-weight:800; letter-spacing:.05em; }
+  button { font:inherit; }
+  .wrap { max-width:1240px; margin:0 auto; padding:16px; }
+  header.top { display:flex; align-items:center; gap:12px; margin-bottom:12px; min-width:0; }
+  .brand { font-weight:800; letter-spacing:.06em; font-size:11px; color:var(--gold); text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  h1 { font-size:21px; margin:1px 0 0; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sub { color:var(--muted); font-size:13px; }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:6px; font-size:12px; font-weight:800; letter-spacing:.05em; flex:none; }
   .pill.live { background:var(--live); }
   .pill.live::before { content:""; width:7px; height:7px; border-radius:50%; background:#fff; animation:blink 1.2s infinite; }
   .pill.off { background:#3a4247; color:#cfd6d2; }
   @keyframes blink { 50% { opacity:.25; } }
-  .grid { display:grid; grid-template-columns: minmax(0,2fr) minmax(280px,1fr); gap:16px; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
-  .player { position:relative; aspect-ratio:16/9; background:#000; border-radius:10px; overflow:hidden; }
+
+  /* Layout: video + bar on the left, tabs on the right (desktop). Phones and tablets: the video
+     stays at the top and plays, the tabs fill the rest of the screen and scroll inside. */
+  .grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(300px,1fr); gap:16px; align-items:stretch; }
+  .stage { position:relative; }
+  .player { position:relative; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; }
   .player iframe, .player #yt-player { position:absolute; inset:0; width:100%; height:100%; border:0; }
-  .placeholder { position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:24px; background:linear-gradient(135deg,#123222,#0b0e10); color:#dfe7e2; }
+  .placeholder { position:absolute; inset:0; display:grid; grid-template-columns:minmax(0,1fr); place-items:center; text-align:center; padding:24px; background:radial-gradient(circle at 30% 20%,#1d4a33,#0b0e10 70%); color:#dfe7e2; }
   .placeholder > div { width:100%; max-width:380px; justify-self:center; }
-  .placeholder { grid-template-columns:minmax(0,1fr); }
   .player.waiting { aspect-ratio:auto; min-height:max(260px, 56.25vw); }
-  @media (min-width: 861px) { .player.waiting { aspect-ratio:16/9; min-height:0; } }
-  .remind { margin:16px auto 0; width:100%; text-align:left; }
-  .remind button { white-space:nowrap; }
-  .remind-row { display:flex; gap:8px; }
-  .remind input[type=tel] { flex:1; min-width:0; background:#0f1315; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:10px 12px; font:inherit; }
-  .remind button { background:var(--live); border:0; color:#fff; border-radius:8px; padding:0 14px; font:inherit; font-weight:700; cursor:pointer; }
-  .remind-ok { display:block; font-size:12px; color:var(--muted); margin-top:8px; }
-  .remind-msg { font-size:12px; color:var(--under); min-height:14px; margin-top:4px; }
-  .remind.done { color:#cfe6d8; font-size:14px; margin-top:16px; }
-  /* Games (moments): a card under the video, never over it (YouTube's rules). */
-  .moment { margin-top:12px; background:var(--panel); border:1px solid var(--gold); border-radius:12px; padding:14px 16px 12px; position:relative; animation:pop .25s ease-out; }
-  @keyframes pop { from { transform:translateY(6px); opacity:0; } }
-  .moment .k { color:var(--gold); font-size:11px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
-  .moment h3 { margin:4px 0 2px; font-size:17px; }
-  .moment .q { margin:0 0 10px; color:#dfe7e2; }
-  .moment .x { position:absolute; top:8px; right:8px; background:none; border:0; color:var(--muted); font-size:20px; cursor:pointer; width:36px; height:36px; }
-  .moment .opts { display:grid; gap:8px; }
-  .moment .opt { text-align:left; background:#0f1315; border:1px solid var(--line); border-radius:9px; color:var(--ink); padding:11px 12px; font:inherit; cursor:pointer; position:relative; overflow:hidden; }
-  .moment .opt:disabled { cursor:default; }
-  .moment .opt .bar { position:absolute; inset:0 auto 0 0; background:rgba(46,125,79,.35); z-index:0; transition:width .6s; }
-  .moment .opt span { position:relative; z-index:1; }
-  .moment .opt .pct { float:right; font-weight:700; }
-  .moment .opt.mine { border-color:var(--gold); } .moment .opt.wrong { border-color:var(--under); } .moment .opt.right { border-color:var(--green); border-width:2px; }
-  .moment .time { height:3px; background:var(--line); border-radius:2px; margin-top:12px; overflow:hidden; }
-  .moment .time i { display:block; height:100%; background:var(--gold); transition:width 1s linear; }
-  .moment .res { margin-top:10px; font-weight:700; }
-  .wheel { width:220px; height:220px; margin:6px auto 12px; border-radius:50%; border:4px solid var(--gold); position:relative; transition:transform 3.2s cubic-bezier(.17,.67,.21,1); }
-  .wheel-wrap { position:relative; }
-  .wheel-wrap::after { content:""; position:absolute; top:-2px; left:50%; transform:translateX(-50%); border:10px solid transparent; border-top:16px solid var(--live); }
-  .wheel b { position:absolute; left:50%; top:50%; transform-origin:0 0; font-size:11px; color:#fff; text-shadow:0 1px 2px #000; white-space:nowrap; }
-  .moment .go { width:100%; background:var(--live); border:0; color:#fff; border-radius:9px; padding:12px; font:inherit; font-weight:800; cursor:pointer; }
-  .moment .prize { display:inline-block; margin:6px 0 10px; padding:4px 10px; border-radius:999px; background:rgba(201,162,39,.15); color:var(--gold); font-size:13px; font-weight:700; }
-  .moment input[type=tel], .moment input[type=email] { width:100%; background:#0f1315; border:1px solid var(--line); border-radius:9px; color:var(--ink); padding:11px 12px; font:inherit; }
-  .moment .check { display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--muted); margin:10px 0 0; }
-  .moment.won { border-color:var(--live); background:linear-gradient(160deg,#2a1414,#15191c 60%); }
-  .moment.won h3 { font-size:22px; }
-  .moment .row2 { display:flex; gap:8px; align-items:center; margin-top:10px; }
-  .moment .small-btn { background:none; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:8px 12px; font:inherit; font-size:13px; cursor:pointer; }
-  .chip-draw { margin-top:10px; background:none; border:1px dashed var(--gold); color:var(--gold); border-radius:999px; padding:6px 12px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
-  .links { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0; }
-  .btn { display:inline-block; padding:7px 12px; border-radius:8px; background:var(--panel); border:1px solid var(--line); text-decoration:none; font:inherit; font-size:14px; color:var(--ink); cursor:pointer; }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; }
-  .panel h2 { font-size:13px; letter-spacing:.08em; text-transform:uppercase; margin:0; padding:12px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  @media (min-width:861px) { .player.waiting { aspect-ratio:16/9; min-height:0; } }
+  .floats { position:absolute; right:6px; bottom:6px; width:64px; height:75%; pointer-events:none; overflow:visible; z-index:3; }
+  .floats span { position:absolute; bottom:0; left:50%; font-size:28px; will-change:transform,opacity; animation:floatUp 2.4s ease-out forwards; }
+  @keyframes floatUp {
+    0% { transform:translate(-50%,0) scale(.6); opacity:0; }
+    12% { opacity:1; transform:translate(calc(-50% + var(--dx1)),-12%) scale(1.1); }
+    60% { transform:translate(calc(-50% + var(--dx2)),-260%) scale(1); opacity:.95; }
+    100% { transform:translate(calc(-50% + var(--dx1)),-520%) scale(.9); opacity:0; }
+  }
+
+  .bar { display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .rx { width:42px; height:42px; border-radius:50%; border:1px solid var(--line); background:var(--panel); font-size:20px; cursor:pointer; display:grid; place-items:center; transition:transform .12s; touch-action:manipulation; }
+  .rx:active, .rx.pop { transform:scale(1.25); }
+  .pts { display:inline-flex; align-items:center; gap:6px; height:42px; padding:0 14px; border-radius:999px; border:1px solid rgba(224,181,50,.5); background:rgba(224,181,50,.1); color:var(--gold); font-weight:800; cursor:pointer; }
+  .pts.bump { animation:bump .6s ease-out; }
+  @keyframes bump { 30% { transform:scale(1.18); background:rgba(224,181,50,.3); } }
+  .bar .sp { flex:1; }
+  .btn { display:inline-flex; align-items:center; height:38px; padding:0 12px; border-radius:9px; background:var(--panel); border:1px solid var(--line); text-decoration:none; font-size:14px; color:var(--ink); cursor:pointer; white-space:nowrap; }
+  .gamepill { height:38px; padding:0 14px; border-radius:999px; border:0; background:var(--gold); color:#141414; font-weight:800; cursor:pointer; animation:pulse 1.6s infinite; }
+  @keyframes pulse { 50% { box-shadow:0 0 0 6px rgba(224,181,50,.18); } }
+  .chip-draw { height:38px; background:none; border:1px dashed var(--gold); color:var(--gold); border-radius:999px; padding:0 12px; font-size:13px; font-weight:700; cursor:pointer; }
+
+  .side-wrap { position:relative; min-width:0; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+  .side { display:flex; flex-direction:column; overflow:hidden; }
+  .tabs { display:flex; border-bottom:1px solid var(--line); flex:none; }
+  .tabs button { flex:1; background:none; border:0; border-bottom:3px solid transparent; color:var(--muted); font-size:12px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:12px 4px 9px; cursor:pointer; white-space:nowrap; }
+  .tabs button.on { color:var(--ink); border-bottom-color:var(--gold); }
+  .tabs .count { display:inline-block; min-width:18px; padding:0 5px; margin-left:5px; border-radius:9px; background:var(--live); color:#fff; font-size:11px; line-height:18px; letter-spacing:0; }
+  .side > .body { flex:1; min-height:0; display:flex; flex-direction:column; }
+  .board, .chat, .clipsTab, .fans { display:flex; flex-direction:column; flex:1; min-height:0; }
+  .chat { height:460px; }
+  .scroll { flex:1; min-height:0; overflow:auto; max-height:520px; }
+  @media (min-width:861px) {
+    .side { height:0; min-height:100%; }
+    .side .board, .side .chat, .side .fans, .side .clipsTab { min-height:380px; height:auto; }
+    .side .scroll { max-height:none; }
+  }
+
   .chips { display:flex; gap:6px; flex-wrap:wrap; padding:10px 14px 0; }
   .chip { padding:3px 10px; border-radius:999px; border:1px solid var(--line); background:none; color:var(--ink); font-size:13px; cursor:pointer; }
   .chip.on { background:var(--green); border-color:var(--green); }
   table { width:100%; border-collapse:collapse; }
   td, th { padding:8px 14px; text-align:left; border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums; }
-  th { color:var(--muted); font-size:12px; font-weight:600; }
+  th { color:var(--muted); font-size:12px; font-weight:600; position:sticky; top:0; background:var(--panel); }
   td.num, th.num { text-align:right; }
   .under { color:var(--under); font-weight:700; }
   .club { color:var(--muted); font-size:12px; display:block; }
-  .scroll { max-height:520px; overflow:auto; }
-  .clips { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; padding:14px; }
+  .clips { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; padding:14px; }
   .clip { text-decoration:none; }
   .clip img { width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:8px; background:#000; display:block; }
   .clip span { display:block; font-size:14px; margin-top:6px; }
@@ -88,22 +89,9 @@
   .list a { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px; border-bottom:1px solid var(--line); text-decoration:none; }
   .empty { padding:16px 14px; color:var(--muted); }
   footer { color:var(--muted); font-size:12px; margin-top:20px; }
-  .tabs { display:flex; border-bottom:1px solid var(--line); }
-  .tabs button { flex:1; background:none; border:0; border-bottom:3px solid transparent; color:var(--muted); font:inherit; font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:12px 8px 9px; cursor:pointer; }
-  .tabs button.on { color:var(--ink); border-bottom-color:var(--gold); }
-  .tabs .count { display:inline-block; min-width:18px; padding:0 5px; margin-left:6px; border-radius:9px; background:var(--live); color:#fff; font-size:11px; line-height:18px; }
-  .side { display:flex; flex-direction:column; min-height:0; }
-  .chat { display:flex; flex-direction:column; height:460px; }
-  .board { display:flex; flex-direction:column; }
-  /* Desktop: the side panel is exactly as tall as the video column and scrolls inside. */
-  @media (min-width: 861px) {
-    .side { height:0; min-height:100%; }
-    .side > .body { flex:1; min-height:0; display:flex; flex-direction:column; }
-    .side .board, .side .chat { flex:1; min-height:360px; height:auto; }
-    .side .board .scroll { flex:1; max-height:none; }
-  }
-  .chat .list { flex:1; min-height:0; overflow-y:auto; padding:8px 0; }
-  .side { overflow:hidden; }
+
+  /* Chat */
+  .chat .list { flex:1; min-height:0; overflow-y:auto; padding:8px 0; overscroll-behavior:contain; }
   .msg { display:flex; gap:9px; padding:6px 14px; align-items:flex-start; }
   .msg .src { flex:none; width:20px; height:20px; border-radius:5px; display:grid; place-items:center; margin-top:1px; }
   .msg .src svg { width:13px; height:13px; fill:#fff; }
@@ -112,21 +100,135 @@
   .msg .txt { font-size:14px; overflow-wrap:anywhere; }
   .msg.q .txt { color:#fff; }
   .msg.mine .who { color:var(--gold); }
-  .pinned { margin:10px 12px 2px; padding:9px 12px; border:1px solid var(--gold); border-radius:8px; background:rgba(201,162,39,.08); font-size:14px; }
+  .pinned { margin:10px 12px 2px; padding:9px 12px; border:1px solid var(--gold); border-radius:8px; background:rgba(224,181,50,.08); font-size:14px; }
   .pinned .k { color:var(--gold); font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; display:block; margin-bottom:2px; }
-  .composer { border-top:1px solid var(--line); padding:10px 12px; display:flex; gap:8px; }
-  .composer input { flex:1; min-width:0; background:#0f1315; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:9px 11px; font:inherit; font-size:14px; }
-  .composer button { background:var(--green); border:0; color:#fff; border-radius:8px; padding:0 14px; font:inherit; font-weight:700; cursor:pointer; }
+  .composer { border-top:1px solid var(--line); padding:10px 12px; display:flex; gap:8px; flex:none; }
+  .composer input { flex:1; min-width:0; background:#0f1315; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:10px 11px; font:inherit; font-size:16px; }
+  .composer button { background:var(--green); border:0; color:#fff; border-radius:8px; padding:0 14px; font-weight:700; cursor:pointer; }
   .composer button:disabled { opacity:.5; cursor:default; }
-  .chat .note { padding:0 12px 10px; font-size:12px; color:var(--muted); min-height:16px; }
+  .chat .note { padding:0 12px 10px; font-size:12px; color:var(--muted); min-height:16px; flex:none; }
   .chat .note.err { color:var(--under); }
   .chat .new { align-self:center; margin:-40px 0 8px; position:relative; background:var(--gold); color:#111; border:0; border-radius:999px; padding:4px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+
+  /* Games tab: my points and Top players */
+  .me-card { margin:12px; padding:14px; border-radius:12px; background:linear-gradient(135deg,rgba(224,181,50,.16),rgba(46,157,95,.12)); border:1px solid rgba(224,181,50,.35); }
+  .me-card .big { font-size:28px; font-weight:900; color:var(--gold); line-height:1; }
+  .me-card .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .me-card form { display:flex; gap:8px; margin-top:10px; }
+  .me-card input { flex:1; min-width:0; background:#0f1315; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:9px 11px; font:inherit; font-size:16px; }
+  .me-card button, .linkbtn { background:none; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer; }
+  .fan { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); }
+  .fan .r { width:30px; text-align:center; font-weight:800; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .fan .r.m { font-size:20px; }
+  .fan .n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+  .fan .c { color:var(--muted); font-size:12px; }
+  .fan .p { font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums; }
+  .fan.me { background:rgba(224,181,50,.08); }
+  .how { padding:12px 14px; color:var(--muted); font-size:13px; }
+
+  /* Game pop-up. Phones/tablets: a bottom sheet under the video (the video stays visible and
+     keeps playing; the rest of the page dims). Desktop: a card slides in beside the video. */
+  .layer { position:fixed; inset:0; z-index:50; pointer-events:none; }
+  .layer.open { pointer-events:auto; }
+  .dim { position:absolute; inset:0; top:var(--stage-b); background:rgba(0,0,0,.55); opacity:0; transition:opacity .25s; }
+  .layer.open .dim { opacity:1; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; max-height:calc(100dvh - var(--stage-b) - 8px); overflow:auto; overscroll-behavior:contain;
+    background:var(--panel2); border:1px solid rgba(224,181,50,.55); border-bottom:0; border-radius:18px 18px 0 0; padding:8px 16px calc(16px + env(safe-area-inset-bottom));
+    transform:translateY(105%); transition:transform .32s cubic-bezier(.2,.9,.25,1); box-shadow:0 -12px 40px rgba(0,0,0,.5); }
+  .layer.open .sheet { transform:none; }
+  .grab { width:40px; height:4px; border-radius:2px; background:#4a5258; margin:2px auto 8px; }
+  @media (min-width:861px) {
+    .layer { position:absolute; inset:0; z-index:20; border-radius:12px; overflow:hidden; }
+    .dim { top:0; }
+    .sheet { top:0; bottom:auto; max-height:100%; border:1px solid rgba(224,181,50,.55); border-radius:12px; transform:translateX(105%); box-shadow:-12px 0 40px rgba(0,0,0,.45); padding:14px 16px 16px; }
+    .grab { display:none; }
+  }
+  .sheet .k { color:var(--gold); font-size:11px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+  .sheet h3 { margin:4px 34px 2px 0; font-size:19px; line-height:1.25; }
+  .sheet .q { margin:2px 0 12px; color:#dfe7e2; }
+  .sheet .x { position:absolute; top:6px; right:6px; background:none; border:0; color:var(--muted); font-size:24px; cursor:pointer; width:40px; height:40px; }
+  .sheet .opts { display:grid; gap:9px; }
+  .opt { text-align:left; background:#0f1315; border:1.5px solid var(--line); border-radius:11px; color:var(--ink); padding:13px 14px; font-size:16px; cursor:pointer; position:relative; overflow:hidden; transition:border-color .2s, transform .1s; touch-action:manipulation; }
+  .opt:active:not(:disabled) { transform:scale(.98); }
+  .opt:disabled { cursor:default; }
+  .opt .bar2 { position:absolute; inset:0 auto 0 0; background:rgba(46,157,95,.3); z-index:0; transition:width .7s; }
+  .opt span { position:relative; z-index:1; }
+  .opt .pct { float:right; font-weight:800; }
+  .opt.mine { border-color:var(--gold); }
+  .opt.wrong { border-color:var(--under); background:rgba(255,107,107,.08); }
+  .opt.right { border-color:var(--green); background:rgba(46,157,95,.16); }
+  .opt.right::after { content:"✓"; position:absolute; right:14px; top:50%; transform:translateY(-50%); color:#7fe0a8; font-weight:900; z-index:1; }
+  .time { height:4px; background:var(--line); border-radius:2px; margin-top:14px; overflow:hidden; }
+  .time i { display:block; height:100%; background:var(--gold); transition:width 1s linear; }
+  .res { margin-top:12px; font-weight:700; min-height:1px; }
+  .res .plus { color:var(--gold); }
+  .sheet.shake { animation:shake .4s; }
+  @keyframes shake { 20%,60% { transform:translateX(-6px); } 40%,80% { transform:translateX(6px); } }
+  .wheel-wrap { position:relative; width:min(220px,32vh); margin:4px auto 14px; }
+  .wheel { width:100%; aspect-ratio:1; border-radius:50%; border:4px solid var(--gold); position:relative; transition:transform 3.2s cubic-bezier(.17,.67,.21,1); }
+  .wheel-wrap::after { content:""; position:absolute; top:-4px; left:50%; transform:translateX(-50%); border:10px solid transparent; border-top:16px solid var(--live); }
+  .wheel b { position:absolute; left:50%; top:50%; transform-origin:0 0; font-size:11px; color:#fff; text-shadow:0 1px 2px #000; white-space:nowrap; }
+  .go { display:block; width:100%; background:var(--live); border:0; color:#fff; border-radius:11px; padding:14px; font-size:16px; font-weight:800; cursor:pointer; text-align:center; text-decoration:none; }
+  .go:disabled { opacity:.6; }
+  .prize { display:inline-block; margin:2px 0 12px; padding:4px 10px; border-radius:999px; background:rgba(224,181,50,.15); color:var(--gold); font-size:13px; font-weight:700; }
+  .sheet input[type=tel] { width:100%; background:#0f1315; border:1px solid var(--line); border-radius:10px; color:var(--ink); padding:12px; font:inherit; font-size:16px; }
+  .check { display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--muted); margin:10px 0 12px; }
+  .row2 { display:flex; gap:8px; align-items:center; margin-top:10px; }
+  .small-btn { background:none; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer; }
+  .sheet.won { border-color:var(--gold); background:radial-gradient(circle at 50% 0%,#4a3510,#1b2024 65%); text-align:center; }
+  .sheet.won h3 { margin:6px 0 4px; font-size:24px; }
+  .trophy { font-size:72px; line-height:1; margin:6px auto 4px; display:inline-block; animation:trophy 1.1s cubic-bezier(.2,1.6,.4,1) both, glow 2s 1.1s infinite; }
+  @keyframes trophy { 0% { transform:scale(.2) rotate(-25deg); opacity:0; } 60% { transform:scale(1.25) rotate(8deg); opacity:1; } 100% { transform:none; } }
+  @keyframes glow { 50% { filter:drop-shadow(0 0 14px rgba(224,181,50,.8)); } }
+  /* "✓ Correct!" badge */
+  .badge { display:flex; align-items:center; gap:12px; margin:4px 0 12px; padding:12px 14px; border-radius:14px; background:linear-gradient(135deg,#1f6b43,#2e9d5f); animation:badge .5s cubic-bezier(.2,1.5,.4,1) both; }
+  .badge .tick { width:44px; height:44px; flex:none; border-radius:50%; background:#fff; color:#1f6b43; display:grid; place-items:center; font-size:26px; font-weight:900; animation:badge .5s .12s cubic-bezier(.2,1.8,.4,1) both; }
+  .badge strong { font-size:20px; display:block; line-height:1.1; }
+  .badge small { font-size:14px; font-weight:700; color:#fff3c4; }
+  @keyframes badge { from { transform:scale(.4); opacity:0; } }
+  .confetti { position:fixed; inset:0; pointer-events:none; z-index:80; width:100vw; height:100vh; }
+  @media (prefers-reduced-motion: reduce) { .floats span, .trophy, .badge, .badge .tick, .sheet.shake, .gamepill { animation:none !important; } .sheet { transition:none; } }
+
+  /* "Remind me" on the placeholder */
+  .remind { margin:16px auto 0; width:100%; text-align:left; }
+  .remind-row { display:flex; gap:8px; }
+  .remind input[type=tel] { flex:1; min-width:0; background:#0f1315; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:10px 12px; font:inherit; font-size:16px; }
+  .remind button { background:var(--live); border:0; color:#fff; border-radius:8px; padding:0 14px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .remind-ok { display:block; font-size:12px; color:var(--muted); margin-top:8px; }
+  .remind-msg { font-size:12px; color:var(--under); min-height:14px; margin-top:4px; }
+  .remind.done { color:#cfe6d8; font-size:14px; margin-top:16px; }
+
+  /* Phones and tablets (portrait): one screen, video on top, tabs below scroll inside. */
+  @media (max-width:860px) {
+    .wrap.event { padding:0; height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
+    .wrap.event header.top { padding:8px 12px 6px; margin:0; flex:none; }
+    .wrap.event h1 { font-size:16px; }
+    .wrap.event .grid { display:flex; flex-direction:column; flex:1; min-height:0; gap:0; }
+    .wrap.event .main { flex:none; position:relative; z-index:55; background:var(--bg); }
+    .wrap.event .player { border-radius:0; }
+    .wrap.event .bar { margin:0; padding:8px 12px; gap:6px; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
+    .wrap.event .bar::-webkit-scrollbar { display:none; }
+    .wrap.event .rx { width:38px; height:38px; font-size:18px; flex:none; }
+    .wrap.event .pts, .wrap.event .btn, .wrap.event .gamepill, .wrap.event .chip-draw { flex:none; height:38px; }
+    .wrap.event .side-wrap { flex:1; min-height:0; display:flex; }
+    .wrap.event .side { flex:1; border-radius:0; border-width:1px 0 0; }
+    .wrap.event .chat { height:auto; }
+    .wrap.event .scroll { max-height:none; }
+    .wrap.event footer { display:none; }
+    .wrap.event .player.waiting { min-height:0; aspect-ratio:auto; height:min(62vh, max(260px, 56.25vw)); }
+    .wrap.event .placeholder { overflow:auto; }
+  }
+  /* Phones turned sideways: the video takes the screen; tabs scroll below it. */
+  @media (max-width:960px) and (orientation:landscape) and (max-height:500px) {
+    .wrap.event { padding:0; }
+    .wrap.event .grid { display:block; }
+    .wrap.event .player { border-radius:0; max-height:100vh; aspect-ratio:auto; height:100vh; }
+    .wrap.event .side { height:80vh; margin-top:8px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap" id="app"><p class="sub">Loading…</p></div>
-<script src="/site/hls-1.5.20.light.min.js"></script>
-<script src="/site/player.js"></script>
 <script>
 (() => {
   const app = document.getElementById('app');
@@ -143,6 +245,9 @@
   };
   const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
   const livePill = (live) => el('span', { class: 'pill ' + (live ? 'live' : 'off'), text: live ? 'LIVE' : 'NOT LIVE' });
+  const reduced = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const desktop = () => window.matchMedia('(min-width: 861px)').matches;
+  const loadScript = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = res; s.onerror = rej; document.head.append(s); });
 
   // ------------------------------------------------------------ list of tournaments
   async function list() {
@@ -153,39 +258,66 @@
         el('div', {}, el('strong', { text: t.name }), el('div', { class: 'sub', text: [t.venue, t.orgName, t.startsOn].filter(Boolean).join(' · ') })),
         livePill(t.live)));
     app.replaceChildren(
-      el('header', {}, el('div', {}, el('div', { class: 'brand', text: 'Go Live' }), el('h1', { text: 'Live now' }))),
+      el('header', { class: 'top' }, el('div', {}, el('div', { class: 'brand', text: 'Go Live' }), el('h1', { text: 'Live now' }))),
       el('div', { class: 'panel list' }, ...(items.length ? items : [el('div', { class: 'empty', text: 'No tournaments to show right now.' })])),
     );
     setTimeout(list, 30000);
   }
 
-  // ------------------------------------------------------------ one tournament
+  // ------------------------------------------------------------ one tournament: the page parts
   let shownVideo = null, category = null, last = null;
   const playerBox = el('div', { class: 'player' });
-  const linksBox = el('div', { class: 'links' });
+  const floats = el('div', { class: 'floats', 'aria-hidden': 'true' });
+  const stage = el('div', { class: 'stage' }, playerBox, floats);
+  const bar = el('div', { class: 'bar' });
+  const mainCol = el('div', { class: 'main' }, stage, bar);
   const boardPanel = el('div', { class: 'board' });
   const chatPanel = el('div', { class: 'chat' });
-  const sideTabs = el('div', { class: 'tabs' });
+  const clipsPanel = el('div', { class: 'clipsTab' });
+  const fansPanel = el('div', { class: 'fans' });
+  const sideTabs = el('div', { class: 'tabs', role: 'tablist' });
   const sideBody = el('div', { class: 'body' });
   const sidePanel = el('div', { class: 'panel side' }, sideTabs, sideBody);
-  let sideTab = 'board', unread = 0, hasBoard = true;
-  const clipsPanel = el('div', { class: 'panel', style: 'margin-top:16px' });
-  const head = el('header');
+  const sideWrap = el('div', { class: 'side-wrap' }, sidePanel);
+  let sideTab = 'board', unread = 0, hasBoard = true, clipCount = 0, tInfo = null;
+  const head = el('header', { class: 'top' });
+
+  // The game pop-up layer (bottom sheet on phones, beside the video on desktop).
+  const dim = el('div', { class: 'dim' });
+  const sheet = el('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'false', tabindex: '-1' });
+  const layer = el('div', { class: 'layer', 'aria-hidden': 'true' }, dim, sheet);
+  function placeLayer() {
+    const host = desktop() ? sideWrap : document.body;
+    if (layer.parentNode !== host) host.append(layer);
+    const b = mainCol.getBoundingClientRect().bottom;
+    document.documentElement.style.setProperty('--stage-b', Math.max(0, Math.round(desktop() ? 0 : b)) + 'px');
+  }
+  window.addEventListener('resize', placeLayer);
+  if (window.ResizeObserver) new ResizeObserver(placeLayer).observe(mainCol);
 
   // ------------------------------------------------------------ player (YouTube IFrame API) + viewership
-  // The video is YouTube's player; the API tells us when it plays, pauses and is muted, so the
+  // The video is YouTube's player or ours; both tell us when it plays and is muted, so the
   // viewer clock counts only real watching (playing, tab visible). Reports go to our server
   // every 30 s and when the page is hidden or closed.
   let ytApi = null, player = null, ytPlaying = false;
-  // Our own player (HLS through the CDN): used instead of YouTube when the event has it.
-  let ours = null, shownSrc = null;
+  // Our own player (HLS through the CDN). Its scripts load only when this event uses it.
+  let ours = null, shownSrc = null, playerLib = null;
   const playingNow = () => ours ? ours.isPlaying() : Boolean(player && ytPlaying);
-  function mountOurs(src, live, title) {
+  function ensurePlayer() {
+    return playerLib || (playerLib = (async () => {
+      const v = document.createElement('video');
+      const nativeOnly = !window.MediaSource && !window.ManagedMediaSource && v.canPlayType('application/vnd.apple.mpegurl');
+      if (!nativeOnly && !window.Hls) await loadScript('/site/hls-1.5.20.light.min.js').catch(() => {});
+      if (!window.GoLivePlayer) await loadScript('/site/player.js');
+    })().catch(() => { playerLib = null; }));
+  }
+  async function mountOurs(src, live, title) {
     if (ours) ours.destroy();
-    player = null; ytPlaying = false;
-    ours = window.GoLivePlayer
-      ? GoLivePlayer.mount(playerBox, { src, live, title, onPlaying: (v) => { if (v) startView(); } })
-      : null;
+    ours = null; player = null; ytPlaying = false;
+    playerBox.replaceChildren(el('div', { class: 'placeholder' }, el('div', { class: 'sub', text: 'Loading the video…' })));
+    await ensurePlayer();
+    if (shownSrc !== src || !window.GoLivePlayer) return;
+    ours = GoLivePlayer.mount(playerBox, { src, live, title, onPlaying: (v) => { if (v) startView(); } });
   }
   function unmountOurs() { if (ours) { ours.destroy(); ours = null; } shownSrc = null; }
   const loadYt = () => ytApi || (ytApi = new Promise((resolve, reject) => {
@@ -242,7 +374,8 @@
   const sharedBy = () => store.get(SHARE_KEY);
   const refSlug = () => { try { const v = JSON.parse(store.get(REF_KEY) || 'null'); return v && Date.now() - v.at < 30 * 86400000 ? v.r : null; } catch { return null; } };
   const view = { token: null, starting: null, clock: 0, streamClockSec: null, streamAt: 0, live: false, pendPlay: 0, pendUnmuted: 0, lastSend: Date.now() };
-  // Started when the video first plays: that is when the viewer clock starts.
+  // Started when the video first plays (that is when the viewer clock starts), or when a live
+  // game opens, so nobody misses a quiz because the video was paused.
   function startView() {
     if (view.token || view.starting || !id) return view.starting;
     view.starting = fetch(`/api/public/tournaments/${id}/view`, {
@@ -258,6 +391,10 @@
       view.live = j.live;
       setStreamClock(j.streamClockSec);
       store.set(VIEWER_KEY, j.viewerKey);
+      fans.points = j.points || 0;
+      fans.name = j.nickname || null;
+      drawBar();
+      if (!fans.name && chatAuth) setNickname(chatAuth.name, true);
     }).catch(() => {}).finally(() => { view.starting = null; });
     return view.starting;
   }
@@ -281,20 +418,108 @@
   }, 1000);
   document.addEventListener('visibilitychange', () => { if (document.hidden) report(true); });
   window.addEventListener('pagehide', () => report(true));
-  // For the games (next step): the three clocks on this page.
   window.goLiveClocks = {
     viewer: () => view.clock,
     stream: () => view.streamClockSec == null ? null : view.streamClockSec + Math.floor((Date.now() - view.streamAt) / 1000),
     unmuted,
   };
 
+  // ------------------------------------------------------------ celebrations
+  // A tiny confetti burst on a canvas (no library). Bigger for prizes. Nothing when the viewer
+  // asked for less motion.
+  function confetti(big) {
+    if (reduced()) return;
+    const c = el('canvas', { class: 'confetti' });
+    document.body.append(c);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = innerWidth, H = innerHeight;
+    c.width = W * dpr; c.height = H * dpr;
+    const x = c.getContext('2d');
+    x.scale(dpr, dpr);
+    const colors = ['#e0b532', '#2e9d5f', '#e53935', '#ffffff', '#4aa3ff', '#ff8a3d'];
+    const ps = [];
+    const burst = (ox, oy, n, spread, up) => {
+      for (let i = 0; i < n; i++) {
+        const a = (-Math.PI / 2) + (Math.random() - 0.5) * spread;
+        const v = up * (0.6 + Math.random() * 0.6);
+        ps.push({ x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4, c: colors[i % colors.length], life: 0 });
+      }
+    };
+    const origin = sheet.getBoundingClientRect();
+    const oy = Math.min(H * 0.8, origin.top > 0 ? origin.top + 60 : H * 0.6);
+    if (big) { burst(W * 0.15, H, 110, 1.0, 19); burst(W * 0.85, H, 110, 1.0, 19); burst(W / 2, oy, 90, 2.4, 14); }
+    else burst(origin.width ? origin.left + origin.width / 2 : W / 2, oy, 90, 2.0, 13);
+    const end = performance.now() + (big ? 3600 : 2200);
+    (function frame(now) {
+      x.clearRect(0, 0, W, H);
+      for (const p of ps) {
+        p.vy += 0.32; p.vx *= 0.992; p.vy *= 0.992; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.fillStyle = p.c;
+        x.globalAlpha = Math.max(0, Math.min(1, (end - now) / 600));
+        x.fillRect(-p.w / 2, -p.h / 4, p.w, p.h / 2 * (0.6 + 0.4 * Math.sin(p.r * 3)));
+        x.restore();
+      }
+      if (now < end) requestAnimationFrame(frame); else c.remove();
+    })(performance.now());
+  }
+  const badge = (title, sub) => el('div', { class: 'badge', role: 'status' }, el('div', { class: 'tick', text: '✓' }), el('div', {}, el('strong', { text: title }), sub ? el('small', { text: sub }) : null));
+
+  // ------------------------------------------------------------ live reactions 👏 🔥 ⛳
+  const RX = { clap: '👏', fire: '🔥', golf: '⛳' };
+  const rx = { last: null, mine: { clap: 0, fire: 0, golf: 0 } };
+  function floatUp(emoji, delay = 0) {
+    if (floats.childElementCount > 24) return;
+    const s = el('span', { text: emoji });
+    const dx = (Math.random() - 0.5) * 40;
+    s.style.setProperty('--dx1', dx.toFixed(0) + 'px');
+    s.style.setProperty('--dx2', (-dx * 0.8).toFixed(0) + 'px');
+    s.style.animationDelay = delay + 'ms';
+    s.addEventListener('animationend', () => s.remove());
+    floats.append(s);
+  }
+  function react(kind, btn) {
+    floatUp(RX[kind]);
+    btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
+    rx.mine[kind]++;
+    fetch(`/api/public/tournaments/${id}/react`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind }) }).catch(() => {});
+  }
+  // Everyone else's reactions arrive with the games feed (every few seconds) and float up too.
+  function othersReacted(totals) {
+    if (!totals) return;
+    if (rx.last && !document.hidden) {
+      let i = 0;
+      for (const k of Object.keys(RX)) {
+        let n = (totals[k] || 0) - (rx.last[k] || 0) - rx.mine[k];
+        n = Math.max(0, Math.min(8, n));
+        for (let j = 0; j < n; j++) floatUp(RX[k], (i++) * 220 + Math.random() * 300);
+      }
+    }
+    rx.last = totals; rx.mine = { clap: 0, fire: 0, golf: 0 };
+  }
+
+  // ------------------------------------------------------------ bar under the video
+  const drawSlot = el('span');
+  function drawBar() {
+    const t = tInfo;
+    const hasGames = Boolean(games.feed && games.feed.moments && games.feed.moments.length);
+    const c = games.current;
+    bar.replaceChildren(...[
+      ...Object.entries(RX).map(([k, e]) => { const b = el('button', { class: 'rx', type: 'button', 'aria-label': 'React ' + e, text: e }); b.onclick = () => react(k, b); return b; }),
+      c && c.min ? el('button', { class: 'gamepill', type: 'button', onclick: () => openSheet(), text: '🎯 ' + (LABEL[c.m.type] || 'Game') + ' open · play' }) : null,
+      drawSlot,
+      hasGames || fans.points ? el('button', { class: 'pts' + (fans.bump ? ' bump' : ''), type: 'button', title: 'Your points: see Top players', onclick: () => { sideTab = 'games'; drawSide(); }, text: '⭐ ' + fans.points }) : null,
+      el('span', { class: 'sp' }),
+      t && t.youtube ? el('a', { class: 'btn', href: t.youtube.watchUrl, target: '_blank', rel: 'noopener', text: 'YouTube' }) : null,
+      t && t.facebookUrl ? el('a', { class: 'btn', href: t.facebookUrl, target: '_blank', rel: 'noopener', text: 'Facebook' }) : null,
+      el('button', { class: 'btn', type: 'button', onclick: () => t && share(t), text: 'Share' })].filter(Boolean));
+    fans.bump = false;
+  }
 
   // ------------------------------------------------------------ games (moments) on three clocks
   // viewer clock: this viewer's watched seconds · stream clock: since the first Go live ·
-  // director: fired live. One card at a time (director first, then stream, then viewer), with a
-  // gap between cards. The server checks every play and decides every result.
-  const momentBox = el('div');
-  const games = { feed: null, done: new Set(), current: null, lastShownAt: 0, visits: 1 };
+  // director: fired live. One pop-up at a time (director first, then stream, then viewer), with a
+  // gap between them. The server checks every play and decides every result.
+  const games = { feed: null, done: new Set(), current: null, lastShownAt: 0, visits: 1, wins: [] };
   const ansKey = 'gl_ans_' + id;
   const myAnswers = (() => { try { return JSON.parse(store.get(ansKey) || '{}'); } catch { return {}; } })();
   const saveAnswer = (key, ans) => { myAnswers[key] = ans; store.set(ansKey, JSON.stringify(myAnswers)); };
@@ -302,20 +527,28 @@
 
   async function pollGames() {
     try {
-      games.feed = await api(`/api/public/tournaments/${id}/moments`);
-      if (games.feed.streamClockSec != null && view.streamClockSec == null) setStreamClock(games.feed.streamClockSec);
+      const f = await api(`/api/public/tournaments/${id}/moments`);
+      const had = Boolean(games.feed && games.feed.moments.length);
+      games.feed = f;
+      if (f.streamClockSec != null && view.streamClockSec == null) setStreamClock(f.streamClockSec);
+      othersReacted(f.reactions);
+      // A live game is open: start the viewer even if the video hasn't played yet.
+      const offset = f.serverTime ? Date.parse(f.serverTime) - Date.now() : 0;
+      if (!view.token && f.runs.some((r) => Date.parse(r.closesAt) - offset > Date.now())) startView();
       // Predictions settled since: tell the viewer how they did.
-      for (const r of games.feed.runs) {
+      for (const r of f.runs) {
         const k = r.momentId + ':' + r.runKey;
-        if (r.correctOption && myAnswers[k] && !settledShown.has(k)) {
-          settledShown.add(k);
-          const m = games.feed.moments.find((x) => x.id === r.momentId);
-          if (m) toastCard(myAnswers[k] === r.correctOption ? 'You called it! ' + m.title : 'Not this time: ' + m.title + '. Answer: ' + ((m.options.find((o) => o.id === r.correctOption) || {}).text || ''));
+        if (r.correctOption && myAnswers[k] && !settledShown.has(k) && !store.get('gl_told_' + k)) {
+          settledShown.add(k); store.set('gl_told_' + k, '1');
+          const m = f.moments.find((x) => x.id === r.momentId);
+          if (m) games.results.push({ m, right: myAnswers[k] === r.correctOption, answer: (m.options.find((o) => o.id === r.correctOption) || {}).text || '' });
         }
       }
+      if (had !== Boolean(f.moments.length)) drawBar();
     } catch {}
-    setTimeout(pollGames, document.hidden ? 15000 : 5000);
+    setTimeout(pollGames, document.hidden ? 15000 : 4000);
   }
+  games.results = [];
 
   function inAudience(m) {
     if (m.audience === 'unmuted') return goLiveClocks.unmuted();
@@ -355,7 +588,7 @@
     cands.sort((a, b) => a.prio - b.prio);
     const c = cands[0];
     if (!c) return null;
-    // Gap between cards (the director's games skip the wait).
+    // Gap between pop-ups (the director's games skip the wait).
     if (c.prio > 0 && now - games.lastShownAt < (f.gapSec || 0) * 1000) return null;
     return c;
   }
@@ -363,47 +596,82 @@
   const post = (url, body) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     .then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error((j.error && j.error.message) || 'Try again'); return j; });
 
-  function closeCard(kind) {
+  // The layer: open shows the sheet; tapping the dim area tucks an unplayed game into a
+  // "Quiz open · play" button under the video (it keeps its time); × closes it.
+  let autoClose = null;
+  function openSheet() {
+    placeLayer();
+    if (games.current) games.current.min = false;
+    layer.classList.add('open'); layer.setAttribute('aria-hidden', 'false');
+    drawBar();
+    setTimeout(() => { try { sheet.focus({ preventScroll: true }); } catch {} }, 50);
+  }
+  function hideSheet() { layer.classList.remove('open'); layer.setAttribute('aria-hidden', 'true'); }
+  dim.onclick = () => {
     const c = games.current;
+    if (c && !c.played && c.m.id !== 'win' && c.m.id !== 'result') { c.min = true; hideSheet(); drawBar(); return; }
+    closeCard();
+  };
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && layer.classList.contains('open')) closeCard('dismissed'); });
+  function later(ms) { clearTimeout(autoClose); autoClose = setTimeout(() => closeCard(), ms); }
+
+  function closeCard(kind) {
+    clearTimeout(autoClose);
+    const c = games.current;
+    hideSheet();
     if (!c) return;
-    // A closed lucky-draw pop-up can be opened again from a small button under the video.
-    if (c.m.type === 'draw' && !c.played) { clearInterval(c.timer); games.current = null; momentBox.replaceChildren(el('button', { class: 'chip-draw', text: '🎟 Lucky draw: enter', onclick: () => { c.until = Date.now() + c.m.openSec * 1000; showCard(c); } })); if (kind === 'dismissed') post(`/api/public/moments/${c.m.id}/seen`, { token: view.token, runKey: c.runKey, kind: 'dismissed' }).catch(() => {}); return; }
-    if (kind === 'dismissed' && !c.played) post(`/api/public/moments/${c.m.id}/seen`, { token: view.token, runKey: c.runKey, kind: 'dismissed' }).catch(() => {});
     clearInterval(c.timer);
     games.current = null;
-    momentBox.replaceChildren();
+    // A closed lucky draw can be opened again from a small button under the video.
+    if (c.m.type === 'draw' && !c.played) {
+      drawSlot.replaceChildren(el('button', { class: 'chip-draw', type: 'button', text: '🎟 Lucky draw', onclick: () => { drawSlot.replaceChildren(); c.until = Date.now() + c.m.openSec * 1000; showCard(c, true); } }));
+    }
+    if (kind === 'dismissed' && !c.played && c.runKey) post(`/api/public/moments/${c.m.id}/seen`, { token: view.token, runKey: c.runKey, kind: 'dismissed' }).catch(() => {});
+    drawBar();
   }
 
-  function toastCard(text) {
-    if (games.current) return;
-    momentBox.replaceChildren(el('div', { class: 'moment' }, el('div', { class: 'k', text: 'Result' }), el('h3', { text }), el('button', { class: 'x', 'aria-label': 'Close', text: '×', onclick: () => momentBox.replaceChildren() })));
-    setTimeout(() => { if (!games.current) momentBox.replaceChildren(); }, 8000);
+  function frame(c, k, title, ...body) {
+    sheet.className = 'sheet';
+    sheet.setAttribute('aria-label', title);
+    sheet.replaceChildren(el('div', { class: 'grab' }),
+      el('button', { class: 'x', type: 'button', 'aria-label': 'Close', text: '×', onclick: () => closeCard('dismissed') }),
+      el('div', { class: 'k', text: k }),
+      el('h3', { text: title }),
+      ...body.filter((x) => x != null));
+  }
+
+  function gotPoints(r) {
+    if (typeof r.totalPoints === 'number') { fans.points = r.totalPoints; fans.bump = true; drawBar(); }
+    loadFans();
   }
 
   const LABEL = { quiz: 'Quiz', poll: 'Poll', prediction: 'Predict', spin: 'Spin the wheel', draw: 'Lucky draw' };
-  function showCard(c) {
+  function showCard(c, again) {
     games.current = c;
     games.done.add(c.key);
     games.lastShownAt = Date.now();
-    post(`/api/public/moments/${c.m.id}/seen`, { token: view.token, runKey: c.runKey, kind: 'shown' }).catch(() => {});
+    if (!again) post(`/api/public/moments/${c.m.id}/seen`, { token: view.token, runKey: c.runKey, kind: 'shown' }).catch(() => {});
     const m = c.m;
-    const res = el('div', { class: 'res' });
-    const bar = el('i', { style: 'width:100%' });
+    const res = el('div', { class: 'res', 'aria-live': 'polite' });
+    const timeBar = el('i', { style: 'width:100%' });
     const total = Math.max(1, c.until - Date.now());
+    const top = el('div');
     let body;
     if (m.type === 'draw') {
-      // Lucky draw: a small pop-up for a mobile number. Only viewers still watching at the draw can win.
-      const phone = el('input', { type: 'tel', inputmode: 'tel', autocomplete: 'tel', placeholder: 'Mobile number', maxlength: '16' });
+      // Lucky draw: a mobile number. Only viewers still watching at the draw can win.
+      const phone = el('input', { type: 'tel', inputmode: 'tel', autocomplete: 'tel', placeholder: 'Mobile number', maxlength: '16', 'aria-label': 'Mobile number' });
       const ok = el('input', { type: 'checkbox' });
-      const go = el('button', { class: 'go', text: 'Enter the draw' });
+      const go = el('button', { class: 'go', type: 'button', text: 'Enter the draw' });
       go.onclick = async () => {
         if (!ok.checked) { res.textContent = 'Tick the box to enter.'; return; }
         go.disabled = true; res.textContent = '';
         try {
           await post(`/api/public/moments/${m.id}/enter`, { token: view.token, runKey: c.runKey, phone: phone.value, consent: true });
           c.played = true; store.set('gl_draw_' + m.id, '1');
-          res.textContent = "You're in! Winners are announced at the end of the show. Keep watching to win.";
-          setTimeout(() => closeCard(), 6000);
+          top.replaceChildren(badge("You're in!", 'Winners are picked at the end. Keep watching to win.'));
+          confetti(false);
+          phone.disabled = true; go.hidden = true; res.textContent = '';
+          later(5000);
         } catch (e) { res.textContent = e.message; go.disabled = false; }
       };
       body = [phone, el('label', { class: 'check' }, ok, el('span', {}, 'I agree to the ', el('a', { href: '/prize-terms/' + id, target: '_blank', rel: 'noopener', text: 'prize terms' }), ' and to be contacted if I win.')), go];
@@ -411,8 +679,8 @@
       const n = m.options.length, step = 360 / n;
       const colors = ['#2e7d4f', '#c9a227', '#1e5f8a', '#a83232', '#6b3fa0', '#3a7d7d', '#8a5a1e', '#4a4f55'];
       const wheel = el('div', { class: 'wheel', style: 'background:conic-gradient(' + m.options.map((o, i) => `${colors[i % colors.length]} ${i * step}deg ${(i + 1) * step}deg`).join(',') + ')' });
-      m.options.forEach((o, i) => { const b = el('b', { text: o.text.slice(0, 18) }); b.style.transform = `rotate(${i * step + step / 2 - 90}deg) translate(28px,-6px)`; wheel.append(b); });
-      const go = el('button', { class: 'go', text: 'SPIN' });
+      m.options.forEach((o, i) => { const b = el('b', { text: o.text.slice(0, 18) }); b.style.transform = `rotate(${i * step + step / 2 - 90}deg) translate(26px,-6px)`; wheel.append(b); });
+      const go = el('button', { class: 'go', type: 'button', text: 'SPIN' });
       go.onclick = async () => {
         go.disabled = true;
         try {
@@ -420,58 +688,84 @@
           c.played = true;
           const i = Math.max(0, m.options.findIndex((o) => o.id === r.segment));
           wheel.style.transform = `rotate(${360 * 5 + (360 - (i * step + step / 2))}deg)`;
-          setTimeout(() => { res.textContent = r.win ? '🎉 ' + r.text : r.text; if (r.prize) queueWin(r.prize); setTimeout(() => closeCard(), r.prize ? 2500 : 7000); }, 3300);
+          setTimeout(() => {
+            go.hidden = true;
+            if (r.win) { top.replaceChildren(badge(r.text, '+' + r.points + ' points')); confetti(Boolean(r.prize)); }
+            else res.replaceChildren(r.text + ' ', el('span', { class: 'plus', text: '+' + r.points + ' points' }));
+            gotPoints(r);
+            if (r.prize) queueWin(r.prize);
+            later(r.prize ? 2200 : 5000);
+          }, reduced() ? 300 : 3300);
         } catch (e) { res.textContent = e.message; go.disabled = false; }
       };
       body = [el('div', { class: 'wheel-wrap' }, wheel), go];
     } else {
-      const btns = m.options.map((o) => el('button', { class: 'opt' }, el('span', { class: 'bar', style: 'width:0' }), el('span', { text: o.text })));
+      const btns = m.options.map((o) => el('button', { class: 'opt', type: 'button' }, el('span', { class: 'bar2', style: 'width:0' }), el('span', { text: o.text })));
       btns.forEach((b, i) => {
         b.onclick = async () => {
           btns.forEach((x) => (x.disabled = true));
+          res.textContent = '';
           try {
             const r = (await post(`/api/public/moments/${m.id}/play`, { token: view.token, runKey: c.runKey, answer: m.options[i].id })).result;
             c.played = true;
             b.classList.add('mine');
+            const plus = '+' + (r.points || 0) + ' points';
             if (m.type === 'quiz') {
               btns.forEach((x, j) => { if (m.options[j].id === r.correctOption) x.classList.add('right'); });
-              if (!r.correct) b.classList.add('wrong');
-              res.textContent = r.correct ? 'Correct! 🎉' : 'Not quite.';
+              if (r.correct) { top.replaceChildren(badge('Correct!', plus)); confetti(Boolean(r.prize)); }
+              else {
+                b.classList.add('wrong');
+                const right = (m.options.find((o) => o.id === r.correctOption) || {}).text;
+                res.replaceChildren('Not quite' + (right ? ': the answer is ' + right + '. ' : '. '), el('span', { class: 'plus', text: plus + ' for playing' }));
+                sheet.classList.remove('shake'); void sheet.offsetWidth; sheet.classList.add('shake');
+              }
             }
-            if (r.results) r.results.forEach((x, j) => { btns[j].querySelector('.bar').style.width = x.percent + '%'; btns[j].append(el('span', { class: 'pct', text: x.percent + '%' })); });
-            if (m.type === 'prediction') { saveAnswer(c.m.id + ':' + c.runKey, m.options[i].id); res.textContent = "Saved! We'll tell you if you called it."; }
-            if (m.type === 'poll') res.textContent = 'Thanks for voting!';
+            if (r.results) r.results.forEach((x, j) => { btns[j].querySelector('.bar2').style.width = x.percent + '%'; btns[j].append(el('span', { class: 'pct', text: x.percent + '%' })); });
+            if (m.type === 'prediction') { saveAnswer(m.id + ':' + c.runKey, m.options[i].id); res.replaceChildren("Saved! We'll tell you if you called it: a right call is +100. ", el('span', { class: 'plus', text: plus })); }
+            if (m.type === 'poll') res.replaceChildren('Thanks for voting! ', el('span', { class: 'plus', text: plus }));
+            gotPoints(r);
             if (r.prize) queueWin(r.prize);
-            setTimeout(() => closeCard(), r.prize ? 2500 : 7000);
+            later(r.prize ? 2200 : r.correct ? 5500 : 5000);
           } catch (e) { res.textContent = e.message; btns.forEach((x) => (x.disabled = false)); }
         };
       });
       body = [el('div', { class: 'opts' }, ...btns)];
     }
-    momentBox.replaceChildren(el('div', { class: 'moment', role: 'dialog', 'aria-label': m.title },
-      el('button', { class: 'x', 'aria-label': 'Close', text: '×', onclick: () => closeCard('dismissed') }),
-      el('div', { class: 'k', text: LABEL[m.type] || 'Game' }),
-      el('h3', { text: m.title }),
+    frame(c, LABEL[m.type] || 'Game', m.title, top,
       m.question ? el('p', { class: 'q', text: m.question }) : null,
-      m.prize ? el('div', { class: 'prize', text: 'Win: ' + m.prize.text + (m.prize.sponsor ? ' · ' + m.prize.sponsor : '') }) : null,
-      ...body, res, el('div', { class: 'time' }, bar)));
+      m.prize ? el('div', { class: 'prize', text: '🎁 Win: ' + m.prize.text + (m.prize.sponsor ? ' · ' + m.prize.sponsor : '') }) : null,
+      ...body, res, el('div', { class: 'time' }, timeBar));
+    openSheet();
     c.timer = setInterval(() => {
       const left = c.until - Date.now();
-      bar.style.width = Math.max(0, (100 * left) / total) + '%';
+      timeBar.style.width = Math.max(0, (100 * left) / total) + '%';
       if (left <= 0 && !c.played) closeCard();
     }, 1000);
+  }
+
+  // A settled prediction: "You called it!" with confetti, or the right answer.
+  function showResult(x) {
+    games.current = { m: { id: 'result' }, runKey: '', played: true, timer: null };
+    if (x.right) {
+      frame(games.current, 'Prediction', x.m.title, badge('You called it!', '+100 points'));
+      openSheet(); confetti(false); loadFans(true);
+    } else {
+      frame(games.current, 'Prediction', x.m.title, el('p', { class: 'q', text: 'Not this time. The answer was ' + x.answer + '. Keep playing for more points!' }));
+      openSheet();
+    }
+    later(5000);
   }
 
   setInterval(() => {
     if (games.current || document.hidden) return;
     if (games.wins.length) return showWin(games.wins.shift());
+    if (games.results.length) return showResult(games.results.shift());
     const c = nextGame();
     if (c) showCard(c);
   }, 1000);
 
   // ------------------------------------------------------------ "You won!"
   // Claim is the main button. Sharing is optional and never needed to claim.
-  games.wins = [];
   const winsSeen = new Set();
   function queueWin(w) { if (!w || winsSeen.has(w.id)) return; winsSeen.add(w.id); games.wins.push(w); }
   function shareUrl() { return location.origin + '/watch/' + id + (games.shareCode ? '?s=' + games.shareCode : ''); }
@@ -506,15 +800,66 @@
   }
   function showWin(w) {
     games.current = { m: { id: 'win' }, runKey: '', played: true, timer: null };
-    momentBox.replaceChildren(el('div', { class: 'moment won', role: 'dialog', 'aria-label': 'You won' },
-      el('button', { class: 'x', 'aria-label': 'Close', text: '×', onclick: () => closeCard() }),
-      el('div', { class: 'k', text: 'Winner' }),
-      el('h3', { text: '🎉 You won ' + w.prize + '!' }),
+    frame(games.current, 'Winner', 'You won ' + w.prize + '!',
       w.sponsor ? el('p', { class: 'q', text: 'From ' + w.sponsor }) : null,
-      el('a', { class: 'go', style: 'display:block;text-align:center;text-decoration:none', href: w.claimUrl, target: '_blank', rel: 'noopener', text: 'Claim prize' }),
+      el('a', { class: 'go', href: w.claimUrl, target: '_blank', rel: 'noopener', text: 'Claim prize' }),
       el('div', { class: 'row2' },
-        el('span', { class: 'sub', style: 'flex:1', text: w.claimBy ? 'Claim by ' + new Date(w.claimBy).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '' }),
-        el('button', { class: 'small-btn', onclick: () => shareWin(w), text: 'Share (optional)' }))));
+        el('span', { class: 'sub', style: 'flex:1;text-align:left', text: w.claimBy ? 'Claim by ' + new Date(w.claimBy).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '' }),
+        el('button', { class: 'small-btn', type: 'button', onclick: () => shareWin(w), text: 'Share (optional)' })));
+    sheet.classList.add('won');
+    sheet.insertBefore(el('div', { class: 'trophy', 'aria-hidden': 'true', text: '🏆' }), sheet.querySelector('.k'));
+    openSheet();
+    confetti(true);
+    setTimeout(() => { if (games.current && games.current.m.id === 'win') confetti(true); }, 1800);
+  }
+
+  // ------------------------------------------------------------ Games tab: points and Top players
+  const fans = { points: 0, name: null, data: null, at: 0, bump: false, editing: false };
+  async function loadFans(force) {
+    if (!force && Date.now() - fans.at < 3000) return;
+    fans.at = Date.now();
+    try {
+      fans.data = await api(`/api/public/tournaments/${id}/fans` + (view.token ? '?token=' + encodeURIComponent(view.token) : ''));
+      if (fans.data.me) { fans.points = fans.data.me.points; if (!fans.name && !/^Fan [0-9A-F]{4}$/.test(fans.data.me.name)) fans.name = fans.data.me.name; }
+      drawFans(); drawBar();
+    } catch {}
+  }
+  setInterval(() => { if (sideTab === 'games' && !document.hidden) loadFans(); }, 15000);
+  async function setNickname(name, quiet) {
+    try {
+      const r = await post('/api/public/view/nickname', { token: view.token, name });
+      fans.name = r.name; fans.editing = false; loadFans(true);
+      return null;
+    } catch (e) { if (!quiet) return e.message; return null; }
+  }
+  function drawFans() {
+    if (sideTab !== 'games') return;
+    const d = fans.data;
+    const me = d && d.me;
+    const msg = el('div', { class: 'sub', style: 'margin-top:6px;color:var(--under)' });
+    let nameRow;
+    if (!view.token) nameRow = el('div', { class: 'sub', style: 'margin-top:8px', text: 'Play the games during the show to earn points.' });
+    else if (!fans.name || fans.editing) {
+      const inp = el('input', { placeholder: 'Your name on Top players', maxlength: '24', autocomplete: 'nickname', value: fans.name || (chatAuth && chatAuth.name) || '' });
+      nameRow = el('form', { onsubmit: async (e) => { e.preventDefault(); const err = await setNickname(inp.value); if (err) msg.textContent = err; } }, inp, el('button', { type: 'submit', text: 'Save' }));
+    } else nameRow = el('div', { class: 'row', style: 'margin-top:8px' }, el('span', { class: 'sub', text: 'Playing as ' }), el('strong', { text: fans.name }), el('button', { class: 'linkbtn', type: 'button', onclick: () => { fans.editing = true; drawFans(); }, text: 'Change' }));
+    const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : null);
+    const row = (x) => el('div', { class: 'fan' + (x.me ? ' me' : '') },
+      el('span', { class: 'r' + (medal(x.rank) ? ' m' : ''), text: medal(x.rank) || String(x.rank) }),
+      el('span', { class: 'n', text: x.name + (x.me ? ' (you)' : '') }),
+      el('span', { class: 'c', text: x.correct ? x.correct + ' ✓' : '' }),
+      el('span', { class: 'p', text: x.points }));
+    const top = d ? d.top : [];
+    fansPanel.replaceChildren(
+      el('div', { class: 'me-card' },
+        el('div', { class: 'row' },
+          el('div', { class: 'big', text: '⭐ ' + fans.points }),
+          el('div', { class: 'sub', text: me ? 'You are #' + me.rank + ' of ' + d.players : 'points' })),
+        nameRow, msg),
+      el('div', { class: 'scroll' },
+        top.length ? el('div', {}, ...top.map(row), me && !top.some((x) => x.me) ? row(me) : null)
+          : el('div', { class: 'empty', text: 'No players yet. Be the first: answer the next quiz!' }),
+        el('div', { class: 'how', text: 'Right answers +100 · a lucky spin +50 · every game you play +10. Prizes are shown on each game.' })));
   }
 
   // "Remind me": a phone number, messaged when the stream starts.
@@ -570,10 +915,6 @@
           el('div', { class: 'sub', text: t.facebookUrl ? 'Watch on Facebook below. This page updates live.' : (t.live ? 'The video appears here in a moment.' : 'Get a message the moment it starts.') }),
           t.live || !t.extras ? null : remindForm())));
     }
-    linksBox.replaceChildren(
-      ...[t.youtube && el('a', { class: 'btn', href: t.youtube.watchUrl, target: '_blank', rel: 'noopener', text: 'Watch on YouTube' }),
-        t.facebookUrl && el('a', { class: 'btn', href: t.facebookUrl, target: '_blank', rel: 'noopener', text: 'Watch on Facebook' }),
-        el('button', { class: 'btn', onclick: () => share(t), text: 'Share' })].filter(Boolean));
   }
 
   function share(t) {
@@ -598,20 +939,26 @@
             el('td', { class: 'num' + (String(r.toPar).startsWith('-') ? ' under' : ''), text: r.toPar }),
             el('td', { class: 'num', text: r.thru }))))))
       : el('div', { class: 'empty', text: 'Scores appear here as soon as the first hole is played.' });
+    const keep = boardPanel.querySelector('.scroll');
+    const y = keep ? keep.scrollTop : 0;
     boardPanel.replaceChildren(...[chips, body].filter(Boolean));
+    const s = boardPanel.querySelector('.scroll'); if (s) s.scrollTop = y;
   }
 
+  let clipSig = '';
   function renderClips(clips) {
-    if (!clips.length) { clipsPanel.hidden = true; return; }
-    clipsPanel.hidden = false;
-    clipsPanel.replaceChildren(el('h2', {}, el('span', { text: 'Highlights' })),
-      el('div', { class: 'clips' }, ...clips.map((c) =>
-        el('a', { class: 'clip', href: c.landscapeUrl, target: '_blank', rel: 'noopener' },
-          el('img', { src: c.thumbUrl, alt: c.title, loading: 'lazy' }),
-          el('span', { text: c.title }),
-          el('small', { text: c.durationSec + ' s' })))));
+    const sig = clips.map((c) => c.id || c.thumbUrl).join(',');
+    if (sig === clipSig) return;
+    clipSig = sig;
+    const had = clipCount;
+    clipCount = clips.length;
+    clipsPanel.replaceChildren(el('div', { class: 'scroll' }, el('div', { class: 'clips' }, ...clips.map((c) =>
+      el('a', { class: 'clip', href: c.landscapeUrl, target: '_blank', rel: 'noopener' },
+        el('img', { src: c.thumbUrl, alt: c.title, loading: 'lazy', decoding: 'async' }),
+        el('span', { text: c.title }),
+        el('small', { text: c.durationSec + ' s' }))))));
+    if (Boolean(had) !== Boolean(clipCount)) { if (!clipCount && sideTab === 'clips') sideTab = 'chat'; drawSide(); }
   }
-
 
   // ------------------------------------------------------------ chat (watch page + YouTube + Facebook)
   const ICONS = {
@@ -652,13 +999,14 @@
           const j = await r.json();
           if (!r.ok) throw new Error(j.error && j.error.message);
           chatAuth = { token: j.token, name: j.name }; store.set(chatKey, JSON.stringify(chatAuth)); renderComposer();
+          if (view.token && !fans.name) setNickname(j.name, true);
           composer.querySelector('input').focus();
         } catch (err) { note.className = 'note err'; note.textContent = err.message || 'Could not join the chat.'; }
       };
       composer.replaceChildren(name, el('button', { type: 'submit', text: 'Join' }));
       return;
     }
-    const text = el('input', { placeholder: `Say something, ${chatAuth.name}`, maxlength: '200', autocomplete: 'off' });
+    const text = el('input', { placeholder: `Say something, ${chatAuth.name}`, maxlength: '200', autocomplete: 'off', enterkeyhint: 'send' });
     const send = el('button', { type: 'submit', text: 'Send' });
     composer.onsubmit = async (e) => {
       e.preventDefault();
@@ -714,21 +1062,31 @@
     setTimeout(pollChat, document.hidden ? 10000 : 3000);
   }
 
+  // ------------------------------------------------------------ tabs: Chat · Leaderboard · Clips · Games
   function drawTabs() {
+    const tab = (k, label, extra) => el('button', { class: sideTab === k ? 'on' : '', role: 'tab', 'aria-selected': String(sideTab === k), type: 'button', onclick: () => { sideTab = k; if (k === 'chat') unread = 0; drawSide(); } }, label, extra || null);
     sideTabs.replaceChildren(...[
-      hasBoard ? el('button', { class: sideTab === 'board' ? 'on' : '', onclick: () => { sideTab = 'board'; drawSide(); }, text: 'Leaderboard' }) : null,
-      el('button', { class: sideTab === 'chat' ? 'on' : '', onclick: () => { sideTab = 'chat'; unread = 0; drawSide(); chatList.scrollTop = chatList.scrollHeight; newBtn.hidden = true; } },
-        'Live chat', unread ? el('span', { class: 'count', text: unread > 99 ? '99+' : String(unread) }) : null),
+      tab('chat', 'Chat', unread ? el('span', { class: 'count', text: unread > 99 ? '99+' : String(unread) }) : null),
+      hasBoard ? tab('board', 'Leaderboard') : null,
+      clipCount ? tab('clips', 'Clips') : null,
+      tab('games', 'Games'),
     ].filter(Boolean));
   }
-  function drawSide() { drawTabs(); sideBody.replaceChildren(sideTab === 'chat' ? chatPanel : boardPanel); }
+  function drawSide() {
+    if (sideTab === 'board' && !hasBoard) sideTab = 'chat';
+    drawTabs();
+    sideBody.replaceChildren({ chat: chatPanel, board: boardPanel, clips: clipsPanel, games: fansPanel }[sideTab] || chatPanel);
+    if (sideTab === 'chat') { chatList.scrollTop = chatList.scrollHeight; newBtn.hidden = true; }
+    if (sideTab === 'games') { drawFans(); loadFans(); }
+  }
 
   async function tournament() {
     try {
       const d = await api('/api/public/tournaments/' + id);
       const t = d.tournament;
+      tInfo = t;
       document.title = t.name + ' · Go Live';
-      const sig = JSON.stringify([t.name, t.venue, t.live, d.onAir && d.onAir.hole]);
+      const sig = JSON.stringify([t.name, t.venue, t.live, d.onAir && d.onAir.hole, Boolean(t.youtube), t.facebookUrl]);
       if (sig !== last) {
         last = sig;
         head.replaceChildren(el('div', { style: 'flex:1;min-width:0' },
@@ -736,26 +1094,31 @@
           el('h1', { text: t.name }),
           el('div', { class: 'sub', text: [t.venue, d.onAir && d.onAir.hole ? 'On camera: hole ' + d.onAir.hole : null].filter(Boolean).join(' · ') })),
           livePill(t.live));
+        drawBar();
+        placeLayer();
       }
       renderPlayer(t, d.watch);
       // Golf events show the leaderboard; other kinds of event go straight to the chat.
       const golf = !t.eventType || t.eventType === 'golf';
-      if (!golf && hasBoard) { hasBoard = false; if (sideTab === 'board') sideTab = 'chat'; drawSide(); }
+      if (!golf && hasBoard) { hasBoard = false; drawSide(); }
       renderBoard(d.leaderboard);
-      renderClips(d.clips);
+      renderClips(d.clips || []);
     } catch (e) {
-      if (e === 404) { app.replaceChildren(el('p', { class: 'sub', text: 'This tournament is not available.' })); return; }
+      if (e === 404) { app.className = 'wrap'; app.replaceChildren(el('p', { class: 'sub', text: 'This tournament is not available.' })); return; }
     }
     setTimeout(tournament, 10000);
   }
 
   if (!id) { list(); return; }
+  app.className = 'wrap event';
   app.replaceChildren(head,
-    el('div', { class: 'grid' }, el('div', {}, playerBox, momentBox, linksBox), sidePanel),
-    clipsPanel,
+    el('div', { class: 'grid' }, mainCol, sideWrap),
     el('footer', { text: 'Produced with Go Live' }));
-  if (new URLSearchParams(location.search).get('tab') === 'chat') sideTab = 'chat';
+  const want = new URLSearchParams(location.search).get('tab');
+  if (['chat', 'board', 'clips', 'games'].includes(want)) sideTab = want;
+  drawBar();
   drawSide();
+  placeLayer();
   renderComposer();
   tournament();
   pollChat();
