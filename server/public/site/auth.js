@@ -10,6 +10,13 @@
   var side = document.getElementById('auth-side');
   var lamp = document.getElementById('lamp-text');
   // ?next=/studio/... after logging in (only paths on this site).
+  // After logging in: owners, directors and admins go to the web app (events, control room,
+  // channels, wallet); someone without a club yet goes to the account page to get started.
+  function home(d) {
+    var orgs = (d && d.orgs) || [];
+    var admin = d && d.user && (d.user.isPlatformAdmin || d.user.platformAdmin);
+    return orgs.length || admin ? '/web' : '/account?welcome=1';
+  }
   var next = (function () { var n = new URLSearchParams(location.search).get('next'); return n && /^\/(studio|account|web)(\/[\w-]+)*\/?$/.test(n) ? n : null; })();
 
   document.querySelectorAll('[data-toggle-pw]').forEach(function (b) {
@@ -94,7 +101,7 @@
           localStorage.setItem('baas.token', res.d.token);
           localStorage.setItem('baas.session', JSON.stringify({ user: res.d.user, orgs: res.d.orgs }));
         } catch (err) {}
-        window.location.href = next || ('/account' + (mode === 'signup' ? '?welcome=1' : ''));
+        window.location.href = next || home(res.d);
       })
       .catch(function (err) {
         submit.disabled = false;
@@ -111,7 +118,7 @@
       localStorage.setItem('baas.token', d.token);
       localStorage.setItem('baas.session', JSON.stringify({ user: d.user, orgs: d.orgs }));
     } catch (err) {}
-    window.location.href = (next && (d.orgs || []).length) ? next : '/account' + (created || !(d.orgs || []).length ? '?welcome=1' : '');
+    window.location.href = (next && (d.orgs || []).length) ? next : home(d);
   }
   function onGoogle(resp) {
     errBox.classList.remove('show');
