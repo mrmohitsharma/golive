@@ -43,6 +43,15 @@ Branch: `v7-dev`. More detail: [DEPLOYMENT.md §3m](DEPLOYMENT.md).
   ```
   Wait for "listening". Migrations 020–022 run on their own.
 
+## 2b. Build the phone app (V7 changes)
+
+- [ ] `cd mobile && flutter analyze && flutter test`. The app changes for the watch player were written without a Flutter SDK, so fix anything these report.
+- [ ] Build and install on one Android phone and one iPhone. On an event, check:
+  - Streaming platforms shows **Watch page player** with a switch;
+  - the control room shows a **WATCH PAGE** pill;
+  - with YouTube switched off, Go live reads **"Go live on the watch page"** and doesn't ask to create a YouTube broadcast.
+- [ ] Update the **agent** on every OBS laptop to the `v7-dev` build. It sets OBS to 720p at 2500 kbps itself.
+
 ## 3. Check the setup
 
 - [ ] Log in as a platform admin at `https://live.gogetslive.com/web/admin/streaming`.
