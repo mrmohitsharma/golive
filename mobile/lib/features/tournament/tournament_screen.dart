@@ -37,6 +37,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
   EngineState _engine = const EngineState();
   OutputsState _outputs = const OutputsState();
   TournamentBilling _billing = const TournamentBilling();
+  WatchInfo? _watch;
   List<Invite> _invites = const [];
   bool _loaded = false;
   bool _busy = false;
@@ -48,6 +49,7 @@ class _TournamentScreenState extends State<TournamentScreen> {
     super.initState();
     _load();
     _loadInvites();
+    _loadWatch();
     _poll = Timer.periodic(const Duration(seconds: 5), (_) => _load(quiet: true));
   }
 
@@ -75,13 +77,35 @@ class _TournamentScreenState extends State<TournamentScreen> {
         _production = ProductionState.fromJson(s['production'] as Map<String, dynamic>?);
         _youtube = YoutubeState.fromJson(s['youtube'] as Map<String, dynamic>?);
         _engine = EngineState.fromJson(s['engine'] as Map<String, dynamic>?);
+        final before = _outputs.watch?.state;
         _outputs = OutputsState.fromJson(s['outputs'] as Map<String, dynamic>?);
+        // Started or stopped: the live link or a new replay changed.
+        if (_loaded && before != _outputs.watch?.state) _loadWatch();
         _billing = TournamentBilling.fromJson(s['billing'] as Map<String, dynamic>?);
         _loaded = true;
         _error = null;
       });
     } on ApiException catch (e) {
       if (mounted && !quiet) setState(() => _error = e.message);
+    }
+  }
+
+  /// Our watch player (V7 servers): replays and the embed link. Older servers: stays null.
+  Future<void> _loadWatch() async {
+    try {
+      final w = await _api.watch(_t.id);
+      if (mounted) setState(() => _watch = w);
+    } on ApiException {
+      // Older server or no rights: the player rows just stay hidden.
+    }
+  }
+
+  Future<void> _setWatch(bool on) async {
+    final r = await guarded(context, () => _api.setOutputs(_t.id, {'watch': {'enabled': on}}));
+    if (r != null && mounted) setState(() => _outputs = r);
+    if (r != null) {
+      await _load(quiet: true);
+      await _loadWatch();
     }
   }
 
@@ -805,15 +829,31 @@ class _TournamentScreenState extends State<TournamentScreen> {
                   OutlinedButton.icon(onPressed: () => launchUrl(Uri.parse(_watchUrl), mode: LaunchMode.externalApplication), icon: const Icon(Icons.open_in_new), label: const Text('Open')),
                   OutlinedButton.icon(onPressed: () => SharePlus.instance.share(ShareParams(text: '${_t.name} live: $_watchUrl')), icon: const Icon(Icons.share), label: const Text('Share link')),
                   OutlinedButton.icon(
+                    // With our player, the embed is the player alone; otherwise the whole watch page.
                     onPressed: () => copyText(
                       context,
-                      '<iframe src="$_watchUrl" style="width:100%;aspect-ratio:16/10;border:0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>',
-                      'Website embed code',
+                      _watch?.embedUrl != null && _outputs.watchActive
+                          ? '<iframe src="${_watch!.embedUrl}" style="width:100%;aspect-ratio:16/9;border:0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>'
+                          : '<iframe src="$_watchUrl" style="width:100%;aspect-ratio:16/10;border:0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>',
+                      _outputs.watchActive ? 'Player embed code' : 'Website embed code',
                     ),
                     icon: const Icon(Icons.code),
-                    label: const Text('Embed code'),
+                    label: Text(_outputs.watchActive ? 'Player embed code' : 'Embed code'),
                   ),
                 ]),
+              if (_watch != null && _watch!.replays.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('Replays on the watch page', style: Theme.of(context).textTheme.titleSmall),
+                for (final r in _watch!.replays.take(5))
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.replay),
+                    title: Text(MaterialLocalizations.of(context).formatMediumDate(r.startedAt)),
+                    subtitle: Text('${TimeOfDay.fromDateTime(r.startedAt).format(context)} · ${r.lengthLabel}'),
+                  ),
+                Text('After the show, the watch page plays the latest replay (kept 14 days).', style: Theme.of(context).textTheme.bodySmall),
+              ],
             ],
           ),
           SectionCard(
@@ -898,10 +938,32 @@ class _TournamentScreenState extends State<TournamentScreen> {
       ]);
     }
 
+    final w = _outputs.watch;
+    final (wPill, wColor) = switch (w?.state) {
+      'live' => ('LIVE', Broadcast.onAir),
+      'connecting' => ('CONNECTING', Broadcast.warning),
+      'retrying' => ('RETRYING', Broadcast.warning),
+      _ => (null, Broadcast.offline),
+    };
     return [
       Text('OBS sends one stream to the server, and the server sends it to each platform you switch on. '
           '${live ? 'Changes apply right away.' : ''}', style: small),
       const SizedBox(height: 4),
+      // Our own player on the watch page (no YouTube logos or ads; viewers load it through our CDN).
+      if (w != null)
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Row(children: [
+            const Text('Watch page player'),
+            if (wPill != null) ...[const SizedBox(width: 8), StatusPill(label: wPill, color: wColor, dense: true)],
+          ]),
+          subtitle: Text(w.error ??
+              (!_t.publicWatch
+                  ? 'The public watch page is off for this event (below).'
+                  : 'Plays the show on your watch page and website embed, without YouTube logos or ads.')),
+          value: w.enabled,
+          onChanged: _busy ? null : _setWatch,
+        ),
       row(StreamPlatform.youtube, _youtube.connected ? 'Create the broadcast in the YouTube card' : 'Connect YouTube under Organisation'),
       row(StreamPlatform.facebook, 'Connect the club’s Page under Organisation (people icon)'),
       row(

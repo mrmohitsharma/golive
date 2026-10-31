@@ -343,7 +343,8 @@ class _ControlRoomScreenState extends State<ControlRoomScreen> {
       return;
     }
     final yt = _room.youtube;
-    if (yt.connected && !yt.hasBroadcast) {
+    // Only when YouTube is switched on for this event: with our watch player it is optional.
+    if (yt.connected && !yt.hasBroadcast && _room.outputs.of(StreamPlatform.youtube).enabled) {
       var privacy = 'unlisted';
       final ok = await showDialog<bool>(
         context: context,
@@ -556,6 +557,25 @@ class _StatusBar extends StatelessWidget {
           StatusPill(label: engineLabel, color: engineColor, icon: cloud ? Icons.cloud : Icons.memory),
           const SizedBox(width: 6),
           StatusPill(label: ytLabel, color: ytColor, icon: Icons.smart_display),
+          if (room.outputs.watchActive)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: StatusPill(
+                dense: true,
+                icon: Icons.live_tv,
+                label: 'WATCH PAGE ${switch (room.outputs.watch!.state) {
+                  'live' => 'LIVE',
+                  'connecting' => '…',
+                  'retrying' => 'RETRYING',
+                  _ => 'READY',
+                }}',
+                color: switch (room.outputs.watch!.state) {
+                  'live' => Broadcast.onAir,
+                  'connecting' || 'retrying' => Broadcast.warning,
+                  _ => Broadcast.panelHigh,
+                },
+              ),
+            ),
           for (final o in room.outputs.active)
             Padding(
               padding: const EdgeInsets.only(left: 6),

@@ -881,13 +881,82 @@ class DestinationOutput {
       );
 }
 
+/// Our own player on the watch page (HLS through the CDN, V7). Null when the platform has it off.
+class WatchOutput {
+  const WatchOutput({this.enabled = true, this.state = 'off', this.error});
+
+  /// On for this event (a director can switch it off per event).
+  final bool enabled;
+
+  /// off | connecting | live | retrying
+  final String state;
+  final String? error;
+
+  bool get live => state == 'live';
+
+  factory WatchOutput.fromJson(Map<String, dynamic> j) =>
+      WatchOutput(enabled: (j['enabled'] as bool?) ?? true, state: (j['state'] as String?) ?? 'off', error: j['error'] as String?);
+}
+
+/// The event's watch player: the live link while streaming, replays, and the embed URL.
+class WatchInfo {
+  const WatchInfo({this.available = false, this.enabled = true, this.live, this.replays = const [], this.embedUrl, this.watchPage, this.publicWatch = true});
+
+  final bool available;
+  final bool enabled;
+  final String? live;
+  final List<WatchReplay> replays;
+  final String? embedUrl;
+  final String? watchPage;
+  final bool publicWatch;
+
+  factory WatchInfo.fromJson(Map<String, dynamic> j) {
+    final w = (j['watch'] as Map<String, dynamic>?) ?? const {};
+    return WatchInfo(
+      available: (j['available'] as bool?) ?? false,
+      enabled: (j['enabled'] as bool?) ?? true,
+      live: w['live'] as String?,
+      replays: ((w['replays'] as List?) ?? const []).map((r) => WatchReplay.fromJson(r as Map<String, dynamic>)).toList(),
+      embedUrl: w['embedUrl'] as String?,
+      watchPage: j['watchPage'] as String?,
+      publicWatch: (j['publicWatch'] as bool?) ?? true,
+    );
+  }
+}
+
+class WatchReplay {
+  const WatchReplay({required this.url, required this.startedAt, required this.durationSec});
+
+  final String url;
+  final DateTime startedAt;
+  final int durationSec;
+
+  /// "1 h 20 min", "45 min".
+  String get lengthLabel {
+    if (durationSec >= 3600) return '${durationSec ~/ 3600} h ${(durationSec % 3600) ~/ 60} min';
+    return '${(durationSec / 60).round().clamp(1, 59)} min';
+  }
+
+  factory WatchReplay.fromJson(Map<String, dynamic> j) => WatchReplay(
+        url: '${j['url']}',
+        startedAt: DateTime.tryParse('${j['startedAt']}')?.toLocal() ?? DateTime.now(),
+        durationSec: (j['durationSec'] as num?)?.toInt() ?? 0,
+      );
+}
+
 class OutputsState {
-  const OutputsState({this.relay = false, this.platforms = const [], this.destinations = const []});
+  const OutputsState({this.relay = false, this.platforms = const [], this.destinations = const [], this.watch});
 
   /// OBS sends one stream to the server, which restreams it to each platform.
   final bool relay;
   final List<PlatformOutput> platforms;
   final List<DestinationOutput> destinations;
+
+  /// Our watch page player; null when it is off for the whole platform.
+  final WatchOutput? watch;
+
+  /// The watch page plays the show with our own player.
+  bool get watchActive => watch?.enabled ?? false;
 
   PlatformOutput of(StreamPlatform p) =>
       platforms.firstWhere((x) => x.platform == p, orElse: () => PlatformOutput(platform: p));
@@ -895,14 +964,15 @@ class OutputsState {
   List<PlatformOutput> get active => platforms.where((p) => p.active).toList();
   List<DestinationOutput> get activeDestinations => destinations.where((d) => d.active).toList();
 
-  /// Everywhere the show goes when the director goes live.
-  int get activeCount => active.length + activeDestinations.length;
+  /// Everywhere the show goes when the director goes live (the watch page counts as one).
+  int get activeCount => active.length + activeDestinations.length + (watchActive ? 1 : 0);
 
-  /// "YouTube + Facebook + 2 more", for the Go live button.
+  /// "Watch page + YouTube + 2 more", for the Go live button.
   String get goLiveLabel {
-    final names = active.map((o) => o.platform.label).toList();
+    final names = [if (watchActive) 'Watch page', ...active.map((o) => o.platform.label)];
     final extra = activeDestinations.length;
     if (names.isEmpty && extra == 0) return 'Go live on YouTube';
+    if (names.length == 1 && watchActive && extra == 0) return 'Go live on the watch page';
     if (names.isEmpty) return 'Go live: $extra destination${extra == 1 ? '' : 's'}';
     return 'Go live: ${names.join(' + ')}${extra > 0 ? ' + $extra more' : ''}';
   }
@@ -914,6 +984,7 @@ class OutputsState {
           platforms: ((j['platforms'] as List?) ?? const []).map((p) => PlatformOutput.fromJson(p as Map<String, dynamic>)).toList(),
           destinations:
               ((j['destinations'] as List?) ?? const []).map((d) => DestinationOutput.fromJson(d as Map<String, dynamic>)).toList(),
+          watch: j['watch'] is Map<String, dynamic> ? WatchOutput.fromJson(j['watch'] as Map<String, dynamic>) : null,
         );
 }
 

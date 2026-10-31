@@ -327,6 +327,8 @@ class ApiClient {
         TournamentBilling.fromJson(r['billing'] as Map<String, dynamic>?),
       );
 
+  /// Our watch player for this event: live link, replays, embed URL (V7 servers).
+  Future<WatchInfo> watch(String id) async => WatchInfo.fromJson(await get('/api/tournaments/$id/watch'));
   Future<OutputsState> setOutputs(String id, Map<String, Object?> patch_) async =>
       OutputsState.fromJson((await patch('/api/tournaments/$id/outputs', patch_))['outputs'] as Map<String, dynamic>?);
 
