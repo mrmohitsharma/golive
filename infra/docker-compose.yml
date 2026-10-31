@@ -83,6 +83,14 @@ services:
       CHAT_BLOCKED_WORDS: ${CHAT_BLOCKED_WORDS:-}
       # Instagram 9:16 re-encode bitrate (kbps)
       INSTAGRAM_VIDEO_KBPS: ${INSTAGRAM_VIDEO_KBPS:-3500}
+      # Our watch player (HLS) and its Bunny CDN pull zone (Admin > Streaming overrides).
+      HLS_ENABLED: ${HLS_ENABLED:-true}
+      HLS_RENDITIONS: ${HLS_RENDITIONS:-720:2500,480:1000}
+      HLS_RETENTION_DAYS: ${HLS_RETENTION_DAYS:-14}
+      HLS_PRESET: ${HLS_PRESET:-veryfast}
+      CDN_HOST: ${CDN_HOST:-}
+      BUNNY_PULL_ZONE_ID: ${BUNNY_PULL_ZONE_ID:-}
+      BUNNY_API_KEY: ${BUNNY_API_KEY:-}
       # Public watch page / API for the CoGolfers website (comma-separated origins)
       PUBLIC_CORS_ORIGINS: ${PUBLIC_CORS_ORIGINS:-}
       WATCH_EMBED_ORIGINS: ${WATCH_EMBED_ORIGINS:-}

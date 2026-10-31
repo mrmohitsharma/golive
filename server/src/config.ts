@@ -137,7 +137,7 @@ const schema = z.object({
   HLS_RETENTION_DAYS: z.coerce.number().min(1).default(14),
   // Bunny CDN starting values (Admin > Streaming overrides them once saved there).
   CDN_HOST: optional,
-  BUNNY_PULL_ZONE_ID: z.coerce.number().int().positive().optional(),
+  BUNNY_PULL_ZONE_ID: z.preprocess((v) => (v === '' || v == null ? undefined : v), z.coerce.number().int().positive().optional()),
   BUNNY_API_KEY: optional,
 
   // Public watch page and API (for the CoGolfers website). Comma-separated origins allowed
