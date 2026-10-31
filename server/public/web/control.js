@@ -105,7 +105,7 @@ export async function render(view, { id }) {
     status.replaceChildren(
       el('span', { class: 'pill ' + (live ? 'live' : ''), text: live ? `LIVE ${e.streaming.timecode ?? ''}` : 'OFF AIR' }),
       el('span', { class: 'pill ' + (e.connected && e.obsConnected ? 'ok' : 'bad'), text: e.connected && e.obsConnected ? 'Engine ready' : 'Engine not connected' }),
-      s.production?.mode === 'cloud' ? el('span', { class: 'small muted', text: `Cloud mixer: ${s.production.cloud.status}` }) : null,
+      s.production?.mode === 'cloud' ? el('span', { class: 'small muted', text: `Cloud OBS: ${s.production.cloud.status}` }) : null,
       b && b.minutes.remainingSeconds != null ? el('span', { class: 'small ' + (b.minutes.remainingSeconds < 600 ? 'pill warn' : 'muted'), text: `${Math.floor(b.minutes.remainingSeconds / 60)} min of credit left` }) : null,
       (e.warnings ?? []).length ? el('span', { class: 'pill warn', title: e.warnings.join('\n'), text: `${e.warnings.length} warning${e.warnings.length > 1 ? 's' : ''}` }) : null,
       el('div', { class: 'sp' }),

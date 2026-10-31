@@ -1,4 +1,6 @@
 import { state, get, post, put, patch, del, api, el, stat, table, num, when, day, dialog, confirmBox, toast, guard, go } from './core.js';
+import { info } from './guide.js';
+import { mainStreamCard } from './streams.js';
 
 export const title = 'Event';
 const TABS = [['overview', 'Overview'], ['people', 'Cameras & people'], ['streaming', 'Streaming'], ['scores', 'Scores'], ['chat', 'Chat'], ['clips', 'Clips'], ['engagement', 'Influencers & games'], ['settings', 'Settings']];
@@ -13,11 +15,12 @@ export async function render(view, { id, tab = 'overview' }) {
   view.append(
     el('div', { class: 'row', style: 'margin-bottom:6px' },
       live ? pill('live', 'LIVE') : pill('', 'Not live'),
-      el('span', { class: 'muted small', text: `${t.profile?.label ?? t.eventType} · ${t.mode === 'cloud' ? 'Cloud production' : 'Laptop (OBS) production'}${t.venue ? ' · ' + t.venue : ''}` }),
+      el('span', { class: 'muted small', text: `${t.profile?.label ?? t.eventType} · ${t.mode === 'cloud' ? 'Cloud OBS' : 'Laptop OBS'}${t.venue ? ' · ' + t.venue : ''}` }),
+      info('obs', 'Cloud OBS or Laptop OBS: how they work'),
       el('div', { class: 'sp' }),
       el('a', { class: 'btn small', href: `/watch/${id}`, target: '_blank', rel: 'noopener', text: 'Watch page' }),
-      el('a', { class: 'btn small primary', href: `/web/e/${id}/control`, text: 'Open control room' })),
-    el('nav', { class: 'tabs' }, TABS.map(([k, l]) => el('a', { href: `/web/e/${id}/${k}`, class: k === tab ? 'on' : null, onclick: (e) => { e.preventDefault(); go(`/web/e/${id}/${k}`); }, text: l }))));
+      el('a', { class: 'btn small primary', href: `/web/e/${id}/control`, 'data-tour': 'control-btn', text: 'Open control room' })),
+    el('nav', { class: 'tabs', 'data-tour': 'event-tabs' }, TABS.map(([k, l]) => el('a', { href: `/web/e/${id}/${k}`, class: k === tab ? 'on' : null, onclick: (e) => { e.preventDefault(); go(`/web/e/${id}/${k}`); }, text: l }))));
   const body = el('div');
   view.append(body);
   const views = { overview, people, streaming, scores, chat, clips, engagement, settings };
@@ -63,7 +66,7 @@ async function overview(body, id, s) {
     el('div', { class: 'card' },
       el('ol', { style: 'margin:0;padding-left:20px;line-height:1.9' },
         el('li', {}, 'Add cameras: phones scan the camera QR below (or open the invite link).'),
-        el('li', {}, prod.mode === 'cloud' ? 'Start the show: we start the cloud mixer and the YouTube broadcast.' : 'Run the Go Live agent with OBS on your laptop (Streaming tab), then start the show.'),
+        el('li', {}, prod.mode === 'cloud' ? 'Start the show: we start Cloud OBS and your main stream.' : 'Laptop OBS: run the Go Live agent next to OBS on your laptop (Streaming tab > Laptop OBS setup), then start the show.'),
         el('li', {}, 'Open the control room, pick a camera and press Go live.')),
       el('div', { class: 'row', style: 'margin-top:12px' },
         el('button', { class: 'btn primary', onclick: guard(async () => {
@@ -72,14 +75,14 @@ async function overview(body, id, s) {
           reloadTab(id, 'overview');
         }), text: 'Start show' }),
         prod.mode === 'cloud' && ['running', 'starting'].includes(prod.cloud.status) ? el('button', { class: 'btn', onclick: guard(async () => {
-          if (!(await confirmBox('Stop the cloud mixer?', 'If you are live, the broadcast ends.', 'Stop'))) return;
+          if (!(await confirmBox('Stop Cloud OBS?', 'If you are live, the broadcast ends.', 'Stop'))) return;
           await post(`/api/tournaments/${id}/cloud-engine/stop`); reloadTab(id, 'overview');
-        }), text: `Stop cloud mixer (${prod.cloud.status})` }) : null,
+        }), text: `Stop Cloud OBS (${prod.cloud.status})` }) : null,
         el('a', { class: 'btn', href: `/web/e/${id}/control`, text: 'Control room' }),
         b?.enabled ? el('button', { class: 'btn', onclick: buySlots(id, 'cameras', b, 'overview'), text: 'Add camera slots' }) : null,
         prod.mode === 'cloud' && !['running', 'starting'].includes(prod.cloud.status) ? el('button', { class: 'btn', onclick: guard(async () => {
-          const r = await post(`/api/tournaments/${id}/cloud-engine/start`); toast(`Cloud mixer ${r.production?.cloud?.status ?? 'starting'}: ready in about a minute`); reloadTab(id, 'overview');
-        }), text: 'Start cloud mixer only' }) : null)),
+          const r = await post(`/api/tournaments/${id}/cloud-engine/start`); toast(`Cloud OBS ${r.production?.cloud?.status ?? 'starting'}: ready in about a minute`); reloadTab(id, 'overview');
+        }), text: 'Start Cloud OBS only' }) : null)),
     camInvite ? el('div', { class: 'card', style: 'margin-top:12px;display:flex;gap:16px;align-items:center;flex-wrap:wrap' },
       el('img', { src: `${camInvite.qrUrl}?token=${encodeURIComponent(state.token)}`, alt: 'Camera QR code', style: 'width:160px;height:160px;background:#fff;border-radius:8px' }),
       el('div', {}, el('strong', { text: 'Camera invite' }), el('p', { class: 'small muted', text: 'Scan with the Go Live app, or share the link. No account needed.' }),
@@ -105,8 +108,8 @@ async function people(body, id, s) {
         }), text: 'Edit' }),
         el('button', { class: 'btn small danger', onclick: guard(async () => { if (!(await confirmBox('Remove this camera?', 'The phone stops sending video and frees its slot.', 'Remove'))) return; await del(`/api/cameras/${c.id}`); reloadTab(id, 'people'); }), text: 'Remove' }))]),
       { empty: 'No cameras yet. Phones join with the camera invite below.' }),
-    el('h2', { text: 'Invite links (no account needed)' }),
-    el('div', { class: 'grid', style: 'grid-template-columns:repeat(auto-fill,minmax(260px,1fr))' }, invites.map((i) => el('div', { class: 'card' },
+    el('h2', {}, 'Invite links (no account needed) ', info('cameras', 'Adding cameras, scorers and commentators')),
+    el('div', { class: 'grid', 'data-tour': 'invites', style: 'grid-template-columns:repeat(auto-fill,minmax(260px,1fr))' }, invites.map((i) => el('div', { class: 'card' },
       el('strong', { text: ROLE[i.role] }),
       el('img', { src: `${i.qrUrl}?token=${encodeURIComponent(state.token)}`, alt: `${ROLE[i.role]} QR`, style: 'display:block;width:140px;height:140px;background:#fff;border-radius:8px;margin:8px 0' }),
       el('div', { class: 'mono small', style: 'user-select:all;word-break:break-all', text: i.joinUrl }),
@@ -133,7 +136,11 @@ async function streaming(body, id, s) {
   const w = outputs.watch ? await get(`/api/tournaments/${id}/watch`) : null;
   const mins = (sec) => sec >= 3600 ? `${Math.floor(sec / 3600)} h ${Math.round((sec % 3600) / 60)} min` : `${Math.max(1, Math.round(sec / 60))} min`;
   const embed = w ? `<iframe src="${w.watch?.embedUrl ?? ''}" width="960" height="540" style="border:0;max-width:100%;aspect-ratio:16/9;height:auto" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>` : '';
+  const mainBox = el('div');
+  await mainStreamCard(mainBox, id, { onChange: () => reloadTab(id, 'streaming') });
   body.append(
+    el('h2', { text: 'Main stream' }),
+    mainBox,
     w ? el('div', {},
       el('h2', { text: 'Watch page player' }),
       el('div', { class: 'card' },
@@ -197,7 +204,7 @@ async function streaming(body, id, s) {
     }), text: 'Add destination' }),
       billing ? el('span', { class: 'small muted', text: `${billing.destinations.used} of ${billing.destinations.limit} destinations used${billing.destinations.price ? ` · extra ones ${billing.destinations.price} credits` : ''}` }) : null,
       billing?.enabled ? el('button', { class: 'btn small', onclick: buySlots(id, 'destinations', billing, 'streaming'), text: 'Add destination slots' }) : null),
-    setup ? el('div', {}, el('h2', { text: 'Laptop production (OBS)' }),
+    setup ? el('div', {}, el('h2', {}, 'Laptop OBS setup ', info('obs', 'How to set up Laptop OBS')),
       el('div', { class: 'card' }, el('p', { class: 'small', text: 'On the laptop with OBS, run the Go Live agent with these settings:' }),
         el('pre', { class: 'mono card', style: 'white-space:pre-wrap;user-select:all', text: setup.envFile }),
         el('button', { class: 'btn small', onclick: guard(async () => { if (!(await confirmBox('Make a new engine key?', 'The laptop agent must be restarted with the new key.', 'New key', false))) return; await post(`/api/tournaments/${id}/engine-key/rotate`); reloadTab(id, 'streaming'); }), text: 'New engine key' }))) : null);
@@ -310,7 +317,7 @@ async function settings(body, id, s) {
       f('venue', 'Venue', el('input', { name: 'venue', value: t.venue ?? '' })),
       f('startsOn', 'Date', el('input', { name: 'startsOn', type: 'date', value: t.startsOn ? String(t.startsOn).slice(0, 10) : '' })),
       f('eventType', 'Type', el('select', { name: 'eventType' }, eventTypes.map((e) => el('option', { value: e.id, selected: e.id === t.eventType || undefined, text: e.label })))),
-      f('mode', 'Production', el('select', { name: 'mode' }, [['cloud', 'Cloud (no laptop)'], ['laptop', 'Laptop with OBS']].map(([v, l]) => el('option', { value: v, selected: v === t.mode || undefined, text: l })))),
+      f('mode', 'Production', el('select', { name: 'mode' }, [['cloud', 'Cloud OBS (runs on our servers, no laptop)'], ['laptop', 'Laptop OBS (OBS on your computer)']].map(([v, l]) => el('option', { value: v, selected: v === t.mode || undefined, text: l })))),
       f('chatSlowSec', 'Seconds between messages from one viewer', el('input', { name: 'chatSlowSec', type: 'number', min: 0, max: 300, value: t.chatSlowSec }))),
     el('div', { style: 'margin-top:10px' }, check('publicWatch', 'Public watch page'), check('chatEnabled', 'Viewers can chat on the watch page'), check('autoFallback', 'Show the fallback screen when the on-air camera drops')),
     el('button', { class: 'btn primary', text: 'Save' }));

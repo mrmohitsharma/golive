@@ -16,7 +16,7 @@ export async function render(view) {
       !s.media.reachable ? el('div', { class: 'banner bad', text: `Media server not reachable: ${s.media.error ?? ''}` }) : null,
       el('div', { class: 'grid', style: 'margin-top:10px' }, s.disks.map((d) => stat(`${d.freeGb} GB free`, `${d.path} (of ${d.totalGb} GB)`, d.freeGb < 5))),
       el('h2', { text: 'Integrations' }),
-      table(['Service', 'State'], Object.entries(s.integrations).map(([k, v]) => [{ payments: 'Payments', sms: 'SMS', youtube: 'YouTube', cloud: 'Cloud production', invoices: 'GST invoices' }[k] ?? k, v])),
+      table(['Service', 'State'], Object.entries(s.integrations).map(([k, v]) => [{ payments: 'Payments', sms: 'SMS', youtube: 'YouTube', cloud: 'Cloud OBS', invoices: 'GST invoices' }[k] ?? k, v])),
       el('h2', { text: 'Cost against revenue' }),
       el('div', { class: 'grid' }, stat(inr(cur.revenueInr), 'Revenue this month (after refunds)'), stat(inr(cur.costInr), 'Estimated cost this month'),
         stat(inr(cur.marginInr), 'Margin this month', cur.marginInr < 0), stat(num(cur.liveHours) + ' h', 'Live hours'), stat(num(cur.cloudHours) + ' h', 'Cloud engine hours')),

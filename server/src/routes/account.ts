@@ -29,6 +29,48 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: Ctx) {
     return { ok: true, name: b.name };
   });
 
+  // ---------------------------------------------------------------- web onboarding
+  /** The setup bar and the product tour: where this user is, so it shows once and resumes. */
+  app.get('/api/me/onboarding', { preHandler: user }, async (req) => {
+    const r = (await repo.db.query<{ onboarding: object }>('SELECT onboarding FROM users WHERE id = $1', [userOf(req).id])).rows[0];
+    // What this server offers, for the setup choices (Cloud OBS needs cloud engines; the watch player needs HLS).
+    return { onboarding: r?.onboarding ?? {}, cloudAvailable: ctx.cloud.available, watchAvailable: ctx.hls.on };
+  });
+  app.patch('/api/me/onboarding', { preHandler: user }, async (req) => {
+    const b = z
+      .object({
+        welcomed: z.boolean().optional(),
+        setup: z
+          .object({
+            state: z.enum(['active', 'hidden', 'skipped', 'done']).optional(),
+            step: z.number().int().min(1).max(4).optional(),
+            eventId: z.string().uuid().nullable().optional(),
+          })
+          .strict()
+          .optional(),
+        tour: z
+          .object({
+            state: z.enum(['active', 'skipped', 'done']).optional(),
+            step: z.number().int().min(0).max(40).optional(),
+            seen: z.array(z.string().max(40)).max(60).optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .parse(req.body);
+    const id = userOf(req).id;
+    const cur = ((await repo.db.query<{ onboarding: Record<string, any> }>('SELECT onboarding FROM users WHERE id = $1', [id])).rows[0]?.onboarding ?? {}) as Record<string, any>;
+    const next = {
+      ...cur,
+      ...(b.welcomed !== undefined ? { welcomed: b.welcomed } : {}),
+      ...(b.setup ? { setup: { ...(cur.setup ?? {}), ...b.setup } } : {}),
+      ...(b.tour ? { tour: { ...(cur.tour ?? {}), ...b.tour, ...(b.tour.seen ? { seen: [...new Set([...(cur.tour?.seen ?? []), ...b.tour.seen])].slice(-60) } : {}) } } : {}),
+    };
+    await repo.db.query('UPDATE users SET onboarding = $2 WHERE id = $1', [id, JSON.stringify(next)]);
+    return { onboarding: next };
+  });
+
   /**
    * Changes (or, for Google-only accounts, sets) the password. Other devices are signed out;
    * this one gets a new token.

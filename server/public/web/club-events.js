@@ -12,7 +12,7 @@ export async function render(view) {
   const draw = () => {
     const rows = all.filter((t) => (show.value === 'all' ? true : show.value === 'archived' ? t.archived : !t.archived));
     list.replaceChildren(table(['Event', 'Type', 'Date', 'Venue', 'Production', ''], rows.map((t) => [
-      el('strong', { text: t.name }), eventTypes.find((e) => e.id === t.eventType)?.label ?? t.eventType, day(t.startsOn), t.venue ?? '–', t.mode === 'cloud' ? 'Cloud' : 'Laptop',
+      el('strong', { text: t.name }), eventTypes.find((e) => e.id === t.eventType)?.label ?? t.eventType, day(t.startsOn), t.venue ?? '–', t.mode === 'cloud' ? 'Cloud OBS' : 'Laptop OBS',
       el('span', { class: 'row' },
         el('a', { class: 'btn small', href: `/web/e/${t.id}`, onclick: (e) => { e.preventDefault(); e.stopPropagation(); go(`/web/e/${t.id}`); }, text: 'Open' }),
         el('button', { class: 'btn small', onclick: (e) => { e.stopPropagation(); copyEvent(t.id, t)(); }, text: 'Copy' }),
@@ -20,22 +20,12 @@ export async function render(view) {
       { onclick: (i) => go(`/web/e/${rows[i].id}`), empty: 'No events here yet.' }));
   };
   show.onchange = draw;
-  const ob = await get(`/api/orgs/${state.orgId}/onboarding`).catch(() => null);
-  const checklist = ob && !ob.done ? el('div', { class: 'card', style: 'margin-bottom:14px' },
-    el('strong', { text: 'Your first show' }), el('span', { class: 'small muted', text: ' · about 5 minutes' }),
-    el('ol', { class: 'checklist' }, [
-      [true, 'Create your account'],
-      [ob.hasEvent, 'Create an event'],
-      [ob.steps.channel, 'Choose where to stream (your YouTube, the Go Live channel, or a stream key)'],
-      [ob.steps.cameras, 'Add a camera: scan the event QR with a phone'],
-      [ob.steps.test, 'Do a test: pick the camera in the control room'],
-      [ob.steps.live, 'Go live'],
-    ].map(([done, text]) => el('li', { class: done ? 'done' : '' }, el('span', { class: 'tick', text: done ? '✓' : '' }), text)))) : null;
-  view.append(checklist,
+  // First-show help is the setup bar above the menu (onboarding.js); no second checklist here.
+  view.append(
     el('div', { class: 'row', style: 'margin-bottom:12px' },
       el('span', { class: 'muted', text: org ? `${org.name} · ${org.role}` : '' }), el('div', { class: 'sp' }),
       el('div', { style: 'width:180px' }, show),
-      el('button', { class: 'btn primary', onclick: guard(async () => {
+      el('button', { class: 'btn primary', 'data-tour': 'new-event', onclick: guard(async () => {
         const v = await dialog({ title: 'New event', ok: 'Create', fields: [
           { name: 'name', label: 'Event name', required: true, placeholder: 'Monsoon Open 2026' },
           { name: 'eventType', label: 'Type of event', type: 'select', value: 'golf', options: eventTypes.map((e) => ({ value: e.id, label: e.label })) },

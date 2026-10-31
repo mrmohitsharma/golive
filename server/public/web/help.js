@@ -1,4 +1,5 @@
 import { state, get, post, el, table, when, toast, guard, go } from './core.js';
+import { learnCard } from './guide.js';
 import { CATEGORY, PRIORITY, statusPill, priorityPill, readFiles, fileInput, thread } from './tickets-ui.js';
 
 export const title = 'Help';
@@ -15,6 +16,7 @@ export async function render(view, { key }) {
     files: fileInput(),
   };
   view.append(
+    learnCard(),
     el('h2', { text: 'Raise a ticket' }),
     el('div', { class: 'card' },
       el('div', { class: 'form' }, el('div', {}, el('label', { text: 'Subject' }), f.subject), el('div', {}, el('label', { text: 'About' }), f.category), el('div', {}, el('label', { text: 'How urgent' }), f.priority), el('div', {}, el('label', { text: 'Event' }), f.event)),

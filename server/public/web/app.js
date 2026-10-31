@@ -1,5 +1,6 @@
 // Go Live web app: boot, menu by role, routing. Pages live in their own modules.
 import { state, store, get, post, el, go, toast, signOut, when } from './core.js';
+import { startOnboarding } from './onboarding.js';
 
 /**
  * Routes: path pattern → page module and who may see it.
@@ -36,6 +37,8 @@ const ROUTES = [
   { path: '/web/e/:id/:tab', page: 'event', role: 'any' },
   { path: '/web/profile', page: 'profile', role: 'any', nav: ['Account', 'Profile'] },
   { path: '/web/help', page: 'help', role: 'any', nav: ['Account', 'Help'] },
+  { path: '/web/guide', page: 'guide', role: 'any', nav: ['Account', 'Guide'] },
+  { path: '/web/guide/:topic', page: 'guide', role: 'any' },
   { path: '/web/help/:key', page: 'help', role: 'any' },
 ];
 export function addRoutes(list) { ROUTES.push(...list); }
@@ -74,7 +77,7 @@ function renderNav() {
   const here = location.pathname.replace(/\/$/, '');
   nav.replaceChildren(...[...groups].flatMap(([g, rs]) => [
     el('div', { class: 'grp', text: g }),
-    ...rs.map((r) => el('a', { href: r.path, class: here === r.path || (r.path !== '/web/admin' && here.startsWith(r.path + '/')) ? 'on' : null, onclick: (e) => { e.preventDefault(); go(r.path); } , text: r.nav[1] })),
+    ...rs.map((r) => el('a', { href: r.path, 'data-tour': 'nav-' + r.nav[1].toLowerCase().replace(/[^a-z]+/g, '-'), class: here === r.path || (r.path !== '/web/admin' && here.startsWith(r.path + '/')) ? 'on' : null, onclick: (e) => { e.preventDefault(); go(r.path); } , text: r.nav[1] })),
   ]));
 }
 
@@ -105,7 +108,7 @@ function renderOrgSwitch() {
   const mine = state.orgs.filter((o) => ['owner', 'director'].includes(o.role));
   sel.hidden = mine.length < 2;
   sel.replaceChildren(...mine.map((o) => el('option', { value: o.id, selected: o.id === state.orgId || undefined, text: `${o.name} · ${o.role}` })));
-  sel.onchange = () => { state.orgId = sel.value; store.set('gl.org', sel.value); route(); };
+  sel.onchange = () => { state.orgId = sel.value; store.set('gl.org', sel.value); route(); startOnboarding().catch(() => {}); };
 }
 
 function renderImpersonation() {
@@ -142,7 +145,9 @@ async function boot() {
   }
   window.addEventListener('popstate', route);
   window.addEventListener('gl:route', route);
-  route();
+  await route();
+  // First login: welcome, the setup bar and the tour (once per user; restart from Help).
+  startOnboarding().catch(() => {});
 }
 
 export { toast };

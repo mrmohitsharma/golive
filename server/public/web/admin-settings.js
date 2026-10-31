@@ -31,6 +31,6 @@ export async function render(view) {
     table(['Name', 'Email', 'Last login'], admins.users.map((u) => [u.name, u.email, day(u.lastLoginAt)]), { onclick: (i) => go('/web/admin/users/' + admins.users[i].id) }),
     el('p', { class: 'small muted', text: 'To add an admin, open the user under Users and choose “Make admin”.' }),
     el('h2', { text: 'This server' }),
-    el('div', { class: 'grid' }, stat(p.brand, 'Brand'), stat(p.billingEnabled ? 'On' : 'Off', 'Billing'), stat(p.cloudAvailable ? 'Available' : 'Off', 'Cloud production'), stat(p.youtube ? 'Configured' : 'Not set', 'YouTube API')),
+    el('div', { class: 'grid' }, stat(p.brand, 'Brand'), stat(p.billingEnabled ? 'On' : 'Off', 'Billing'), stat(p.cloudAvailable ? 'Available' : 'Off', 'Cloud OBS'), stat(p.youtube ? 'Configured' : 'Not set', 'YouTube API')),
     el('p', { class: 'small muted' }, `Public address ${p.publicBaseUrl} · support ${p.supportEmail ?? '(not set)'} · legal entity ${p.legalEntity ?? '(not set)'} · event types: ${p.eventTypes.map((e) => e.name).join(', ')}. These come from the server config.`));
 }

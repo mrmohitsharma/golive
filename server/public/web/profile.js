@@ -1,4 +1,5 @@
 import { state, post, patch, el, confirmBox, toast, signOut, guard, store, go } from './core.js';
+import { learnCard } from './guide.js';
 
 export const title = 'Profile';
 
@@ -9,6 +10,7 @@ export async function render(view) {
   const pw1 = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'New password, 8+ characters' });
   const pw2 = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Repeat new password' });
   view.append(
+    learnCard(),
     el('div', { class: 'card' },
       el('div', { class: 'form' },
         el('div', {}, el('label', { text: 'Name' }), name),

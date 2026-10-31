@@ -124,3 +124,86 @@ body.wide main { max-width:none; }
 .tk-msg.team { border-left:4px solid var(--gold); } .tk-msg.internal { background:rgba(242,179,61,.07); border-color:rgba(242,179,61,.45); }
 .tk-msg.system { padding:6px 12px; background:transparent; border-style:dashed; font-size:12.5px; }
 .tk-body { white-space:pre-wrap; margin-top:6px; }
+
+/* ---- first-login setup bar (above the menu) and its step panels */
+.setup { background:linear-gradient(90deg,#1d1612,#14181b 60%); border-bottom:1px solid var(--line); position:relative; z-index:6; }
+.setup-in { display:flex; align-items:center; gap:14px; padding:10px 20px; flex-wrap:wrap; }
+.setup-title { color:var(--gold); text-transform:uppercase; letter-spacing:.06em; font-size:12.5px; }
+.setup-steps { display:flex; align-items:center; gap:0; list-style:none; margin:0; padding:0; flex-wrap:wrap; }
+.setup-steps li { display:flex; align-items:center; }
+.setup-steps li + li::before { content:""; width:28px; height:2px; background:var(--line); margin:0 4px; }
+.setup-steps li.done + li::before { background:var(--green); }
+.setup-steps button { display:flex; align-items:center; gap:7px; background:none; border:0; color:var(--muted); font:inherit; font-weight:600; cursor:pointer; padding:4px 6px; border-radius:8px; }
+.setup-steps button:hover { background:var(--panel2); color:var(--ink); }
+.setup-steps .dot { width:22px; height:22px; border-radius:50%; display:inline-grid; place-items:center; font-size:12px; font-weight:800; border:2px solid var(--line); color:var(--muted); background:var(--panel); }
+.setup-steps li.done .dot { background:var(--green); border-color:var(--green); color:#fff; }
+.setup-steps li.on .dot { border-color:var(--gold); color:var(--gold); box-shadow:0 0 0 3px rgba(201,162,39,.2); }
+.setup-steps li.on button, .setup-steps li.done button { color:var(--ink); }
+.setup-count { font-size:12.5px; color:var(--muted); font-weight:700; }
+.setup-panel { padding:16px 24px 0; }
+.setup-card { background:var(--panel); border:1px solid var(--gold); border-radius:var(--r); padding:18px 20px; box-shadow:0 10px 30px rgba(0,0,0,.35); max-width:980px; }
+.setup-nav { margin-top:16px; padding-top:12px; border-top:1px solid var(--line); }
+.cam-invite { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+.cam-invite .qr { width:168px; height:168px; background:#fff; border-radius:10px; padding:4px; flex:none; }
+.invite-row { display:grid; grid-template-columns:130px 1fr auto; gap:10px; align-items:center; padding:6px 0; border-bottom:1px solid var(--line); }
+.cam-list { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+.checklist.golive li { display:flex; gap:10px; align-items:center; }
+
+/* ---- choice cards (production mode, main stream) */
+.choices { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; }
+.choices.two { grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); }
+.choice { display:flex; gap:12px; align-items:flex-start; text-align:left; background:var(--panel2); border:1.5px solid var(--line); border-radius:10px; padding:12px 14px; color:var(--ink); font:inherit; cursor:pointer; position:relative; }
+.choice:hover:not([disabled]) { border-color:#3a434a; }
+.choice.on { border-color:var(--gold); box-shadow:0 0 0 3px rgba(201,162,39,.15); }
+.choice[disabled] { opacity:.5; cursor:not-allowed; }
+.choice .ci { width:30px; height:30px; flex:none; border-radius:8px; background:var(--panel); display:grid; place-items:center; font-weight:800; color:var(--gold); }
+.choice .tick { position:absolute; top:8px; right:10px; color:var(--gold); font-weight:800; }
+.choice .radio { width:18px; height:18px; flex:none; border-radius:50%; border:2px solid var(--muted); margin-top:2px; }
+.choice.on .radio { border-color:var(--gold); background:radial-gradient(circle,var(--gold) 0 4px,transparent 5px); }
+.main-now { display:flex; gap:12px; align-items:center; flex-wrap:wrap; background:var(--panel2); border-radius:10px; padding:12px 14px; }
+
+/* ---- ⓘ icon and the guide drawer */
+.info-i { display:inline-grid; place-items:center; width:20px; height:20px; border-radius:50%; border:1.5px solid var(--muted); background:none; color:var(--muted); font:700 12px/1 Georgia,serif; font-style:italic; cursor:pointer; vertical-align:middle; padding:0; flex:none; }
+.info-i:hover, .info-i:focus-visible { border-color:var(--gold); color:var(--gold); }
+.drawer-wrap { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:60; display:flex; justify-content:flex-end; }
+.drawer { width:min(520px,100%); height:100%; overflow-y:auto; background:var(--bg); border-left:1px solid var(--line); padding:18px 20px; box-shadow:-10px 0 30px rgba(0,0,0,.4); }
+.guide-steps { margin:8px 0 0; padding-left:20px; line-height:1.6; }
+.guide-steps li { margin-bottom:6px; }
+.guide-layout { display:grid; grid-template-columns:260px minmax(0,1fr); gap:20px; align-items:start; }
+.guide-toc { display:grid; gap:6px; position:sticky; top:70px; }
+.guide-toc a { display:flex; gap:10px; padding:10px; border-radius:10px; text-decoration:none; color:var(--ink); border:1px solid var(--line); background:var(--panel); }
+.guide-toc a.on { border-color:var(--gold); }
+.guide-toc .n { width:24px; height:24px; flex:none; border-radius:50%; background:var(--panel2); display:grid; place-items:center; font-weight:800; font-size:12px; color:var(--gold); }
+
+/* ---- product tour */
+.tour-layer { position:fixed; inset:0; z-index:70; pointer-events:none; }
+.tour-hole { position:fixed; border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.62); border:2px solid var(--gold); transition:all .25s ease; }
+.tour-tip { position:fixed; pointer-events:auto; background:var(--panel); border:1px solid var(--gold); border-radius:12px; padding:14px 16px; box-shadow:0 14px 40px rgba(0,0,0,.5); transition:top .25s ease, left .25s ease; }
+.tour-tip h3 { margin:2px 0 6px; font-size:16px; }
+.tour-tip p { margin:0 0 6px; color:var(--ink); line-height:1.5; }
+.tour-count { font-size:12px; font-weight:800; color:var(--gold); letter-spacing:.04em; }
+.tour-action { background:rgba(201,162,39,.12); border-radius:8px; padding:8px 10px; font-size:13.5px; }
+.tour-progress { height:4px; border-radius:2px; background:var(--panel2); overflow:hidden; margin-top:8px; }
+.tour-progress i { display:block; height:100%; background:var(--gold); }
+
+/* ---- welcome screen */
+dialog.welcome { max-width:520px; text-align:left; }
+.welcome-mark { width:46px; height:46px; border-radius:12px; background:rgba(229,57,53,.15); display:grid; place-items:center; margin-bottom:8px; }
+.welcome-mark .dot { width:14px; height:14px; border-radius:50%; background:var(--live); box-shadow:0 0 0 5px rgba(229,57,53,.25); }
+.welcome-steps { list-style:none; padding:0; margin:12px 0 0; display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+.welcome-steps li { display:flex; gap:8px; align-items:center; background:var(--panel2); border-radius:8px; padding:8px 10px; font-weight:600; }
+.welcome-steps .n { width:22px; height:22px; border-radius:50%; background:var(--gold); color:#111; display:grid; place-items:center; font-weight:800; font-size:12px; }
+
+@media (max-width: 860px) {
+  .setup-in { padding:8px 12px; gap:8px; }
+  .setup-steps .lbl { display:none; }
+  .setup-steps li.on .lbl { display:inline; }
+  .setup-panel { padding:12px 12px 0; }
+  .invite-row { grid-template-columns:1fr; }
+  .guide-layout { grid-template-columns:1fr; }
+  .guide-toc { position:static; }
+  .welcome-steps { grid-template-columns:1fr; }
+}
+.banner:not(.warn):not(.bad):not(.ok) { background:var(--panel2); border:1px solid var(--line); }
+.banner.ok { background:rgba(46,158,95,.12); border:1px solid var(--green); }
+.checklist.golive li.done { text-decoration:none; color:var(--ink); }

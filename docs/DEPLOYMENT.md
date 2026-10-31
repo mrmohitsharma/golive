@@ -321,6 +321,21 @@ Sizing:
 - The player saves bandwidth by itself: it stops downloading 30 s after the tab is hidden, asks "Still watching?" after 40 minutes without a tap, and uses 480p on mobile data or Data Saver and in phone-sized players (viewers can still pick 720p).
 - Migration 022 runs on start.
 
+## 3n. First-login setup and product tour (V7 web)
+
+Every new owner and director sees this once (it's remembered per user, on any device):
+1. **Welcome screen**, with three choices: set up my first show, take the 2-minute tour, or explore.
+2. **Setup bar above the menu ("Get on air · 2 of 4")**. Each step opens a panel above the page:
+   - Create event (Cloud OBS selected by default, or Laptop OBS; ⓘ explains both);
+   - Add cameras (QR, links, WhatsApp; the list of phones that joined updates live);
+   - Main stream (watch page, YouTube, Facebook, Instagram or any stream key; pause or switch any time);
+   - Go live (Start show, Open control room, copy the watch link).
+
+   Step 1 opens by itself when the club has no event. A club that has already been live skips the setup steps.
+3. **Product tour (9 steps)**. It highlights each menu and feature with a tooltip, asks for the key actions, shows "3 / 9", and has Previous / Next / Skip. A reload resumes it.
+
+Restart any of these from **Help** or **Profile** ("Learn Go Live"). The written walkthrough is at `/web/guide`. Migration 023 runs on start.
+
 ## 4. Cloud mode (OBS on the server)
 
 ```bash

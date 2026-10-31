@@ -398,6 +398,7 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
         youtube: flag.optional(),
         facebook: flag.optional(),
         watch: flag.optional(),
+        main: z.string().max(60).optional(),
         instagram: z
           .object({
             enabled: z.boolean().optional(),
@@ -408,7 +409,9 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
           .optional(),
       })
       .parse(req.body);
-    const updated = await outputs.update(t, body);
+    const { main, ...rest } = body;
+    let updated = await outputs.update(t, rest);
+    if (main) updated = await outputs.setMain(updated, main);
     await hub.outputsUpdated(t.id);
     return { outputs: await outputs.state(updated) };
   });

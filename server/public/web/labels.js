@@ -16,4 +16,4 @@ export const TX_LABELS = {
   destinations: 'Extra destinations', viewership: 'Influencers & games', messages: 'SMS',
 };
 export const ROLE_LABELS = { owner: 'Owner', director: 'Director', scorer: 'Scorer', commentator: 'Commentator', camera: 'Camera' };
-export const FEATURE_LABELS = { cloud: 'Cloud production (OBS on our server)', viewership: 'Influencers & games add-on' };
+export const FEATURE_LABELS = { cloud: 'Cloud OBS (OBS on our servers)', viewership: 'Influencers & games add-on' };

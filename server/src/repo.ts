@@ -84,6 +84,8 @@ export interface TournamentOutputs {
   instagram?: { enabled?: boolean; urlEnc?: string | null; hint?: string | null };
   /** Our watch page player (on unless switched off for this event). */
   watch?: { enabled?: boolean };
+  /** The main stream the director chose: 'watch' | 'youtube' | 'facebook' | 'instagram' | 'd:<destination id>'. */
+  main?: string | null;
 }
 
 export interface OrgFacebookRow {

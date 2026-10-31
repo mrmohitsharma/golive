@@ -54,6 +54,18 @@ export interface OutputsState {
   destinations: DestinationState[];
   /** Our own watch page player (HLS through the CDN); null when it is off for the platform. */
   watch: { enabled: boolean; state: 'off' | RelayStatus['state']; since: string | null; error: string | null } | null;
+  /** The main stream: the one place viewers are sent to. Paused = switched off for now. */
+  main: MainStream;
+}
+
+export interface MainStream {
+  id: string;
+  label: string;
+  /** Where viewers watch it, when known (the watch page, the YouTube video, the Facebook post). */
+  link: string | null;
+  paused: boolean;
+  /** Set up enough to stream (a YouTube broadcast or key, a connected Page, a pasted key). */
+  ready: boolean;
 }
 
 /**
@@ -155,6 +167,7 @@ export class OutputsService {
     const w = running.get('watch');
     return {
       relay,
+      main: this.mainOf(t, c, dests),
       watch: this.hls?.on
         ? { enabled: t.outputs?.watch?.enabled !== false, state: w?.state ?? 'off', since: w?.since ?? null, error: w?.error ?? null }
         : null,
@@ -191,6 +204,46 @@ export class OutputsService {
         };
       }),
     };
+  }
+
+  /** The chosen main stream, or a sensible default: our watch player when on, else YouTube. */
+  private mainOf(t: TournamentRow, c: Record<Platform, boolean>, dests: Awaited<ReturnType<DestinationsService['list']>>): MainStream {
+    const base = this.config.PUBLIC_BASE_URL.replace(/\/$/, '');
+    const watchOn = Boolean(this.hls?.on);
+    const pick = (id: string | null | undefined): MainStream | null => {
+      if (!id) return null;
+      if (id === 'watch') {
+        if (!watchOn) return null;
+        return { id, label: 'Watch page (our player)', link: `${base}/watch/${t.id}`, paused: t.outputs?.watch?.enabled === false, ready: true };
+      }
+      if (id === 'youtube' || id === 'facebook' || id === 'instagram') {
+        const p = id as Platform;
+        const link = p === 'youtube' ? watchUrl(t.yt_broadcast_id) : p === 'facebook' ? t.fb_permalink : null;
+        return { id, label: { youtube: 'YouTube', facebook: 'Facebook Page', instagram: 'Instagram' }[p], link, paused: !this.wants(t, p), ready: c[p] };
+      }
+      if (id.startsWith('d:')) {
+        const d = dests.find((x) => x.id === id.slice(2));
+        if (!d) return null;
+        return { id, label: d.label, link: this.destinations.linkFor(d), paused: !d.enabled, ready: Boolean(d.url_enc) || d.kind === 'channel' };
+      }
+      return null;
+    };
+    return pick(t.outputs?.main) ?? pick(watchOn ? 'watch' : 'youtube') ?? pick('youtube')!;
+  }
+
+  /** Makes `main` the main stream and switches it on (a paused one is resumed). */
+  async setMain(t: TournamentRow, main: string): Promise<TournamentRow> {
+    if (main === 'watch') {
+      if (!this.hls?.on) throw new HttpError(409, 'watch_off', 'The watch page player is not available on this server.');
+      t = await this.update(t, { watch: { enabled: true } });
+    } else if (main === 'youtube' || main === 'facebook' || main === 'instagram') {
+      t = await this.update(t, { [main]: { enabled: true } });
+    } else if (/^d:[0-9a-f-]{36}$/.test(main)) {
+      const d = await this.destinations.get(t.id, main.slice(2));
+      if (!d.enabled) await this.updateDestination(t, d.id, { enabled: true });
+    } else throw new HttpError(400, 'bad_main', 'Choose the watch page, YouTube, Facebook, Instagram or one of this event’s destinations.');
+    const o: TournamentOutputs = { ...(t.outputs ?? {}), main };
+    return (await this.repo.setOutputs(t.id, o))!;
   }
 
   async update(
