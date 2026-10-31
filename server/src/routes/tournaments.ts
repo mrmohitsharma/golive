@@ -475,6 +475,13 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
     return { done, problems, production: cloud.state(fresh), youtube: await hub.youtubeState(fresh) };
   });
 
+  /** "Keep running": Cloud OBS is not live but the director wants it on for another while. */
+  app.post('/api/tournaments/:id/cloud-engine/keep', { preHandler: user }, async (req) => {
+    const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
+    const s = await cloud.keepRunning(t.id);
+    return { production: s ?? cloud.state(t), kept: Boolean(s) };
+  });
+
   app.post('/api/tournaments/:id/cloud-engine/stop', { preHandler: user }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, idParam(req), 'direct');
     if (hub.engineState(t.id).streaming.active) {

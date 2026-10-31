@@ -37,7 +37,7 @@ describe('cloud production mode', () => {
   let director: TestSocket;
 
   before(async () => {
-    h = await startHarness({ cloudDriver: driver, env: { CLOUD_ENGINE_IDLE_STOP_MIN: '0', ENGINE_SRT_HOST: 'mediamtx', ENGINE_SRT_PORT: '8890' } });
+    h = await startHarness({ cloudDriver: driver, env: { CLOUD_ENGINE_IDLE_STOP_SEC: '1', CLOUD_ENGINE_IDLE_WARN_SEC: '0', ENGINE_SRT_HOST: 'mediamtx', ENGINE_SRT_PORT: '8890' } });
     owner = await signup(h, 'owner@club.test');
     directorToken = await addStaff(h, owner.token, owner.orgId, 'd@club.test', 'director');
     tournamentId = await createTournament(h, owner.token, owner.orgId, { mode: 'laptop' });
@@ -93,9 +93,9 @@ describe('cloud production mode', () => {
   });
 
   it('auto-stops when nothing is live (idle timeout), so the bill only covers event hours', async () => {
-    await h.app.cloud.tick(); // first idle observation
-    await new Promise((r) => setTimeout(r, 20));
-    await h.app.cloud.tick(); // idle > 0 min → stop
+    await h.app.cloud.tick(); // idle count started when the engine connected; warns
+    await new Promise((r) => setTimeout(r, 1100));
+    await h.app.cloud.tick(); // not live for over 1 s → stop
     assert.deepEqual(driver.stopped, ['c1']);
     await director.next((m) => m.type === 'production' && m.production.cloud.status === 'stopped');
   });

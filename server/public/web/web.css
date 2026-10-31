@@ -244,3 +244,6 @@ dialog.welcome { max-width:520px; text-align:left; }
 .gl-hint { margin-top:8px; font-size:13.5px; color:var(--ink); }
 @keyframes glpulse { 0%{box-shadow:0 0 0 0 rgba(201,162,39,.65)} 70%{box-shadow:0 0 0 10px rgba(201,162,39,0)} 100%{box-shadow:0 0 0 0 rgba(201,162,39,0)} }
 @media (max-width: 860px) { .gl-sep { display:none; } .gl-step { font-size:12.5px; } }
+.cr-idle { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:10px 14px; margin-bottom:12px; font-size:13.5px; }
+.cr-idle.warn { border-color:var(--warn); background:rgba(242,179,61,.1); }
+.cr-grid .empty { grid-column:1/-1; text-align:left; }

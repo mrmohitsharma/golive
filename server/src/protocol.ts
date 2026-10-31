@@ -130,7 +130,11 @@ export interface ProductionState {
     startedAt: string | null;
     error: string | null;
     costPerHour: number;
+    /** Kept for older apps: the idle stop in whole minutes (at least 1). */
     autoStopAfterIdleMin: number;
+    autoStopAfterIdleSec: number;
+    /** When Cloud OBS will stop by itself because the show is not live (null: not counting). */
+    autoStopAt: string | null;
   };
 }
 

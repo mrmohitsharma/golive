@@ -347,7 +347,7 @@ docker compose up -d
 curl https://live.cogolfers.com/api/info               # "cloudProduction": true
 ```
 
-Directors then pick **Cloud** when creating a tournament (or under *Production*) and tap **Start cloud engine** ~5 minutes before the show. Each engine is one container on the compose network (`cg-engine-<id>`), reads cameras from MediaMTX internally, renders graphics from the server, and streams to YouTube. It stops when a director taps **Stop**, after `CLOUD_ENGINE_IDLE_STOP_MIN` minutes with nothing live, or after `CLOUD_ENGINE_MAX_HOURS`.
+Directors then pick **Cloud** when creating a tournament (or under *Production*) and tap **Start cloud engine** ~5 minutes before the show. Each engine is one container on the compose network (`cg-engine-<id>`), reads cameras from MediaMTX internally, renders graphics from the server, and streams to YouTube. It stops when a director taps **Stop**, after `CLOUD_ENGINE_IDLE_STOP_SEC` (2 minutes) without the show being live, before going live or after End broadcast, or after `CLOUD_ENGINE_MAX_HOURS`. The control room shows a countdown with **Keep running**, and any director action restarts the count. When it stops, camera phones are told to stop sending (they resume with the next Start show, or with Go live on the phone).
 
 Engine defaults: 1920×1080 at 30 fps, 6000 kbps x264 `veryfast`, 2 s keyframes (`CLOUD_ENGINE_WIDTH/HEIGHT/FPS/VIDEO_KBPS`). That needs ~6 vCPU for the encode plus camera decoding (no GPU in a standard VM). On a smaller VM use 1280×720 / 4500 kbps.
 

@@ -41,6 +41,10 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   bool inPreview = false;
   bool appInBackground = false;
   bool removedByDirector = false;
+
+  /// The show ended (the server paused the cameras); [_resumeAfterShow] = it was sending before.
+  bool pausedByShow = false;
+  bool _resumeAfterShow = false;
   Map<String, Object?> actual = const {};
 
   bool _publisherConnected = false;
@@ -107,6 +111,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   // ---------------------------------------------------------------- operator actions
   Future<void> goLive() async {
     if (phase == CameraPhase.error || phase == CameraPhase.starting) return;
+    pausedByShow = false;
     wantLive = true;
     reconnectAttempts = 0;
     _backoff.reset();
@@ -129,6 +134,15 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     phase = CameraPhase.ready;
     message = null;
     _sendTelemetry();
+    _notify();
+  }
+
+  Future<void> _pauseForShowEnd(String why) async {
+    if (pausedByShow) return;
+    _resumeAfterShow = wantLive;
+    pausedByShow = true;
+    await stopLive();
+    message = why;
     _notify();
   }
 
@@ -245,6 +259,16 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
         removedByDirector = true;
         message = 'The director removed this camera from the tournament.';
         unawaited(stopLive());
+      case 'camera.pause':
+        // The show is over: stop uploading (saves this phone's data and the server's bandwidth).
+        unawaited(_pauseForShowEnd('${m['message'] ?? 'The show has ended. Tap Go live when the next show starts.'}'));
+      case 'camera.resume':
+        if (pausedByShow) {
+          pausedByShow = false;
+          message = 'The director started the next show.';
+          if (_resumeAfterShow) unawaited(goLive());
+          _resumeAfterShow = false;
+        }
       case 'error':
         if (m['code'] == 'unauthorized') message = '${m['message']}';
     }

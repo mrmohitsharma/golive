@@ -86,6 +86,26 @@ export async function render(view, { id }) {
   pgmBox.append(airBadge);
   const liveBtn = el('div', { class: 'cr-live-btn' });
   const guideHost = el('div');
+  // Cloud OBS stops by itself when the show is not live: a countdown with Keep running.
+  const idleBar = el('div', { class: 'cr-idle', hidden: true });
+  let idleTimer = null;
+  const drawIdle = () => {
+    const at = s.production?.cloud?.autoStopAt;
+    const live = s.engine?.streaming?.active;
+    const left = at ? Math.max(0, Math.round((Date.parse(at) - Date.now()) / 1000)) : null;
+    if (left == null || live || s.production?.cloud?.status !== 'running') { idleBar.hidden = true; return; }
+    const warn = left <= 60;
+    idleBar.hidden = false;
+    idleBar.className = 'cr-idle' + (warn ? ' warn' : '');
+    idleBar.replaceChildren(
+      el('span', {}, el('strong', { text: `Cloud OBS stops in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` }),
+        ' because the show is not live. It saves you money when nobody is using it; Start show turns it on again.'),
+      el('div', { class: 'sp' }),
+      el('button', { class: 'btn small ' + (warn ? 'primary' : ''), onclick: guard(async () => {
+        const r = await post(`/api/tournaments/${id}/cloud-engine/keep`, {});
+        s.production = r.production; drawIdle(); toast('Cloud OBS stays on');
+      }), text: 'Keep running' }));
+  };
   const showGuide = el('button', { class: 'btn small ghost', hidden: true, text: 'Show guide' });
   let steps = null;
   const pgmLabel = el('div', { class: 'cr-label' }), pvwLabel = el('div', { class: 'cr-label' });
@@ -261,11 +281,11 @@ export async function render(view, { id }) {
     switch (m.type) {
       case 'snapshot': s = { ...s, ...m }; drawAll(); break;
       case 'cameras': { const before = (s.commentators ?? []).map((c) => c.id + c.online).join(); s.cameras = m.cameras; s.commentators = m.commentators; drawMonitors(); drawGrid(); if (tab === 'Audio' && before !== (m.commentators ?? []).map((c) => c.id + c.online).join()) drawSide(); break; }
-      case 'engine': s.engine = m.engine ?? m; drawStatus(); drawMonitors(); drawGrid(); break;
+      case 'engine': s.engine = m.engine ?? m; drawStatus(); drawMonitors(); drawGrid(); drawIdle(); break;
       case 'outputs': s.outputs = m.outputs ?? m; drawStatus(); break;
       case 'graphics': s.graphics = m.graphics ?? m; if (tab === 'Graphics') drawSide(); break;
       case 'audio': s.audio = m.audio ?? m; break;
-      case 'production': s.production = m.production ?? m; drawStatus(); break;
+      case 'production': s.production = m.production ?? m; drawStatus(); drawIdle(); break;
       case 'billing': s.billing = m.billing ?? m; drawStatus(); break;
       case 'chat': if (tab === 'Chat') drawSide(); break;
       case 'meters': for (const bar of side.querySelectorAll('.cr-meter')) { const db = m.levels?.[bar.dataset.input]; bar.firstChild.style.width = db == null ? '0%' : `${Math.max(0, Math.min(100, ((db + 60) / 60) * 100))}%`; bar.classList.toggle('hot', db != null && db > -6); } break;
@@ -309,6 +329,7 @@ export async function render(view, { id }) {
 
   view.append(
     guideHost,
+    idleBar,
     status,
     el('div', { class: 'cr' },
       el('div', { class: 'cr-main' },
@@ -338,8 +359,9 @@ export async function render(view, { id }) {
   document.addEventListener('keydown', keys);
   document.addEventListener('keydown', shift, true);
   thumbTimer = setInterval(drawGrid, 5000);
+  idleTimer = setInterval(drawIdle, 1000);
   return () => {
-    closed = true; clearTimeout(wsTimer); clearInterval(thumbTimer); ws?.close(); pgm.close(); pvw.close(); mic.stop();
+    closed = true; clearTimeout(wsTimer); clearInterval(thumbTimer); clearInterval(idleTimer); ws?.close(); pgm.close(); pvw.close(); mic.stop();
     document.removeEventListener('keydown', keys); document.removeEventListener('keydown', shift, true);
     document.body.classList.remove('wide');
   };

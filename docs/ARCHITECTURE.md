@@ -146,7 +146,9 @@ The owner connects the club's channel once (Google OAuth, `youtube` scope, offli
 | Scorer has no signal | request fails | scores stay queued on the phone (survive restarts) and send in order when signal returns |
 | Commentator link drops | WebRTC connection state | reconnects with backoff; mixer shows the commentator offline |
 | Agent or OBS down | WebSocket / obs-websocket close | ENGINE OFFLINE / OBS NOT REACHABLE; switching disabled; both reconnect |
-| Cloud engine idle | no stream for `CLOUD_ENGINE_IDLE_STOP_MIN` | container stopped, directors informed |
+| Cloud OBS idle | not live for `CLOUD_ENGINE_IDLE_STOP_SEC` (120 s; phones sending video don't count; director activity or Keep running restarts the count) | warning at `CLOUD_ENGINE_IDLE_WARN_SEC`, then the container stops, directors are told, camera phones get `camera.pause` |
+| Cloud OBS never connects | `CLOUD_ENGINE_START_TIMEOUT_SEC` (300 s) | container stopped |
+| Laptop OBS show ended | `CLOUD_ENGINE_IDLE_STOP_SEC` after End broadcast, not live again | camera phones get `camera.pause` |
 | Server restart | WebSocket close | apps and agent reconnect and resubscribe |
 
 ## Security

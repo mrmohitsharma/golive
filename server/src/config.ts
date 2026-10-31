@@ -159,7 +159,15 @@ const schema = z.object({
   CLOUD_ENGINE_CPUS: z.coerce.number().default(6),
   CLOUD_ENGINE_MEMORY_MB: z.coerce.number().default(6144),
   CLOUD_ENGINE_SERVER_URL: z.string().default('http://server:8080'),
-  CLOUD_ENGINE_IDLE_STOP_MIN: z.coerce.number().default(30),
+  // Cloud OBS stops by itself when the show is not live for this long (before going live,
+  // or after End broadcast), with a warning first. Phones sending video do not keep it on;
+  // a director working in the control room (or Keep running) restarts the count.
+  CLOUD_ENGINE_IDLE_STOP_SEC: z.coerce.number().min(1).default(120),
+  CLOUD_ENGINE_IDLE_WARN_SEC: z.coerce.number().min(0).default(60),
+  // Never connected after this long: stop it (it would bill for nothing).
+  CLOUD_ENGINE_START_TIMEOUT_SEC: z.coerce.number().min(1).default(300),
+  /** @deprecated replaced by CLOUD_ENGINE_IDLE_STOP_SEC; kept so old .env files still load. */
+  CLOUD_ENGINE_IDLE_STOP_MIN: z.coerce.number().optional(),
   CLOUD_ENGINE_MAX_HOURS: z.coerce.number().default(14),
   CLOUD_ENGINE_COST_PER_HOUR: z.coerce.number().default(0.35),
   CLOUD_ENGINE_WIDTH: z.coerce.number().default(1920),

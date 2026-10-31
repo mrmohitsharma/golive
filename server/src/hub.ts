@@ -74,6 +74,10 @@ interface TournamentLive {
   lastMetersAt: number;
   /** Last time the restream relays were checked against what is wanted (throttle). */
   relayCheckedAt: number;
+  /** The show is over: camera phones were told to stop sending until the next show. */
+  camerasPaused: boolean;
+  /** Laptop OBS: pause the cameras this long after End broadcast unless live again. */
+  endTimer: NodeJS.Timeout | null;
 }
 
 export interface Logger {
@@ -157,7 +161,7 @@ export class Hub {
   private liveFor(tournamentId: string): TournamentLive {
     let l = this.live.get(tournamentId);
     if (!l) {
-      l = { engine: emptyEngineState(), engineClient: null, telemetry: new Map(), programmeOfflineSince: null, youtube: emptyYoutube(), lastMetersAt: 0, relayCheckedAt: 0 };
+      l = { engine: emptyEngineState(), engineClient: null, telemetry: new Map(), programmeOfflineSince: null, youtube: emptyYoutube(), lastMetersAt: 0, relayCheckedAt: 0, camerasPaused: false, endTimer: null };
       this.live.set(tournamentId, l);
     }
     return l;
@@ -173,10 +177,29 @@ export class Hub {
 
   /** Anything live in this tournament? (cloud engine idle auto-stop) */
   isBusy(tournamentId: string): boolean {
+    // Only the show being live keeps Cloud OBS on: a phone left sending video does not.
+    return this.liveFor(tournamentId).engine.streaming.active;
+  }
+
+  /**
+   * The show is over (Cloud OBS stopped, or Laptop OBS ended a while ago): tell the camera
+   * phones to stop sending until the next show, saving their data and our bandwidth.
+   */
+  pauseCameras(tournamentId: string, message: string): void {
     const l = this.liveFor(tournamentId);
-    if (l.engine.streaming.active) return true;
-    for (const [, v] of l.telemetry) if (v.t.state === 'live' && Date.now() - v.at < this.config.TELEMETRY_STALE_MS) return true;
-    return false;
+    if (l.engine.streaming.active) return;
+    l.camerasPaused = true;
+    for (const c of this.clients) if (c.tournamentId === tournamentId && c.cameraId) this.send(c, { type: 'camera.pause', message });
+  }
+
+  /** A new show starts (Start show, Cloud OBS started, or live again): phones may send again. */
+  resumeCameras(tournamentId: string): void {
+    const l = this.liveFor(tournamentId);
+    if (l.endTimer) clearTimeout(l.endTimer);
+    l.endTimer = null;
+    if (!l.camerasPaused) return;
+    l.camerasPaused = false;
+    for (const c of this.clients) if (c.tournamentId === tournamentId && c.cameraId) this.send(c, { type: 'camera.resume' });
   }
 
   telemetryFor(tournamentId: string, cameraId: string): (CameraTelemetry & { receivedAt: string }) | null {
@@ -431,6 +454,7 @@ export class Hub {
         client.role = role;
         client.cameraId = cam.id;
         this.send(client, { type: 'camera.joined', camera: this.cameraDto(cam) });
+        if (this.liveFor(cam.tournament_id).camerasPaused) this.send(client, { type: 'camera.pause', message: 'The show has ended, so this camera stopped sending. Tap Go live when the director starts the next show.' });
         return this.sendTally(client);
       }
 
@@ -559,6 +583,8 @@ export class Hub {
     if (!DIRECTOR_ACTIONS.includes(action)) return fail(`Unknown action ${String(action)}.`);
     const tid = client.tournamentId;
     const l = this.liveFor(tid);
+    // A director working in the control room is not idle: restart Cloud OBS's idle count.
+    void this.services.cloud.keepRunning(tid, true).catch(() => {});
     let cameraId = typeof msg.cameraId === 'string' ? msg.cameraId : null;
     if (action === 'take' && !cameraId) cameraId = l.engine.previewCameraId;
 
@@ -620,6 +646,16 @@ export class Hub {
     if (!t) return;
     if (was && !now) await this.services.outputs.ended(t);
     else await this.services.outputs.reconcile(t, now);
+    if (now) this.resumeCameras(tournamentId);
+    // Laptop OBS has no cloud engine to stop: pause the phones a while after the show ends.
+    if (was && !now && t.production_mode !== 'cloud') {
+      if (l.endTimer) clearTimeout(l.endTimer);
+      l.endTimer = setTimeout(() => {
+        l.endTimer = null;
+        this.pauseCameras(tournamentId, 'The show has ended, so this camera stopped sending. Tap Go live when the director starts the next show.');
+      }, this.config.CLOUD_ENGINE_IDLE_STOP_SEC * 1000);
+      l.endTimer.unref?.();
+    }
     await this.outputsChanged(tournamentId);
     // Viewer comments from YouTube and Facebook are read only while live.
     const fresh = await this.repo.tournamentById(tournamentId);

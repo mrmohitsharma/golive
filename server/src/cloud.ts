@@ -178,7 +178,14 @@ interface CloudRecord {
  */
 export class CloudEngineManager {
   private idleSince = new Map<string, number>();
+  private warned = new Set<string>();
   private timer: NodeJS.Timeout | null = null;
+  /** Set by the app: tell directors, and pause the cameras when Cloud OBS stops on its own. */
+  events: {
+    alert?: (tournamentId: string, level: 'info' | 'warning' | 'error', message: string) => void;
+    stopped?: (tournamentId: string, reason: string) => void;
+    started?: (tournamentId: string) => void;
+  } = {};
 
   constructor(
     private readonly config: Config,
@@ -196,7 +203,8 @@ export class CloudEngineManager {
 
   start(): void {
     if (this.timer || !this.driver) return;
-    this.timer = setInterval(() => void this.watchdog(), 30_000);
+    // Every 10 s, so a 2-minute idle stop with a 1-minute warning is on time.
+    this.timer = setInterval(() => void this.watchdog(), 10_000);
     this.timer.unref();
   }
 
@@ -214,7 +222,11 @@ export class CloudEngineManager {
         startedAt: c.startedAt ?? null,
         error: c.error ?? null,
         costPerHour: this.config.CLOUD_ENGINE_COST_PER_HOUR,
-        autoStopAfterIdleMin: this.config.CLOUD_ENGINE_IDLE_STOP_MIN,
+        autoStopAfterIdleMin: Math.max(1, Math.round(this.config.CLOUD_ENGINE_IDLE_STOP_SEC / 60)),
+        autoStopAfterIdleSec: this.config.CLOUD_ENGINE_IDLE_STOP_SEC,
+        autoStopAt: c.status === 'running' && this.idleSince.has(t.id)
+          ? new Date(this.idleSince.get(t.id)! + this.config.CLOUD_ENGINE_IDLE_STOP_SEC * 1000).toISOString()
+          : null,
       },
     };
   }
@@ -247,8 +259,12 @@ export class CloudEngineManager {
     try {
       const id = await this.driver.start(spec);
       this.idleSince.delete(t.id);
+      this.warned.delete(t.id);
       await this.save(t, { id, driver: this.driver.name, status: 'starting', startedAt: new Date().toISOString(), error: null });
       this.log.info({ tournament: t.id, handle: id }, 'cloud engine starting');
+      try {
+        this.events.started?.(t.id);
+      } catch {}
     } catch (err) {
       await this.save(t, { status: 'error', startedAt: null, error: (err as Error).message.slice(0, 300) });
       throw new HttpError(502, 'cloud_start_failed', `Could not start the cloud engine: ${(err as Error).message}`);
@@ -263,8 +279,12 @@ export class CloudEngineManager {
       await this.driver.stop(cur.id).catch((err) => this.log.warn({ err: (err as Error).message }, 'cloud engine stop failed'));
     }
     this.idleSince.delete(t.id);
+    this.warned.delete(t.id);
     await this.save(t, { status: 'stopped', startedAt: null, error: null });
     this.log.info({ tournament: t.id, reason }, 'cloud engine stopped');
+    try {
+      this.events.stopped?.(t.id, reason);
+    } catch {}
     return this.state((await this.repo.tournamentById(t.id))!);
   }
 
@@ -272,7 +292,29 @@ export class CloudEngineManager {
   async engineConnected(tournamentId: string): Promise<void> {
     const t = await this.repo.tournamentById(tournamentId);
     const cur = (t?.cloud_engine ?? {}) as CloudRecord;
-    if (t && cur.id && cur.status === 'starting') await this.save(t, { ...cur, status: 'running' });
+    if (t && cur.id && cur.status === 'starting') {
+      // The idle count starts now, not while it was booting.
+      this.idleSince.set(tournamentId, Date.now());
+      this.warned.delete(tournamentId);
+      await this.save(t, { ...cur, status: 'running' });
+    }
+  }
+
+  /**
+   * "Keep running", or a director working in the control room: restart the idle count.
+   * Returns the new state when Cloud OBS is running, else null.
+   */
+  async keepRunning(tournamentId: string, quiet = false): Promise<ProductionState | null> {
+    if (!this.idleSince.has(tournamentId)) return null;
+    const had = this.warned.has(tournamentId);
+    this.idleSince.set(tournamentId, Date.now());
+    this.warned.delete(tournamentId);
+    const t = await this.repo.tournamentById(tournamentId);
+    if (!t) return null;
+    const s = this.state(t);
+    // Always tell the room when a warning was showing, so the countdown goes away.
+    if (!quiet || had) this.onChange(tournamentId, s);
+    return s;
   }
 
   private async watchdog(): Promise<void> {
@@ -289,12 +331,36 @@ export class CloudEngineManager {
         await this.stopEngine(t, 'maximum runtime reached');
         continue;
       }
+      // Booting: never connected in time → stop (nothing to bill for).
+      if (cur.status === 'starting') {
+        if (Date.now() - startedAt > this.config.CLOUD_ENGINE_START_TIMEOUT_SEC * 1000) {
+          this.events.alert?.(t.id, 'error', 'Cloud OBS did not start in time, so it was stopped. Press Start show to try again.');
+          await this.stopEngine(t, 'did not start');
+        }
+        continue;
+      }
       if (this.isBusy(t.id)) {
-        this.idleSince.delete(t.id);
-      } else {
-        const since = this.idleSince.get(t.id) ?? Date.now();
-        this.idleSince.set(t.id, since);
-        if (Date.now() - since > this.config.CLOUD_ENGINE_IDLE_STOP_MIN * 60_000) await this.stopEngine(t, 'idle');
+        if (this.idleSince.has(t.id)) {
+          this.idleSince.delete(t.id);
+          this.warned.delete(t.id);
+          this.onChange(t.id, this.state(t));
+        }
+        continue;
+      }
+      // Not live: count, warn, then stop.
+      const first = !this.idleSince.has(t.id);
+      const since = this.idleSince.get(t.id) ?? Date.now();
+      this.idleSince.set(t.id, since);
+      if (first) this.onChange(t.id, this.state(t));
+      const idleSec = (Date.now() - since) / 1000;
+      const stopSec = this.config.CLOUD_ENGINE_IDLE_STOP_SEC;
+      if (idleSec >= stopSec) {
+        this.events.alert?.(t.id, 'warning', `Cloud OBS stopped: the show was not live for ${fmt(stopSec)}. Press Start show to turn it on again.`);
+        await this.stopEngine(t, 'idle');
+      } else if (idleSec >= this.config.CLOUD_ENGINE_IDLE_WARN_SEC && !this.warned.has(t.id)) {
+        this.warned.add(t.id);
+        this.events.alert?.(t.id, 'warning', `Cloud OBS stops in ${fmt(Math.ceil(stopSec - idleSec))} because the show is not live. Go live, or press Keep running in the control room to keep it on.`);
+        this.onChange(t.id, this.state(t));
       }
     }
   }
@@ -309,4 +375,11 @@ export function makeDriver(config: Config, log: Log): CloudDriver | null {
   if (config.CLOUD_ENGINE_DRIVER === 'docker') return new DockerDriver(config);
   if (config.CLOUD_ENGINE_DRIVER === 'process') return new ProcessDriver(config, log);
   return null;
+}
+
+/** 120 → "2 minutes", 45 → "45 seconds". */
+function fmt(sec: number): string {
+  if (sec >= 60 && sec % 60 === 0) return `${sec / 60} minute${sec === 60 ? '' : 's'}`;
+  if (sec >= 90) return `${Math.round(sec / 60)} minutes`;
+  return `${Math.round(sec)} seconds`;
 }

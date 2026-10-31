@@ -121,6 +121,12 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const hls = new HlsService(config, repo, secrets, log, cdnFetch);
   await hls.reload();
   outputs.hls = hls;
+  // Cloud OBS stops on its own when the show is not live: tell the room, pause the phones.
+  cloud.events = {
+    alert: (tid, level, message) => hub.alert(tid, level, message),
+    stopped: (tid) => hub.pauseCameras(tid, 'The show has ended, so this camera stopped sending. Tap Go live when the director starts the next show.'),
+    started: (tid) => hub.resumeCameras(tid),
+  };
   hls.engineVideo = (tid) => hub.engineState(tid).video;
   relay.hooks = { hlsStart: (tid, _dir, s) => hls.started(tid, s), hlsEnd: (tid, _dir, s) => hls.ended(tid, s) };
   const invoices = new InvoiceService(repo);
