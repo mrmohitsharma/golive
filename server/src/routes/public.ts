@@ -116,6 +116,8 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
       const onAir = e.programmeCameraId ? await repo.cameraById(e.programmeCameraId) : null;
       return {
         tournament: summary({ ...t, org_name: org?.name }),
+        // Our own player: the live HLS stream (once FFmpeg is writing it) and the replays.
+        watch: await ctx.hls.info(t, ctx.relay.status(t.id).some((s) => s.id === 'watch' && s.state === 'live')),
         onAir: e.streaming.active && onAir && !e.fallbackActive ? { hole: onAir.hole, replay: e.replayActive } : null,
         holes: holes.length,
         leaderboard: rows

@@ -125,6 +125,8 @@
 </head>
 <body>
 <div class="wrap" id="app"><p class="sub">Loading…</p></div>
+<script src="/site/hls-1.5.20.light.min.js"></script>
+<script src="/site/player.js"></script>
 <script>
 (() => {
   const app = document.getElementById('app');
@@ -175,6 +177,17 @@
   // viewer clock counts only real watching (playing, tab visible). Reports go to our server
   // every 30 s and when the page is hidden or closed.
   let ytApi = null, player = null, ytPlaying = false;
+  // Our own player (HLS through the CDN): used instead of YouTube when the event has it.
+  let ours = null, shownSrc = null;
+  const playingNow = () => ours ? ours.isPlaying() : Boolean(player && ytPlaying);
+  function mountOurs(src, live, title) {
+    if (ours) ours.destroy();
+    player = null; ytPlaying = false;
+    ours = window.GoLivePlayer
+      ? GoLivePlayer.mount(playerBox, { src, live, title, onPlaying: (v) => { if (v) startView(); } })
+      : null;
+  }
+  function unmountOurs() { if (ours) { ours.destroy(); ours = null; } shownSrc = null; }
   const loadYt = () => ytApi || (ytApi = new Promise((resolve, reject) => {
     if (window.YT && window.YT.Player) return resolve(window.YT);
     const prev = window.onYouTubeIframeAPIReady;
@@ -249,7 +262,7 @@
     return view.starting;
   }
   function setStreamClock(sec) { view.streamClockSec = sec; view.streamAt = Date.now(); }
-  const unmuted = () => { try { return player && !player.isMuted() && player.getVolume() > 0; } catch { return false; } };
+  const unmuted = () => { try { return ours ? ours.isUnmuted() : Boolean(player && !player.isMuted() && player.getVolume() > 0); } catch { return false; } };
 
   function report(beacon) {
     if (!view.token || (!view.pendPlay && !beacon)) return;
@@ -260,7 +273,7 @@
       .then((r) => r.ok ? r.json() : null).then((j) => { if (j) { view.live = j.live; setStreamClock(j.streamClockSec); for (const w of j.wins || []) queueWin(w); } }).catch(() => {});
   }
   setInterval(() => {
-    if (player && ytPlaying && !document.hidden && view.token) {
+    if (playingNow() && !document.hidden && view.token) {
       view.pendPlay++; view.clock++;
       if (unmuted()) view.pendUnmuted++;
     }
@@ -528,14 +541,27 @@
     return form;
   }
 
-  function renderPlayer(t) {
+  function renderPlayer(t, w) {
+    // 1. our live stream, 2. YouTube, 3. our replay once the show is over, 4. a placeholder.
+    const replay = !t.live && w && w.replays && w.replays[0];
+    const src = (w && w.live) || null;
     const vid = t.youtube && t.youtube.videoId;
-    if (vid && vid !== shownVideo) {
-      shownVideo = vid;
-      playerBox.classList.remove('waiting');
-      mountPlayer(t);
-    }
-    if (!vid && shownVideo !== '') {
+    if (src || (!vid && replay)) {
+      const want = src || replay.url;
+      if (want !== shownSrc) {
+        shownSrc = want; shownVideo = null;
+        playerBox.classList.remove('waiting');
+        mountOurs(want, Boolean(src), t.name);
+      }
+    } else if (vid) {
+      if (shownSrc) unmountOurs();
+      if (vid !== shownVideo) {
+        shownVideo = vid;
+        playerBox.classList.remove('waiting');
+        mountPlayer(t);
+      }
+    } else if (shownVideo !== '') {
+      unmountOurs();
       shownVideo = '';
       player = null; ytPlaying = false;
       playerBox.classList.add('waiting');
@@ -711,7 +737,7 @@
           el('div', { class: 'sub', text: [t.venue, d.onAir && d.onAir.hole ? 'On camera: hole ' + d.onAir.hole : null].filter(Boolean).join(' · ') })),
           livePill(t.live));
       }
-      renderPlayer(t);
+      renderPlayer(t, d.watch);
       // Golf events show the leaderboard; other kinds of event go straight to the chat.
       const golf = !t.eventType || t.eventType === 'golf';
       if (!golf && hasBoard) { hasBoard = false; if (sideTab === 'board') sideTab = 'chat'; drawSide(); }

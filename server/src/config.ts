@@ -126,6 +126,16 @@ const schema = z.object({
   RELAY_RETRY_MAX_SEC: z.coerce.number().default(30),
   INSTAGRAM_VIDEO_KBPS: z.coerce.number().default(3500),
 
+  // Our own watch player: the programme is turned into HLS (several qualities) under HLS_DIR
+  // and served at /hls/..., normally through a CDN pull zone (Admin > Streaming).
+  HLS_ENABLED: bool('true'),
+  HLS_DIR: optional,
+  // height:kbps pairs, best first. Each one costs about one CPU core while live.
+  HLS_RENDITIONS: z.string().regex(/^\d{3,4}:\d{3,5}(,\d{3,4}:\d{3,5})*$/).default('720:2500,480:1000'),
+  HLS_PRESET: z.enum(['ultrafast', 'superfast', 'veryfast', 'faster', 'fast']).default('veryfast'),
+  HLS_SEGMENT_SEC: z.coerce.number().int().min(1).max(6).default(2),
+  HLS_RETENTION_DAYS: z.coerce.number().min(1).default(14),
+
   // Public watch page and API (for the CoGolfers website). Comma-separated origins allowed
   // to call /api/public/* from a browser, and to embed /watch/<id> in an iframe.
   PUBLIC_CORS_ORIGINS: z.string().default(''),

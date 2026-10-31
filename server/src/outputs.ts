@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { Config } from './config.js';
+import type { HlsService } from './hls.js';
 import type { Repo, TournamentOutputs, TournamentRow } from './repo.js';
 import type { Sealer } from './crypto.js';
 import type { YouTubeService } from './youtube.js';
@@ -51,6 +52,8 @@ export interface OutputsState {
   platforms: PlatformState[];
   /** Extra destinations of this event (more YouTube channels, Facebook or Instagram keys, other services). */
   destinations: DestinationState[];
+  /** Our own watch page player (HLS through the CDN); null when it is off for the platform. */
+  watch: { enabled: boolean; state: 'off' | RelayStatus['state']; since: string | null; error: string | null } | null;
 }
 
 /**
@@ -71,6 +74,13 @@ export class OutputsService {
     private readonly destinations: DestinationsService,
     private readonly billing: BillingService,
   ) {}
+
+  /** Our watch player (set after construction). */
+  hls: HlsService | null = null;
+
+  private watchWanted(t: TournamentRow): boolean {
+    return Boolean(this.hls?.wanted(t));
+  }
 
   /** Destinations the show goes to: main platforms switched on and set up, plus enabled extra destinations. */
   async destinationCount(t: TournamentRow): Promise<number> {
@@ -132,7 +142,7 @@ export class OutputsService {
 
   /** What OBS should stream to: this server when any platform is set up, else whatever OBS/agent has. */
   async engineOutput(t: TournamentRow): Promise<{ server: string; key: string } | null> {
-    if (!(await this.destinationCount(t))) return null;
+    if (!(await this.destinationCount(t)) && !this.watchWanted(t)) return null;
     const key = await this.repo.ensureOutputKey(t);
     return { server: engineOutputUrl(this.config, t.id, key, t.production_mode), key: '' };
   }
@@ -141,9 +151,13 @@ export class OutputsService {
     const c = await this.configured(t);
     const running = new Map(this.relay.status(t.id).map((s) => [s.id, s]));
     const dests = await this.destinations.list(t.id);
-    const relay = PLATFORMS.some((p) => c[p] && this.wants(t, p)) || dests.some((d) => d.enabled);
+    const relay = PLATFORMS.some((p) => c[p] && this.wants(t, p)) || dests.some((d) => d.enabled) || this.watchWanted(t);
+    const w = running.get('watch');
     return {
       relay,
+      watch: this.hls?.on
+        ? { enabled: t.outputs?.watch?.enabled !== false, state: w?.state ?? 'off', since: w?.since ?? null, error: w?.error ?? null }
+        : null,
       destinations: dests.map((d) => {
         const r = running.get(`d:${d.id}`);
         return {
@@ -181,9 +195,15 @@ export class OutputsService {
 
   async update(
     t: TournamentRow,
-    patch: { youtube?: { enabled?: boolean }; facebook?: { enabled?: boolean }; instagram?: { enabled?: boolean; streamUrl?: string; streamKey?: string; clear?: boolean } },
+    patch: {
+      youtube?: { enabled?: boolean };
+      facebook?: { enabled?: boolean };
+      instagram?: { enabled?: boolean; streamUrl?: string; streamKey?: string; clear?: boolean };
+      watch?: { enabled?: boolean };
+    },
   ): Promise<TournamentRow> {
     const o: TournamentOutputs = structuredClone(t.outputs ?? {});
+    if (patch.watch?.enabled !== undefined) o.watch = { ...o.watch, enabled: patch.watch.enabled };
     if (patch.youtube?.enabled !== undefined) o.youtube = { ...o.youtube, enabled: patch.youtube.enabled };
     if (patch.facebook?.enabled !== undefined) {
       if (patch.facebook.enabled && !(await this.configured(t)).facebook) {
@@ -243,9 +263,11 @@ export class OutputsService {
     }
     const active = await this.active(t);
     const extra = await this.destinations.active(t.id);
-    if (!active.length && !extra.length) return this.relay.stop(t.id);
+    const watch = this.watchWanted(t);
+    if (!active.length && !extra.length && !watch) return this.relay.stop(t.id);
     const fresh = (await this.repo.tournamentById(t.id)) ?? t;
     const targets: RelayTarget[] = [];
+    if (watch && this.hls) targets.push(this.hls.target(fresh));
     for (const p of active) {
       const url = this.urlFor(fresh, p);
       if (url) targets.push({ id: p, platform: p, url, vertical: p === 'instagram' });

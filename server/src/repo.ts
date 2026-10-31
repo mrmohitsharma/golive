@@ -82,6 +82,8 @@ export interface TournamentOutputs {
   youtube?: { enabled?: boolean };
   facebook?: { enabled?: boolean };
   instagram?: { enabled?: boolean; urlEnc?: string | null; hint?: string | null };
+  /** Our watch page player (on unless switched off for this event). */
+  watch?: { enabled?: boolean };
 }
 
 export interface OrgFacebookRow {

@@ -11,6 +11,7 @@ import type { HealthPoller } from './health.js';
 import type { Thumbnailer } from './thumbnails.js';
 import type { FacebookService } from './facebook.js';
 import type { OutputsService } from './outputs.js';
+import type { HlsService } from './hls.js';
 import type { RelayManager } from './relay.js';
 import type { BillingService } from './billing.js';
 import type { PaymentsService } from './payments.js';
@@ -39,6 +40,7 @@ export interface Ctx {
   youtube: YouTubeService;
   facebook: FacebookService;
   outputs: OutputsService;
+  hls: HlsService;
   relay: RelayManager;
   media: MediaService;
   graphics: GraphicsService;

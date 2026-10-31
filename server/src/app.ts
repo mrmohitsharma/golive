@@ -25,6 +25,8 @@ import { CloudEngineManager, makeDriver, type CloudDriver } from './cloud.js';
 import { FacebookService } from './facebook.js';
 import { RelayManager } from './relay.js';
 import { OutputsService } from './outputs.js';
+import { HlsService } from './hls.js';
+import { registerHlsRoutes } from './routes/hls.js';
 import { BillingService } from './billing.js';
 import { PaymentsService } from './payments.js';
 import { ChatService } from './chat.js';
@@ -79,6 +81,7 @@ export interface AppDeps {
   metaFetch?: typeof fetch;
   /** Replaces process spawning for restream relays (tests). */
   relaySpawn?: ConstructorParameters<typeof RelayManager>[3];
+  cdnFetch?: typeof fetch;
   /** Replaces fetch for the Cashfree API (tests). */
   cashfreeFetch?: typeof fetch;
   /** Clock for billing (tests). */
@@ -89,7 +92,7 @@ export interface App extends Ctx {
   fastify: FastifyInstance;
 }
 
-export async function buildApp({ config, db, startBackground = true, fetchImpl, googleFetch, cloudDriver, metaFetch, relaySpawn, cashfreeFetch, billingClock, msg91Fetch }: AppDeps): Promise<App> {
+export async function buildApp({ config, db, startBackground = true, fetchImpl, googleFetch, cloudDriver, metaFetch, relaySpawn, cashfreeFetch, billingClock, msg91Fetch, cdnFetch }: AppDeps): Promise<App> {
   const fastify = Fastify({
     logger: { level: config.LOG_LEVEL, redact: ['req.headers.authorization', 'req.query.token', 'req.query.secret', 'req.query.k', 'req.query.sig'] },
     trustProxy: true,
@@ -115,6 +118,10 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const secrets = new PlatformSecrets(repo, sealer);
   const platform = new PlatformSettings(config, repo);
   await platform.reload();
+  const hls = new HlsService(config, repo, secrets, log, cdnFetch);
+  await hls.reload();
+  outputs.hls = hls;
+  relay.hooks = { hlsStart: (tid, _dir, s) => hls.started(tid, s), hlsEnd: (tid, _dir, s) => hls.ended(tid, s) };
   const invoices = new InvoiceService(repo);
   const payments = new PaymentsService(config, repo, billing, cashfreeFetch, secrets);
   payments.invoices = invoices;
@@ -172,7 +179,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
   const googleSignIn = new GoogleSignIn(config, googleFetch);
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions, secrets, invoices, platform, mailer, notifier };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, hls, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions, secrets, invoices, platform, mailer, notifier };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -219,6 +226,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerAdminOpsRoutes(fastify, ctx);
   registerAccountRoutes(fastify, ctx);
   registerSupportRoutes(fastify, ctx);
+  registerHlsRoutes(fastify, ctx);
   registerDestinationRoutes(fastify, ctx);
 
   // ------------------------------------------------------------------ MediaMTX auth hook
@@ -263,6 +271,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     cloud.start();
     hub.startYoutubePolling();
     billing.start();
+    hls.start();
+    void hls.recover((tid) => hub.engineState(tid).streaming.active).catch((err) => log.warn({ err }, 'hls recover failed'));
     const purge = () => {
       void chat.purgePlatformComments().catch((err) => log.warn({ err }, 'chat purge failed'));
       void applyRetention(repo).catch((err) => log.warn({ err }, 'viewership retention failed'));
@@ -315,6 +325,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     thumbs.stop();
     media.close();
     cloud.close();
+    hls.stop();
   });
 
   return { fastify, ...ctx };

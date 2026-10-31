@@ -56,13 +56,14 @@ Streaming continues with the screen off (foreground service, "camera is live" no
 | Email | Needs SMTP settings (Admin > Email); without them emails are logged as not sent. Tested with a fake mail server only. Plain HTML emails, English only. | Set up SES (DEPLOYMENT §3l) and send a test. |
 | Support tickets | Replies happen on the web; replying by email to a ticket email does not add to the ticket. Attachments: images and PDFs only, 5 × 5 MB. | Reply-to is your support inbox, so check it too. |
 | Browser commentary | The web commentator uses the browser microphone over WHIP; tested against a simulated engine, not real MediaMTX. | Try it once before an event. |
+| Watch player (HLS) | About 10–20 s behind live (2 s segments). Encoding uses about 2 CPU cores per live event on the server. Tested with real FFmpeg and in Chromium; not yet on iPhone Safari (native HLS) or through a real Bunny pull zone. The cost figures come from Bunny's statistics times the price set in Admin > Streaming. Viewers are not charged in credits yet. | One test event from India on the Volume and Standard networks. |
 | Scorer conflicts | Two scorers entering the same player+hole: the last one received wins. | Assign one scorer per group. |
 
 ## Verification status
 
 | Piece | Status |
 |---|---|
-| Server | Compiles; 180/180 tests (incl. billing, Cashfree with a fake gateway, admin, web app, emails with a fake mail server, support tickets, viewer comments with fake YouTube/Facebook). |
+| Server | Compiles; 187/187 tests (incl. billing, Cashfree with a fake gateway, admin, web app, emails with a fake mail server, support tickets, viewer comments with fake YouTube/Facebook). |
 | OBS agent | Compiles; 15/15 tests with fake OBS; **6/6 against real OBS Studio 30** (headless). |
 | Full pipeline | **33/33** with real MediaMTX, real OBS (started by the cloud-engine entrypoint), simulated phones, fake Google/Meta APIs. YouTube, Facebook and Instagram outputs verified by frame colour (and audio level on YouTube); Instagram size 720×1280. Billing: 3rd camera refused until bought, live minutes charged while on air and stopped after. Comments from the watch page, YouTube and Facebook in one feed; a question put on air. |
 | Graphics overlay | Rendered and checked in Chromium at 1920×1080; not shown inside OBS here (Ubuntu's OBS lacked Browser Source). |

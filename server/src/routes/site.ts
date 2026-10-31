@@ -31,6 +31,10 @@ const ASSETS: Record<string, string> = {
   'scenes.js': 'text/javascript; charset=utf-8',
   'favicon.svg': 'image/svg+xml',
   'og.png': 'image/png',
+  // Our watch player (/watch and /embed): hls.js (Apache-2.0) and our wrapper.
+  'hls-1.5.20.light.min.js': 'text/javascript; charset=utf-8',
+  'hls.js.LICENSE.txt': 'text/plain; charset=utf-8',
+  'player.js': 'text/javascript; charset=utf-8',
 };
 
 /**

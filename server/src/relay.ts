@@ -1,4 +1,6 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Config } from './config.js';
 
@@ -16,6 +18,22 @@ export interface RelayTarget {
   url: string;
   /** Re-encode to 720x1280 (Instagram); otherwise the programme is copied untouched. */
   vertical: boolean;
+  /** Our watch player: HLS files in several qualities under `dir`, a new session folder per start. */
+  hls?: HlsSpec;
+}
+
+export interface HlsSpec {
+  dir: string;
+  renditions: { height: number; kbps: number }[];
+  preset: string;
+  segmentSec: number;
+}
+
+export interface RelayHooks {
+  /** An HLS session folder was created and FFmpeg started writing to it. */
+  hlsStart?: (tournamentId: string, dir: string, session: string) => void;
+  /** That FFmpeg stopped (for good or before a retry): the session can be closed. */
+  hlsEnd?: (tournamentId: string, dir: string, session: string) => void;
 }
 
 export interface RelayStatus {
@@ -37,6 +55,7 @@ interface Running {
   lastOutUs: number;
   wanted: boolean;
   stderr: string;
+  session: string | null;
 }
 
 /**
@@ -47,6 +66,7 @@ interface Running {
  */
 export class RelayManager {
   private byTournament = new Map<string, Map<string, Running>>();
+  hooks: RelayHooks = {};
 
   constructor(
     private readonly config: Config,
@@ -77,6 +97,35 @@ export class RelayManager {
     ];
   }
 
+  /** HLS for our watch player: every rendition encoded with keyframes on segment boundaries. */
+  static hlsArgs(input: string, spec: HlsSpec, out: string): string[] {
+    const n = spec.renditions.length;
+    const split = `[0:v]split=${n}${spec.renditions.map((_, i) => `[s${i}]`).join('')}`;
+    const scales = spec.renditions.map((r, i) => `[s${i}]scale=-2:${r.height},setsar=1[o${i}]`);
+    const maps = spec.renditions.flatMap((_, i) => ['-map', `[o${i}]`, '-map', '0:a:0']);
+    const rates = spec.renditions.flatMap((r, i) => [
+      `-b:v:${i}`, `${r.kbps}k`, `-maxrate:v:${i}`, `${Math.round(r.kbps * 1.07)}k`, `-bufsize:v:${i}`, `${Math.round(r.kbps * 1.5)}k`,
+      `-b:a:${i}`, r.height >= 720 ? '128k' : '96k',
+    ]);
+    const seg = spec.segmentSec;
+    return [
+      '-hide_banner', '-loglevel', 'error', '-nostats', '-progress', 'pipe:1', '-rtsp_transport', 'tcp', '-i', input,
+      '-filter_complex', [split, ...scales].join(';'),
+      ...maps,
+      '-c:v', 'libx264', '-preset', spec.preset, '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-r', '30',
+      '-force_key_frames', `expr:gte(t,n_forced*${seg})`, '-sc_threshold', '0',
+      '-c:a', 'aac', '-ar', '48000', '-ac', '2',
+      ...rates,
+      '-f', 'hls', '-hls_time', String(seg), '-hls_list_size', '8',
+      '-hls_flags', 'independent_segments+temp_file',
+      '-hls_segment_type', 'mpegts',
+      '-hls_segment_filename', path.join(out, 'v%v', 's%05d.ts'),
+      '-master_pl_name', 'master.m3u8',
+      '-var_stream_map', spec.renditions.map((r, i) => `v:${i},a:${i},name:${r.height}p`).join(' '),
+      path.join(out, 'v%v', 'live.m3u8'),
+    ];
+  }
+
   /** Makes the running relays for a tournament match `targets` (start new, stop removed, restart changed). */
   setTargets(tournamentId: string, input: string, targets: RelayTarget[]): void {
     const map = this.byTournament.get(tournamentId) ?? new Map<string, Running>();
@@ -84,7 +133,7 @@ export class RelayManager {
     for (const [id, r] of map) {
       const next = targets.find((t) => t.id === id);
       if (!next || next.url !== r.target.url || next.vertical !== r.target.vertical) {
-        this.kill(r);
+        this.kill(r, tournamentId);
         map.delete(id);
       }
     }
@@ -98,6 +147,7 @@ export class RelayManager {
         lastOutUs: 0,
         wanted: true,
         stderr: '',
+        session: null,
       };
       map.set(t.id, r);
       this.run(tournamentId, input, r);
@@ -109,7 +159,7 @@ export class RelayManager {
   stop(tournamentId: string): void {
     const map = this.byTournament.get(tournamentId);
     if (!map) return;
-    for (const r of map.values()) this.kill(r);
+    for (const r of map.values()) this.kill(r, tournamentId);
     this.byTournament.delete(tournamentId);
     this.onChange(tournamentId);
   }
@@ -136,7 +186,20 @@ export class RelayManager {
     if (!r.wanted) return;
     r.lastOutUs = 0;
     r.stderr = '';
-    const proc = this.spawn(this.config.FFMPEG_PATH, RelayManager.args(this.config, input, r.target));
+    let args: string[];
+    const hls = r.target.hls;
+    if (hls) {
+      // A fresh folder each start: segment names restart at 0, and a CDN keeps old ones cached.
+      const session = 's' + Date.now().toString(36);
+      const out = path.join(hls.dir, session);
+      for (const x of hls.renditions) fs.mkdirSync(path.join(out, `v${x.height}p`), { recursive: true });
+      r.session = session;
+      args = RelayManager.hlsArgs(input, hls, out);
+      try {
+        this.hooks.hlsStart?.(tournamentId, hls.dir, session);
+      } catch {}
+    } else args = RelayManager.args(this.config, input, r.target);
+    const proc = this.spawn(this.config.FFMPEG_PATH, args);
     r.proc = proc;
     let buf = '';
     proc.stdout?.on('data', (d: Buffer) => {
@@ -163,6 +226,7 @@ export class RelayManager {
     proc.on('exit', (code) => {
       if (r.proc !== proc) return;
       r.proc = null;
+      this.endSession(tournamentId, r);
       if (!r.wanted) return;
       const wasLive = r.status.state === 'live';
       if (wasLive) r.status.restarts = 0;
@@ -178,16 +242,28 @@ export class RelayManager {
     });
   }
 
-  private kill(r: Running): void {
+  private endSession(tournamentId: string, r: Running): void {
+    if (!r.session || !r.target.hls) return;
+    const s = r.session;
+    r.session = null;
+    try {
+      this.hooks.hlsEnd?.(tournamentId, r.target.hls.dir, s);
+    } catch {}
+  }
+
+  private kill(r: Running, tournamentId?: string): void {
     r.wanted = false;
     if (r.timer) clearTimeout(r.timer);
     r.timer = null;
     const p = r.proc;
     r.proc = null;
+    const end = () => tournamentId && this.endSession(tournamentId, r);
     if (p && p.exitCode === null) {
+      // The HLS session is closed once FFmpeg has written its last segment.
+      if (r.session) p.once('exit', end);
       p.kill('SIGTERM');
       setTimeout(() => p.exitCode === null && p.kill('SIGKILL'), 3000).unref();
-    }
+    } else end();
   }
 }
 

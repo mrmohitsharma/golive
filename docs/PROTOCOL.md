@@ -137,6 +137,8 @@ Sessions: every account token is checked against the database (10 s cache): disa
 | `GET/PUT /api/admin/platform {signupEnabled, costs}` | admin | Sign-up switch (applies at once), running costs |
 | `GET /api/admin/system` | admin | Health, disks, database, integrations, cost against revenue by month (`usage_daily`) |
 | `GET /api/admin/reports/:kind[.csv]?months` | admin | `revenue`, `usage`, `growth`, `viewership`, `sms`, `margin` |
+| `GET /api/admin/streaming`, `PUT /api/admin/streaming {playerEnabled, host, pullZoneId, apiKey?, costPerGbUsd, lockOrigin}`, `POST /api/admin/streaming/test`, `GET /api/admin/streaming/stats?days` | admin | Our watch player and the CDN (Bunny): settings (API key encrypted, masked), setup check (pull zone, origin, a request through the CDN), bandwidth and cost from Bunny's statistics, recent streams |
+| `GET /api/tournaments/:id/watch` | owner/director | The event's live player link, replays and embed URL; `PATCH /api/tournaments/:id/outputs {watch: {enabled}}` turns our player off or on for one event |
 | `PATCH /api/me {name}`, `POST /api/me/password {currentPassword, newPassword}` | user | Own name; password change returns a new token and signs out other devices |
 | `POST /api/auth/forgot {email}`, `POST /api/auth/reset {token, password}` | public | Reset link by email (1 hour, single use, 3 per hour; same answer whether the email exists or not). Page: `/reset-password` |
 | `GET/PUT /api/admin/email`, `POST /api/admin/email/test {to}`, `GET /api/admin/emails?kind&status` | admin | SMTP settings (password encrypted), test email, email log (sent, failed, not sent) |
@@ -147,6 +149,8 @@ Sessions: every account token is checked against the database (10 s cache): disa
 | `GET /api/support/t/:key`, `POST /api/support/t/:key/messages {body, files}`, `GET /api/support/t/:key/files/:fid` | link holder | The requester's private view and replies (a reply reopens it; refused when closed) |
 | `GET /api/support/mine` | user | My tickets |
 | `GET /api/admin/tickets?status&priority&category&assigned&q`, `GET /api/admin/tickets/:id`, `POST …/messages {body, internal, files, status}`, `PATCH …/:id {status, priority, category, assignedTo}`, `GET …/files/:fid` | admin | Ticket inbox and thread; internal notes; changes logged as internal system notes; emails on reply, assignment, resolve and close |
+
+Our watch player (HLS): while the show is live the server encodes the programme (720p and 480p by default, 2 s segments) to `HLS_DIR/<event>/<session>/`. A new session folder is made each time FFmpeg starts. Viewers load `https://<cdn host>/hls/<event>/<session>/master.m3u8`; the CDN pulls from this server's `/hls/...` (segments cached a year, live playlists 1 s, `/hls/ping` for checks; with the origin lock on, requests need `X-Origin-Secret`). When the session ends, `replay.m3u8` and per-quality `vod.m3u8` are written over the same segments. `GET /api/public/tournaments/:id` has `watch: {live, replays[], embedUrl}`; `/embed/<event>` is the player alone and can be framed by any site.
 
 The web control room (`/web/e/<id>/control`) uses the same WebSocket (`subscribe`, `command`) and WHEP previews as the app. It can also send the browser's microphone as a commentator over WHIP (`POST /api/tournaments/:id/commentators/register` for the bearer), set per-camera levels, commentary delay and ducking, leaderboard size and category, and the hole card.
 

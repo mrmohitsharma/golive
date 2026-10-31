@@ -397,6 +397,7 @@ export function registerTournamentRoutes(app: FastifyInstance, ctx: Ctx) {
       .object({
         youtube: flag.optional(),
         facebook: flag.optional(),
+        watch: flag.optional(),
         instagram: z
           .object({
             enabled: z.boolean().optional(),

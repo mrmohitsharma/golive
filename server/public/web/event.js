@@ -130,7 +130,23 @@ async function streaming(body, id, s) {
   const live = s.engine?.streaming?.active;
   const PLAT = { youtube: 'YouTube', facebook: 'Facebook', instagram: 'Instagram' };
   const ytSource = { org: 'Your YouTube channel', golive: 'The Go Live channel', key: 'A stream key from YouTube Studio' }[yt.source];
+  const w = outputs.watch ? await get(`/api/tournaments/${id}/watch`) : null;
+  const mins = (sec) => sec >= 3600 ? `${Math.floor(sec / 3600)} h ${Math.round((sec % 3600) / 60)} min` : `${Math.max(1, Math.round(sec / 60))} min`;
+  const embed = w ? `<iframe src="${w.watch?.embedUrl ?? ''}" width="960" height="540" style="border:0;max-width:100%;aspect-ratio:16/9;height:auto" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>` : '';
   body.append(
+    w ? el('div', {},
+      el('h2', { text: 'Watch page player' }),
+      el('div', { class: 'card' },
+        el('p', { class: 'small muted', text: 'The show plays on your watch page with our own player, without YouTube logos or ads. YouTube and the destinations below still get it too.' }),
+        el('p', {}, 'Status: ', outputs.watch.error ? pill('bad', outputs.watch.error) : pill(outputs.watch.state === 'live' ? 'ok' : '', outputs.watch.enabled ? (outputs.watch.state === 'off' ? 'Starts with the show' : outputs.watch.state) : 'Off for this event'),
+          ' · ', el('a', { href: w.watchPage, target: '_blank', rel: 'noopener', text: 'Open the watch page' })),
+        !w.publicWatch ? el('div', { class: 'banner warn', text: 'The public watch page is off for this event (Settings), so viewers cannot open it.' }) : null,
+        el('label', { class: 'small muted', text: 'Put the player on any website:' }),
+        el('pre', { class: 'mono card', style: 'white-space:pre-wrap;user-select:all;margin:4px 0 8px', text: embed }),
+        w.watch?.replays?.length ? el('div', {}, el('strong', { text: 'Replays' }), ...w.watch.replays.map((r) => el('div', { class: 'small' }, `${new Date(r.startedAt).toLocaleString()} · ${mins(r.durationSec)} · `, el('a', { href: r.url, target: '_blank', rel: 'noopener', text: 'HLS link' })))) : null,
+        el('div', { class: 'row', style: 'margin-top:8px' },
+          el('button', { class: 'btn small', onclick: guard(async () => { navigator.clipboard?.writeText(embed); toast('Embed code copied'); }), text: 'Copy embed code' }),
+          el('button', { class: 'btn small', onclick: guard(async () => { await patch(`/api/tournaments/${id}/outputs`, { watch: { enabled: !outputs.watch.enabled } }); reloadTab(id, 'streaming'); }), text: outputs.watch.enabled ? 'Turn off for this event' : 'Turn on' })))) : null,
     el('h2', { text: 'YouTube' }),
     el('div', { class: 'card' },
       el('p', {}, 'Streams to: ', el('strong', { text: ytSource }), yt.channelTitle ? ` (${yt.channelTitle})` : ''),

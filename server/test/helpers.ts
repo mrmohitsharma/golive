@@ -25,6 +25,8 @@ export function testConfig(overrides: Record<string, string> = {}): Config {
     AUTO_FALLBACK_GRACE_MS: '50',
     // Billing has its own tests; elsewhere, no camera or minute limits.
     BILLING_ENABLED: 'false',
+    // The watch player spawns FFmpeg; it has its own tests.
+    HLS_ENABLED: 'false',
     ...overrides,
   });
 }
@@ -54,6 +56,7 @@ export async function startHarness(
     relaySpawn?: Parameters<typeof buildApp>[0]['relaySpawn'];
     cashfreeFetch?: typeof fetch;
     msg91Fetch?: typeof fetch;
+    cdnFetch?: typeof fetch;
     billingClock?: () => number;
   } = {},
 ): Promise<Harness> {
@@ -76,6 +79,7 @@ export async function startHarness(
     relaySpawn: opts.relaySpawn,
     cashfreeFetch: opts.cashfreeFetch,
     msg91Fetch: opts.msg91Fetch,
+    cdnFetch: opts.cdnFetch,
     billingClock: opts.billingClock,
     cloudDriver: opts.cloudDriver ?? null,
   });

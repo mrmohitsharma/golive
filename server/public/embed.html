@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Go Live</title>
+<style>
+  html, body { margin:0; height:100%; background:#000; color:#fff; font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #box { position:fixed; inset:0; }
+  #box iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  .wait { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center; padding:20px; background:radial-gradient(circle at 50% 40%, #1d2428, #000); }
+  .wait b { font-size:18px; }
+  .wait span { color:#9aa5a0; }
+  .full { position:fixed; right:10px; bottom:10px; z-index:5; color:#fff; background:rgba(0,0,0,.6); border:1px solid rgba(255,255,255,.25); border-radius:6px; padding:4px 9px; font-size:12px; text-decoration:none; }
+</style>
+</head>
+<body>
+<div id="box"><div class="wait"><b>Loading…</b></div></div>
+<a class="full" id="full" target="_blank" rel="noopener" hidden>Open full page ↗</a>
+<script src="/site/hls-1.5.20.light.min.js"></script>
+<script src="/site/player.js"></script>
+<script>
+(() => {
+  // The player alone, for any website: <iframe src="https://<server>/embed/<event>" allow="autoplay; fullscreen">.
+  const id = location.pathname.split('/').filter(Boolean)[1];
+  const box = document.getElementById('box');
+  const full = document.getElementById('full');
+  const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+  let ours = null, shown = null;
+
+  // Viewer clock, as on the watch page: counts only while the video plays and the tab is visible.
+  const view = { token: null, starting: false, play: 0, unmuted: 0, last: Date.now() };
+  function startView() {
+    if (view.token || view.starting) return;
+    view.starting = true;
+    fetch(`/api/public/tournaments/${id}/view`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ viewerKey: store.get('gl_viewer') }) })
+      .then((r) => r.ok ? r.json() : null).then((j) => { if (j) { view.token = j.token; store.set('gl_viewer', j.viewerKey); } })
+      .catch(() => {}).finally(() => { view.starting = false; });
+  }
+  function report(beacon) {
+    if (!view.token || !view.play) return;
+    const body = JSON.stringify({ token: view.token, playingSec: view.play, unmutedSec: view.unmuted });
+    view.play = 0; view.unmuted = 0; view.last = Date.now();
+    if (beacon && navigator.sendBeacon) navigator.sendBeacon('/api/public/view/beat', new Blob([body], { type: 'text/plain' }));
+    else fetch('/api/public/view/beat', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
+  }
+  setInterval(() => {
+    if (ours && ours.isPlaying() && !document.hidden && view.token) { view.play++; if (ours.isUnmuted()) view.unmuted++; }
+    if (Date.now() - view.last >= 30000) report(false);
+  }, 1000);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) report(true); });
+  window.addEventListener('pagehide', () => report(true));
+
+  function wait(title, sub) {
+    if (ours) { ours.destroy(); ours = null; }
+    const w = document.createElement('div');
+    w.className = 'wait';
+    const b = document.createElement('b'); b.textContent = title;
+    const s = document.createElement('span'); s.textContent = sub || '';
+    w.append(b, s);
+    box.replaceChildren(w);
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/public/tournaments/' + id);
+      if (r.status === 404) { wait('This event is not available.'); shown = 'none'; return; }
+      const d = await r.json();
+      const t = d.tournament, w = d.watch;
+      document.title = t.name;
+      full.href = t.watchPage; full.hidden = false;
+      const replay = !t.live && w && w.replays && w.replays[0];
+      const src = (w && w.live) || (replay && replay.url) || null;
+      const yt = !src && t.youtube ? t.youtube.embedUrl : null;
+      const key = src || yt || (t.live ? 'live-wait' : 'wait');
+      if (key !== shown) {
+        shown = key;
+        if (src) ours = GoLivePlayer.mount(box, { src, live: Boolean(w.live), title: t.name, onPlaying: (v) => { if (v) startView(); } });
+        else if (yt) {
+          if (ours) { ours.destroy(); ours = null; }
+          const f = document.createElement('iframe');
+          f.src = yt; f.title = t.name; f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; f.allowFullscreen = true;
+          box.replaceChildren(f);
+        } else wait(t.name, t.live ? 'Live now: the video appears here in a moment.' : 'The broadcast has not started yet.');
+      }
+    } catch {}
+    setTimeout(load, 15000);
+  }
+  if (id) load(); else wait('No event in the address.');
+})();
+</script>
+</body>
+</html>

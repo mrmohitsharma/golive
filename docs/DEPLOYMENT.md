@@ -298,6 +298,28 @@ Emails need any SMTP service. The cheapest good one is **Amazon SES** (about $0.
 
 Support: visitors raise tickets at `https://<your server>/support` (linked in the website footer); members use Help in the web app. Answer them in Admin > Support. Attachments are stored under `MEDIA_DIR/tickets/`, so include that folder in backups. Migrations 020–021 run on start.
 
+## 3m. Our watch player through Bunny CDN (V7)
+
+The watch page plays the show with our own player instead of YouTube's. YouTube still gets the stream if it is set up. The server encodes 720p and 480p, and viewers load it through Bunny, at about $0.005 per GB on the Volume network (roughly ₹0.5 per viewer-hour at 720p).
+
+1. bunny.net > Delivery > CDN > Add Pull Zone. Origin URL: your server, e.g. `https://live.gogetslive.com`. Tier: Volume.
+2. In the zone, go to Caching > General. Set *Cache expiration time* to "Respect origin Cache-Control" and *Browser cache expiration* to "Match server cache expiration". Then go to Headers, turn on "Add CORS headers", and add `m3u8, ts` to its list.
+3. In the web app, open Admin > Streaming and fill in:
+   - the CDN hostname (e.g. `gogetslive.b-cdn.net`);
+   - the pull zone id (the number in the Bunny address bar);
+   - the API key (Bunny > Account settings);
+   - the price.
+
+   Then Save, and press "Test the setup".
+4. Optional, "Only the CDN may read the stream": switch it on and copy the secret shown. In Bunny, add an Edge rule to the zone with the action "Set Request Header", header `X-Origin-Secret` and that value, matching every URL. This stops people pulling the stream straight from your server.
+5. Clubs get an embed code on the event's Streaming tab: `<iframe src="https://<server>/embed/<event>">`.
+
+Sizing:
+- Each live event uses about one CPU core per quality (two by default) on the server.
+- Disk use is about 1.6 GB per hour, kept `HLS_RETENTION_DAYS` days (14) as replays under `MEDIA_DIR/hls` (or `HLS_DIR`).
+- Change qualities with `HLS_RENDITIONS` (e.g. `720:2500,480:1000,360:600`), or turn the whole thing off with `HLS_ENABLED=false`.
+- Migration 022 runs on start.
+
 ## 4. Cloud mode (OBS on the server)
 
 ```bash

@@ -20,6 +20,7 @@ const ROUTES = [
   { path: '/web/admin/viewership', page: 'admin-viewership', role: 'admin', nav: ['Admin', 'Viewership'] },
   { path: '/web/admin/sms', page: 'admin-sms', role: 'admin', nav: ['Admin', 'SMS'] },
   { path: '/web/admin/email', page: 'admin-email', role: 'admin', nav: ['Admin', 'Email'] },
+  { path: '/web/admin/streaming', page: 'admin-streaming', role: 'admin', nav: ['Admin', 'Streaming'] },
   { path: '/web/admin/safety', page: 'admin-safety', role: 'admin', nav: ['Admin', 'Safety'] },
   { path: '/web/admin/safety/:tab', page: 'admin-safety', role: 'admin' },
   { path: '/web/admin/reports', page: 'admin-reports', role: 'admin', nav: ['Admin', 'Reports'] },
