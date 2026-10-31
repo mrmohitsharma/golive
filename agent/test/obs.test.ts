@@ -138,6 +138,31 @@ describe('ObsController', () => {
     assert.equal(obs.profile['SimpleOutput.x264Settings'], 'keyint=60 min-keyint=30');
   });
 
+  it('V7: scales the output (not the canvas) to 720p at the server bitrate and reports it; Advanced output is left alone', async () => {
+    await ctl.sync(config({ encoder: { height: 720, videoKbps: 2500 } }));
+    assert.deepEqual([obs.video.baseWidth, obs.video.baseHeight, obs.video.outputWidth, obs.video.outputHeight], [1920, 1080, 1280, 720], 'scenes keep their 1080p layout');
+    assert.deepEqual([obs.profile['SimpleOutput.VBitrate'], obs.profile['SimpleOutput.x264Settings']], ['2500', 'keyint=60 min-keyint=30']);
+    assert.deepEqual(ctl.state.video, { outputWidth: 1280, outputHeight: 720, kbps: 2500 });
+    // A 4:3 canvas keeps its shape.
+    obs.video.baseWidth = 1440;
+    await ctl.sync(config({ encoder: { height: 720, videoKbps: 2500 } }));
+    assert.equal(obs.video.outputWidth, 960);
+    // An operator on Advanced output: untouched, bitrate unknown, a warning.
+    obs.video.baseWidth = 1920;
+    obs.video.outputWidth = 1920;
+    obs.video.outputHeight = 1080;
+    obs.profile['Output.Mode'] = 'Advanced';
+    obs.profile['SimpleOutput.VBitrate'] = '6000';
+    await ctl.sync(config({ encoder: { height: 720, videoKbps: 2500 } }));
+    assert.equal(ctl.state.video!.kbps, null);
+    assert.equal(obs.profile['SimpleOutput.VBitrate'], '6000');
+    assert.ok(ctl.state.warnings.some((w) => /Advanced output/.test(w)));
+    // An old server (no encoder in the config): nothing changes.
+    obs.profile['Output.Mode'] = 'Simple';
+    await ctl.sync(config());
+    assert.equal(obs.profile['SimpleOutput.VBitrate'], '6000');
+  });
+
   it('streams to the server programme ingest (SRT) when the server restreams', async () => {
     const srt = 'srt://live.test:8890?streamid=publish:prog-abc:engine:k&latency=600000&pkt_size=1316';
     await ctl.sync(config({ output: { server: srt, key: '' } }));

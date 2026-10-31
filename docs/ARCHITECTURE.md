@@ -159,6 +159,8 @@ The owner connects the club's channel once (Google OAuth, `youtube` scope, offli
 
 ## Bandwidth and cost (10 cameras, 5-hour event, YouTube + Facebook + Instagram)
 
+Since V7 OBS sends a 720p programme at 2.5 Mbps (was 1080p at 6 Mbps), so the restream and director-preview figures below are about 60% lower; the watch player passes that programme straight through (see DEPLOYMENT §3m).
+
 Rough figures to plan with; check your provider's current prices.
 
 | Flow | Laptop mode | Cloud mode |

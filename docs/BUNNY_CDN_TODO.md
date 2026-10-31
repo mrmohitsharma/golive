@@ -25,7 +25,7 @@ Branch: `v7-dev`. More detail: [DEPLOYMENT.md §3m](DEPLOYMENT.md).
 ## 2. Deploy `v7-dev` to live.gogetslive.com
 
 - [ ] Before deploying, check the server has **at least 4 CPU cores** and **50 GB free disk**:
-  - each live event uses about 2 cores while live;
+  - each live event uses well under 1 core while live (the agent makes OBS send 720p, which is passed straight through; only 480p is encoded);
   - recordings take about 1.6 GB per hour and are kept 14 days.
 - [ ] Add these lines to `infra/.env` on the server. **Never commit the key to git.**
   ```
@@ -72,7 +72,8 @@ Branch: `v7-dev`. More detail: [DEPLOYMENT.md §3m](DEPLOYMENT.md).
 - [ ] Open the browser's network tab. The `.ts` and `.m3u8` files must load from `gogetslive.b-cdn.net`, **not** from live.gogetslive.com.
 - [ ] Copy the embed code from the Streaming tab into a test HTML page and check that it plays.
 - [ ] End the show. Within a minute, a **Replay** should appear on the Streaming tab and the watch page should play it.
-- [ ] Watch the server's CPU during the show (`docker stats`). Note the peak.
+- [ ] Watch the server's CPU during the show (`docker stats`). Note the peak. With the V7 agent, the watch player should use well under 1 core: OBS sends 720p and the server only adds 480p.
+- [ ] On the laptop, check OBS: Settings → Video → *Output (scaled) resolution* is 1280×720, and Output → Streaming bitrate is 2500. The agent sets these itself in Simple output mode.
 
 ## 5. Choose the network and report back
 
@@ -100,4 +101,5 @@ Branch: `v7-dev`. More detail: [DEPLOYMENT.md §3m](DEPLOYMENT.md).
 | Status stays "connecting" or "retrying" | `docker compose logs server`; the programme must reach MediaMTX, and the camera feed must have sound |
 | Player says "Reconnecting…" | Is the event still live? Check that `master.m3u8` loads from the CDN URL in the network tab |
 | Video loads from live.gogetslive.com, not b-cdn.net | `CDN_HOST` isn't set: check Admin → Streaming |
-| Server CPU at 100% | Use fewer qualities: `HLS_RENDITIONS=720:2500` or `HLS_PRESET=superfast`, then restart |
+| Server CPU at 100% | Check the event's warnings: OBS on *Advanced output* (or an old agent) means the server re-encodes. Switch OBS Output to Simple, or set `HLS_LADDER=720:2500` (720p only), then restart |
+| Stream shows 1080p / high bitrate | Update the agent on the laptop (V7 sets OBS to 720p at 2.5 Mbps by itself) |

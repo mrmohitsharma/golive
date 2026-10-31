@@ -48,6 +48,8 @@ export interface EngineState {
   replayActive: boolean;
   studioMode: boolean;
   streaming: StreamOutputStatus;
+  /** What OBS actually sends (reported by agents from V7): lets the server pass a 720p programme straight to viewers. */
+  video?: { outputWidth: number; outputHeight: number; kbps: number | null } | null;
   /** Things the operator should fix, e.g. "OBS has no Browser Source: graphics disabled". */
   warnings: string[];
   lastError?: string | null;

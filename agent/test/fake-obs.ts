@@ -66,6 +66,11 @@ export class FakeObs implements ObsClient {
         if (this.streaming) this.err('Video settings cannot be changed while an output is active.');
         Object.assign(this.video, data);
         return;
+      case 'GetProfileParameter': {
+        const k = `${data.parameterCategory}.${data.parameterName}`;
+        const d: Record<string, string> = { 'Output.Mode': 'Simple', 'SimpleOutput.VBitrate': '2500' };
+        return { parameterValue: this.profile[k] ?? d[k] ?? null, defaultParameterValue: d[k] ?? null };
+      }
       case 'SetProfileParameter':
         this.profile[`${data.parameterCategory}.${data.parameterName}`] = data.parameterValue;
         return;

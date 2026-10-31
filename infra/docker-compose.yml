@@ -85,7 +85,11 @@ services:
       INSTAGRAM_VIDEO_KBPS: ${INSTAGRAM_VIDEO_KBPS:-3500}
       # Our watch player (HLS) and its Bunny CDN pull zone (Admin > Streaming overrides).
       HLS_ENABLED: ${HLS_ENABLED:-true}
-      HLS_RENDITIONS: ${HLS_RENDITIONS:-720:2500,480:1000}
+      HLS_RENDITIONS: ${HLS_RENDITIONS:-auto}
+      HLS_LADDER: ${HLS_LADDER:-720:2500,480:1000}
+      # What OBS sends (both modes); a 720p programme is passed straight to viewers.
+      PROGRAMME_HEIGHT: ${PROGRAMME_HEIGHT:-720}
+      PROGRAMME_KBPS: ${PROGRAMME_KBPS:-2500}
       HLS_RETENTION_DAYS: ${HLS_RETENTION_DAYS:-14}
       HLS_PRESET: ${HLS_PRESET:-veryfast}
       CDN_HOST: ${CDN_HOST:-}

@@ -13,7 +13,7 @@ import { SESSION_RE } from '../hls.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = [path.resolve(here, '../../public'), path.resolve(here, '../../../public')].find((p) => fs.existsSync(p));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const VARIANT = /^v\d{3,4}p$/;
+const VARIANT = /^v(\d{3,4}p|src)$/;
 const FILE = /^(master|replay|live|vod)\.m3u8$|^s\d{5,7}\.ts$/;
 
 /**
@@ -70,7 +70,7 @@ export function registerHlsRoutes(app: FastifyInstance, ctx: Ctx) {
       reply.header('Cache-Control', 'public, max-age=31536000, immutable');
     } else {
       reply.type('application/vnd.apple.mpegurl');
-      reply.header('Cache-Control', file === 'live.m3u8' ? 'public, max-age=1' : file === 'master.m3u8' ? 'public, max-age=10' : 'public, max-age=300');
+      reply.header('Cache-Control', file === 'live.m3u8' ? 'public, max-age=1' : file === 'master.m3u8' ? 'public, max-age=2' : 'public, max-age=300');
     }
     reply.header('Content-Length', size);
     return reply.send(fs.createReadStream(p));

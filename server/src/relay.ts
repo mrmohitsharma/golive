@@ -24,7 +24,8 @@ export interface RelayTarget {
 
 export interface HlsSpec {
   dir: string;
-  renditions: { height: number; kbps: number }[];
+  /** Best first. `copy`: the programme as it is (already the right size): no re-encode. */
+  renditions: { height: number; kbps: number; copy?: boolean }[];
   preset: string;
   segmentSec: number;
 }
@@ -98,30 +99,41 @@ export class RelayManager {
   }
 
   /** HLS for our watch player: every rendition encoded with keyframes on segment boundaries. */
+  static variantName(r: HlsSpec['renditions'][number]): string {
+    return r.copy ? 'src' : `${r.height}p`;
+  }
+
   static hlsArgs(input: string, spec: HlsSpec, out: string): string[] {
-    const n = spec.renditions.length;
-    const split = `[0:v]split=${n}${spec.renditions.map((_, i) => `[s${i}]`).join('')}`;
-    const scales = spec.renditions.map((r, i) => `[s${i}]scale=-2:${r.height},setsar=1[o${i}]`);
-    const maps = spec.renditions.flatMap((_, i) => ['-map', `[o${i}]`, '-map', '0:a:0']);
-    const rates = spec.renditions.flatMap((r, i) => [
-      `-b:v:${i}`, `${r.kbps}k`, `-maxrate:v:${i}`, `${Math.round(r.kbps * 1.07)}k`, `-bufsize:v:${i}`, `${Math.round(r.kbps * 1.5)}k`,
-      `-b:a:${i}`, r.height >= 720 ? '128k' : '96k',
-    ]);
+    const enc = spec.renditions.map((r, i) => ({ r, i })).filter((x) => !x.r.copy);
+    const graph = enc.length
+      ? [
+          `[0:v]split=${enc.length}${enc.map((x) => `[s${x.i}]`).join('')}`,
+          ...enc.map((x) => `[s${x.i}]scale=-2:${x.r.height},setsar=1[o${x.i}]`),
+        ].join(';')
+      : null;
     const seg = spec.segmentSec;
+    const perStream = spec.renditions.flatMap((r, i) =>
+      r.copy
+        ? // The programme already has 2 s keyframes (set by the agent): copied untouched.
+          ['-map', '0:v:0', '-map', '0:a:0', `-c:v:${i}`, 'copy', `-c:a:${i}`, 'copy']
+        : [
+            '-map', `[o${i}]`, '-map', '0:a:0',
+            `-c:v:${i}`, 'libx264', `-preset:v:${i}`, spec.preset, `-profile:v:${i}`, 'main', `-pix_fmt:v:${i}`, 'yuv420p',
+            `-force_key_frames:v:${i}`, `expr:gte(t,n_forced*${seg})`, `-sc_threshold:v:${i}`, '0',
+            `-b:v:${i}`, `${r.kbps}k`, `-maxrate:v:${i}`, `${Math.round(r.kbps * 1.07)}k`, `-bufsize:v:${i}`, `${Math.round(r.kbps * 1.5)}k`,
+            `-c:a:${i}`, 'aac', `-b:a:${i}`, r.height >= 720 ? '128k' : '96k', `-ar:a:${i}`, '48000', `-ac:a:${i}`, '2',
+          ],
+    );
     return [
       '-hide_banner', '-loglevel', 'error', '-nostats', '-progress', 'pipe:1', '-rtsp_transport', 'tcp', '-i', input,
-      '-filter_complex', [split, ...scales].join(';'),
-      ...maps,
-      '-c:v', 'libx264', '-preset', spec.preset, '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-r', '30',
-      '-force_key_frames', `expr:gte(t,n_forced*${seg})`, '-sc_threshold', '0',
-      '-c:a', 'aac', '-ar', '48000', '-ac', '2',
-      ...rates,
+      ...(graph ? ['-filter_complex', graph] : []),
+      ...perStream,
       '-f', 'hls', '-hls_time', String(seg), '-hls_list_size', '8',
       '-hls_flags', 'independent_segments+temp_file',
       '-hls_segment_type', 'mpegts',
       '-hls_segment_filename', path.join(out, 'v%v', 's%05d.ts'),
       '-master_pl_name', 'master.m3u8',
-      '-var_stream_map', spec.renditions.map((r, i) => `v:${i},a:${i},name:${r.height}p`).join(' '),
+      '-var_stream_map', spec.renditions.map((r, i) => `v:${i},a:${i},name:${RelayManager.variantName(r)}`).join(' '),
       path.join(out, 'v%v', 'live.m3u8'),
     ];
   }
@@ -192,7 +204,7 @@ export class RelayManager {
       // A fresh folder each start: segment names restart at 0, and a CDN keeps old ones cached.
       const session = 's' + Date.now().toString(36);
       const out = path.join(hls.dir, session);
-      for (const x of hls.renditions) fs.mkdirSync(path.join(out, `v${x.height}p`), { recursive: true });
+      for (const x of hls.renditions) fs.mkdirSync(path.join(out, `v${RelayManager.variantName(x)}`), { recursive: true });
       r.session = session;
       args = RelayManager.hlsArgs(input, hls, out);
       try {

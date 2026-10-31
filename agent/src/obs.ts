@@ -46,6 +46,8 @@ export interface EngineConfig {
   output: { server: string; key: string } | null;
   audio: AudioState;
   canvas: { width: number; height: number; fps: number; videoKbps: number } | null;
+  /** What viewers get (both modes, from V7 servers): OBS output height and bitrate, 2 s keyframes. */
+  encoder?: { height: number; videoKbps: number } | null;
 }
 
 /** The subset of obs-websocket-js we use, so tests can plug in a fake OBS. */
@@ -75,7 +77,11 @@ export interface ObsState {
   };
   warnings: string[];
   lastError: string | null;
+  /** What OBS sends (output size, bitrate if known): the server passes a 720p programme straight through. */
+  video: { outputWidth: number; outputHeight: number; kbps: number | null } | null;
 }
+
+export const ADVANCED_OUTPUT_WARNING = 'OBS uses Advanced output: set the stream to 1280x720, 2500 kbps, keyframe every 2 s (or switch Output to Simple) to save server and viewer costs';
 
 export const SCENE_PREFIX = 'CG cam-';
 export const FEED_SUFFIX = ' Feed';
@@ -155,6 +161,7 @@ export class ObsController {
     streaming: { active: false, reconnecting: false, timecode: null, kbps: null, congestion: null, skippedFrames: null, totalFrames: null },
     warnings: [],
     lastError: null,
+    video: null,
   };
 
   constructor(
@@ -300,6 +307,54 @@ export class ObsController {
     await p('SimpleOutput', 'x264Settings', `keyint=${c.fps * 2} min-keyint=${c.fps}`);
   }
 
+  /**
+   * Both modes: OBS scales its output (not the canvas the scenes are laid out on) to the
+   * server's programme size, 720p, at its bitrate with 2 s keyframes, so the server can pass it
+   * straight to YouTube and the watch player without re-encoding. OBS in Advanced output mode
+   * is left alone with a warning (the server then re-encodes). While streaming, only reports.
+   */
+  private async applyEncoder(): Promise<void> {
+    const e = this.config?.encoder;
+    if (!e) return;
+    const vs = await this.obs.call('GetVideoSettings');
+    const fps = Math.round((vs.fpsNumerator || 30) / (vs.fpsDenominator || 1));
+    const height = Math.min(e.height, vs.baseHeight);
+    const width = Math.round((height * (vs.baseWidth / vs.baseHeight)) / 2) * 2;
+    const live = this.state.streaming.active;
+    if (!live && (vs.outputWidth !== width || vs.outputHeight !== height)) {
+      await this.obs.call('SetVideoSettings', {
+        baseWidth: vs.baseWidth,
+        baseHeight: vs.baseHeight,
+        outputWidth: width,
+        outputHeight: height,
+        fpsNumerator: vs.fpsNumerator,
+        fpsDenominator: vs.fpsDenominator,
+      });
+    }
+    const get = async (parameterCategory: string, parameterName: string): Promise<string | null> => {
+      try {
+        return (await this.obs.call('GetProfileParameter', { parameterCategory, parameterName })).parameterValue ?? null;
+      } catch {
+        return null;
+      }
+    };
+    const mode = (await get('Output', 'Mode')) ?? 'Simple';
+    let kbps: number | null = null;
+    this.state.warnings = this.state.warnings.filter((w) => w !== ADVANCED_OUTPUT_WARNING);
+    if (mode === 'Simple') {
+      if (!live) {
+        const p = (parameterCategory: string, parameterName: string, parameterValue: string) =>
+          this.obs.call('SetProfileParameter', { parameterCategory, parameterName, parameterValue });
+        await p('SimpleOutput', 'VBitrate', String(e.videoKbps));
+        await p('SimpleOutput', 'UseAdvanced', 'true');
+        await p('SimpleOutput', 'x264Settings', `keyint=${fps * 2} min-keyint=${fps}`);
+        kbps = e.videoKbps;
+      } else kbps = Number(await get('SimpleOutput', 'VBitrate')) || null;
+    } else this.state.warnings = [...this.state.warnings, ADVANCED_OUTPUT_WARNING];
+    const now = live ? await this.obs.call('GetVideoSettings') : { outputWidth: width, outputHeight: height };
+    this.state.video = { outputWidth: now.outputWidth, outputHeight: now.outputHeight, kbps };
+  }
+
   private async pickKind(candidates: string[]): Promise<string> {
     const found = candidates.find((k) => this.inputKinds.includes(k));
     if (!found) throw new Error(`OBS has none of these source types: ${candidates.join(', ')}`);
@@ -438,6 +493,7 @@ export class ObsController {
     const result = { created: 0, updated: 0, removed: 0 };
     if (!this.state.obsConnected) return result;
     await this.applyCanvas();
+    await this.applyEncoder();
     await this.applyStreamDestination();
     await this.ensureFallbackScene();
     let scenes = await this.sceneNames();

@@ -318,6 +318,9 @@ export class Hub {
               videoKbps: this.config.CLOUD_ENGINE_VIDEO_KBPS,
             }
           : null,
+      // What viewers get (both modes): OBS scales its output to this and the server passes it
+      // straight through to YouTube and the watch player, so nothing is re-encoded.
+      encoder: { height: this.config.PROGRAMME_HEIGHT, videoKbps: this.config.PROGRAMME_KBPS },
     };
   }
 
@@ -516,6 +519,10 @@ export class Hub {
       },
       warnings: Array.isArray(s.warnings) ? s.warnings.filter((w) => typeof w === 'string').slice(0, 5) : [],
       lastError: s.lastError ?? null,
+      video:
+        s.video && Number.isFinite(s.video.outputHeight) && Number.isFinite(s.video.outputWidth)
+          ? { outputWidth: Number(s.video.outputWidth), outputHeight: Number(s.video.outputHeight), kbps: s.video.kbps == null ? null : Number(s.video.kbps) }
+          : null,
       updatedAt: new Date().toISOString(),
     };
     if (l.engine.programmeCameraId !== prevProgramme) l.programmeOfflineSince = null;

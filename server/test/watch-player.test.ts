@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { api, createTournament, engineToken, expectOk, signup, startHarness, testConfig, TestSocket, type Harness } from './helpers.js';
 import { RelayManager } from '../src/relay.js';
-import { finalize, HlsService } from '../src/hls.js';
+import { finalize, fixMaster, HlsService } from '../src/hls.js';
 
 /** Stands in for FFmpeg. For an HLS run it writes what FFmpeg would: master, playlists, segments. */
 class FakeProc extends EventEmitter {
@@ -19,13 +19,17 @@ class FakeProc extends EventEmitter {
   constructor(public args: string[]) {
     super();
     if (args.includes('hls')) {
+      // Like FFmpeg: a copied stream is listed with only its audio bitrate (fixMaster corrects it).
       const out = path.dirname(path.dirname(args.at(-1)!));
-      fs.writeFileSync(path.join(out, 'master.m3u8'), '#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-STREAM-INF:BANDWIDTH=2890800,RESOLUTION=1280x720\nv720p/live.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1205600,RESOLUTION=854x480\nv480p/live.m3u8\n');
-      for (const v of ['v720p', 'v480p']) {
+      const names = args[args.indexOf('-var_stream_map') + 1].split(' ').map((x) => x.split('name:')[1]);
+      const info: Record<string, [number, string, number]> = { src: [176293, '1280x720', 625000], '720p': [2890800, '1280x720', 625000], '480p': [1205600, '854x480', 250000] };
+      fs.writeFileSync(path.join(out, 'master.m3u8'), ['#EXTM3U', '#EXT-X-VERSION:6', ...names.flatMap((n) => [`#EXT-X-STREAM-INF:BANDWIDTH=${info[n][0]},RESOLUTION=${info[n][1]}`, `v${n}/live.m3u8`])].join('\n') + '\n');
+      for (const n of names) {
+        const v = `v${n}`;
         const lines = ['#EXTM3U', '#EXT-X-VERSION:6', '#EXT-X-TARGETDURATION:2', '#EXT-X-MEDIA-SEQUENCE:0'];
         for (let i = 0; i < 5; i++) {
           const f = `s0000${i}.ts`;
-          fs.writeFileSync(path.join(out, v, f), Buffer.alloc(1000, i));
+          fs.writeFileSync(path.join(out, v, f), Buffer.alloc(info[n][2], i));
           lines.push(`#EXTINF:${i === 4 ? '1.500000' : '2.000000'},`, f);
         }
         fs.writeFileSync(path.join(out, v, 'live.m3u8'), lines.join('\n') + '\n');
@@ -130,12 +134,16 @@ describe('V7 watch player: our own HLS through a CDN (Bunny), replays, embed, ad
     engine.send({ type: 'engine.hello' });
     const cfg = await engine.type('engine.config');
     assert.match(cfg.output.server, /streamid=publish:prog-/, 'OBS streams to the server for the watch player');
-    engine.send({ type: 'engine.state', state: { obsConnected: true, studioMode: true, streaming: { active: true, reconnecting: false } } });
+    assert.deepEqual(cfg.encoder, { height: 720, videoKbps: 2500 }, 'laptop mode too: OBS sends 720p at 2.5 Mbps');
+    // The agent reports OBS sends 720p at 2500 kbps: the server passes it straight through.
+    engine.send({ type: 'engine.state', state: { obsConnected: true, studioMode: true, video: { outputWidth: 1280, outputHeight: 720, kbps: 2500 }, streaming: { active: true, reconnecting: false } } });
     for (let i = 0; i < 100 && !procs.length; i++) await new Promise((r) => setTimeout(r, 20));
     assert.equal(procs.length, 1);
     const a = procs[0].args;
-    assert.equal(a[a.indexOf('-var_stream_map') + 1], 'v:0,a:0,name:720p v:1,a:1,name:480p');
-    assert.ok(a.includes('2500k') && a.includes('1000k') && a.includes('expr:gte(t,n_forced*2)'));
+    assert.equal(a[a.indexOf('-var_stream_map') + 1], 'v:0,a:0,name:src v:1,a:1,name:480p');
+    assert.deepEqual([a[a.indexOf('-c:v:0') + 1], a[a.indexOf('-c:v:1') + 1]], ['copy', 'libx264'], 'only 480p is encoded');
+    assert.equal(a[a.indexOf('-filter_complex') + 1], '[0:v]split=1[s1];[s1]scale=-2:480,setsar=1[o1]');
+    assert.ok(!a.includes('2500k') && a.includes('1000k') && a.includes('expr:gte(t,n_forced*2)'));
     session = path.basename(path.dirname(path.dirname(a.at(-1)!)));
     assert.match(session, /^s[0-9a-z]+$/);
     for (let i = 0; i < 50 && !(await h.db.query('SELECT 1 FROM watch_sessions WHERE name = $1', [session])).rowCount; i++) await new Promise((r) => setTimeout(r, 20));
@@ -144,7 +152,9 @@ describe('V7 watch player: our own HLS through a CDN (Bunny), replays, embed, ad
     const w0 = await expectOk(api(h, 'GET', `/api/tournaments/${tid}/watch`, undefined, owner.token));
     assert.deepEqual([w0.available, w0.enabled, w0.watch.live], [true, true, null]);
     procs[0].stdout.write('frame=60\nout_time_us=2000000\nprogress=continue\n');
-    await new Promise((r) => setTimeout(r, 50));
+    // Published once the master playlist is there and its bandwidth corrected.
+    for (let i = 0; i < 40 && !(await expectOk(api(h, 'GET', `/api/tournaments/${tid}/watch`, undefined, owner.token))).watch.live; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.match(fs.readFileSync(path.join(hlsDir, tid, session, 'master.m3u8'), 'utf8'), /BANDWIDTH=3666667,RESOLUTION=1280x720\nvsrc\/live\.m3u8/, 'peak: 625 kB in the 1.5 s segment = 3.33 Mbps, +10%');
     const pub = await expectOk(api(h, 'GET', `/api/public/tournaments/${tid}`));
     assert.equal(pub.watch.live, `https://gogetslive.b-cdn.net/hls/${tid}/${session}/master.m3u8`);
     assert.equal(pub.watch.embedUrl, `https://live.example.com/embed/${tid}`);
@@ -153,16 +163,39 @@ describe('V7 watch player: our own HLS through a CDN (Bunny), replays, embed, ad
     engine.close();
   });
 
+  it('auto qualities: pass-through only when OBS really sends 720p at a sane bitrate', async () => {
+    const t = (await h.app.repo.tournamentById(tid))!;
+    const hls = h.app.hls;
+    const keep = hls.engineVideo;
+    const recipe = (v: any) => {
+      hls.engineVideo = () => v;
+      return hls.spec(t).renditions.map((r) => (r.copy ? `copy${r.height}` : `${r.height}:${r.kbps}`)).join(',');
+    };
+    try {
+      assert.equal(recipe({ outputHeight: 720, kbps: 2500 }), 'copy720,480:1000');
+      assert.equal(recipe({ outputHeight: 480, kbps: 1200 }), 'copy480', 'nothing smaller to make');
+      assert.equal(recipe(null), '720:2500,480:1000', 'an older agent: encode as before');
+      assert.equal(recipe({ outputHeight: 1080, kbps: 6000 }), '720:2500,480:1000', '1080p is never passed to viewers');
+      assert.equal(recipe({ outputHeight: 720, kbps: null }), '720:2500,480:1000', 'Advanced output: bitrate unknown');
+      assert.equal(recipe({ outputHeight: 720, kbps: 8000 }), '720:2500,480:1000', 'too heavy for viewers');
+    } finally {
+      hls.engineVideo = keep;
+    }
+  });
+
   it('the origin serves playlists and segments with CDN-friendly caching, and nothing else', async () => {
     const base = `${h.baseUrl}/hls/${tid}/${session}`;
     let r = await fetch(`${base}/master.m3u8`);
-    assert.deepEqual([r.status, r.headers.get('content-type'), r.headers.get('cache-control'), r.headers.get('access-control-allow-origin')], [200, 'application/vnd.apple.mpegurl', 'public, max-age=10', '*']);
-    r = await fetch(`${base}/v720p/live.m3u8`);
+    assert.deepEqual([r.status, r.headers.get('content-type'), r.headers.get('cache-control'), r.headers.get('access-control-allow-origin')], [200, 'application/vnd.apple.mpegurl', 'public, max-age=2', '*']);
+    r = await fetch(`${base}/vsrc/live.m3u8`);
     assert.equal(r.headers.get('cache-control'), 'public, max-age=1');
     r = await fetch(`${base}/v480p/s00003.ts`);
-    assert.deepEqual([r.status, r.headers.get('content-type'), r.headers.get('cache-control'), (await r.arrayBuffer()).byteLength], [200, 'video/mp2t', 'public, max-age=31536000, immutable', 1000]);
-    for (const bad of [`${base}/v720p/s00099.ts`, `${base}/secret.txt`, `${base}/..%2f..%2fpasswd`, `${h.baseUrl}/hls/${tid}/notasession/master.m3u8`, `${base}/x/live.m3u8`]) {
+    assert.deepEqual([r.status, r.headers.get('content-type'), r.headers.get('cache-control'), (await r.arrayBuffer()).byteLength], [200, 'video/mp2t', 'public, max-age=31536000, immutable', 250000]);
+    for (const bad of [`${base}/vsrc/s00099.ts`, `${base}/v720/live.m3u8`, `${base}/secret.txt`, `${base}/..%2f..%2fpasswd`, `${h.baseUrl}/hls/${tid}/notasession/master.m3u8`, `${base}/x/live.m3u8`]) {
       assert.equal((await fetch(bad)).status, 404, bad);
+    }
+    for (const ok of [`${base}/vsrc/s00000.ts`, `${base}/v480p/live.m3u8`]) {
+      assert.equal((await fetch(ok)).status, 200, ok);
     }
     const e = await fetch(`${h.baseUrl}/embed/${tid}`);
     assert.equal(e.status, 200);
@@ -196,10 +229,10 @@ describe('V7 watch player: our own HLS through a CDN (Bunny), replays, embed, ad
       if (row.ended_at) break;
       await new Promise((r) => setTimeout(r, 20));
     }
-    assert.deepEqual([row.duration_sec, Number(row.bytes)], [10, 10000], '4 × 2 s + 1.5 s, 10 segments of 1 kB');
-    const vod = fs.readFileSync(path.join(hlsDir, tid, session, 'v720p', 'vod.m3u8'), 'utf8');
+    assert.deepEqual([row.duration_sec, Number(row.bytes)], [10, 5 * 625000 + 5 * 250000], '4 × 2 s + 1.5 s');
+    const vod = fs.readFileSync(path.join(hlsDir, tid, session, 'vsrc', 'vod.m3u8'), 'utf8');
     assert.match(vod, /#EXT-X-PLAYLIST-TYPE:VOD[\s\S]*#EXTINF:1\.500000,\ns00004\.ts\n#EXT-X-ENDLIST/);
-    assert.match(fs.readFileSync(path.join(hlsDir, tid, session, 'replay.m3u8'), 'utf8'), /v720p\/vod\.m3u8[\s\S]*v480p\/vod\.m3u8/);
+    assert.match(fs.readFileSync(path.join(hlsDir, tid, session, 'replay.m3u8'), 'utf8'), /BANDWIDTH=3666667[^\n]*\nvsrc\/vod\.m3u8[\s\S]*v480p\/vod\.m3u8/);
     const w = await expectOk(api(h, 'GET', `/api/tournaments/${tid}/watch`, undefined, owner.token));
     assert.equal(w.watch.live, null);
     assert.deepEqual(w.watch.replays.map((r: any) => [r.url, r.durationSec]), [[`https://gogetslive.b-cdn.net/hls/${tid}/${session}/replay.m3u8`, 10]]);
@@ -248,6 +281,32 @@ describe('V7 watch player: our own HLS through a CDN (Bunny), replays, embed, ad
     assert.ok(Math.abs(fin.durationSec - 5) < 0.2, String(fin.durationSec));
     const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path.join(out, 'replay.m3u8')], { encoding: 'utf8' });
     assert.ok(Math.abs(Number(probe.stdout.trim()) - 5) < 0.3, probe.stdout + probe.stderr);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('V7 watch player, real FFmpeg: a 720p programme passed straight through', () => {
+  it('copies the 720p programme, encodes only 480p, and the corrected master and replay play', { skip: spawnSync('ffmpeg', ['-version']).status !== 0 }, () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gl-copy-'));
+    const src = path.join(dir, 'prog.ts');
+    // What OBS sends after the agent sets it up: 720p, 2.5 Mbps, keyframes every 2 s.
+    spawnSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '8', '-c:v', 'libx264', '-preset', 'ultrafast', '-b:v', '2500k', '-g', '60', '-c:a', 'aac', '-f', 'mpegts', src]);
+    const out = path.join(dir, 's0copy001');
+    const spec = { dir, renditions: [{ height: 720, kbps: 2500, copy: true }, { height: 480, kbps: 1000 }], preset: 'ultrafast', segmentSec: 2 };
+    for (const r of spec.renditions) fs.mkdirSync(path.join(out, `v${RelayManager.variantName(r)}`), { recursive: true });
+    const args = RelayManager.hlsArgs(src, spec, out).filter((a, i, all) => a !== '-rtsp_transport' && all[i - 1] !== '-rtsp_transport');
+    const r = spawnSync('ffmpeg', args, { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    const before = Number(/BANDWIDTH=(\d+),RESOLUTION=1280x720/.exec(fs.readFileSync(path.join(out, 'master.m3u8'), 'utf8'))![1]);
+    assert.ok(before < 1_000_000, `FFmpeg under-states a copied stream (${before})`);
+    assert.ok(fixMaster(out));
+    const after = Number(/BANDWIDTH=(\d+),RESOLUTION=1280x720/.exec(fs.readFileSync(path.join(out, 'master.m3u8'), 'utf8'))![1]);
+    assert.ok(after > 2_000_000 && after < 6_000_000, String(after));
+    const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', path.join(out, 'vsrc', 's00001.ts')], { encoding: 'utf8' });
+    assert.equal(probe.stdout.trim().split('\n')[0], '1280,720');
+    finalize(out, 2);
+    const d = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path.join(out, 'replay.m3u8')], { encoding: 'utf8' });
+    assert.ok(Math.abs(Number(d.stdout.trim()) - 8) < 0.3, d.stdout + d.stderr);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

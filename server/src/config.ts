@@ -131,7 +131,14 @@ const schema = z.object({
   HLS_ENABLED: bool('true'),
   HLS_DIR: optional,
   // height:kbps pairs, best first. Each one costs about one CPU core while live.
-  HLS_RENDITIONS: z.string().regex(/^\d{3,4}:\d{3,5}(,\d{3,4}:\d{3,5})*$/).default('720:2500,480:1000'),
+  // 'auto': when OBS reports a programme of PROGRAMME_HEIGHT or less, it is passed straight
+  // through as the top quality (almost no CPU) and only the lower ones are encoded; otherwise
+  // the qualities in HLS_LADDER are all encoded. Or a fixed list like '720:2500,480:1000'.
+  HLS_RENDITIONS: z.string().regex(/^auto$|^\d{3,4}:\d{3,5}(,\d{3,4}:\d{3,5})*$/).default('auto'),
+  HLS_LADDER: z.string().regex(/^\d{3,4}:\d{3,5}(,\d{3,4}:\d{3,5})*$/).default('720:2500,480:1000'),
+  // The programme OBS sends (both modes): scaled output and bitrate, 2 s keyframes.
+  PROGRAMME_HEIGHT: z.coerce.number().int().min(360).max(1080).default(720),
+  PROGRAMME_KBPS: z.coerce.number().int().min(800).max(8000).default(2500),
   HLS_PRESET: z.enum(['ultrafast', 'superfast', 'veryfast', 'faster', 'fast']).default('veryfast'),
   HLS_SEGMENT_SEC: z.coerce.number().int().min(1).max(6).default(2),
   HLS_RETENTION_DAYS: z.coerce.number().min(1).default(14),
@@ -158,7 +165,7 @@ const schema = z.object({
   CLOUD_ENGINE_WIDTH: z.coerce.number().default(1920),
   CLOUD_ENGINE_HEIGHT: z.coerce.number().default(1080),
   CLOUD_ENGINE_FPS: z.coerce.number().default(30),
-  CLOUD_ENGINE_VIDEO_KBPS: z.coerce.number().default(6000),
+  CLOUD_ENGINE_VIDEO_KBPS: z.coerce.number().default(2500),
   // process driver (development/tests): command that starts OBS + agent on this machine.
   CLOUD_ENGINE_PROCESS_CMD: optional,
   DOCKER_SOCKET: z.string().default('/var/run/docker.sock'),

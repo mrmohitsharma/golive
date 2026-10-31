@@ -126,7 +126,7 @@ One show can go to more places than the main YouTube channel, Facebook Page and 
 
 Pricing (in `/admin` → Pricing & packs): **Free destinations per event** (default 1) and **Credits per extra destination** (default 50). Every place the event streams to counts, including the main YouTube, Facebook and Instagram. When an organiser adds one more than the event includes, the app offers to buy it for this event. Set *Free destinations* to 3 to keep the old behaviour (YouTube + Facebook + Instagram free).
 
-Server sizing: each destination is one more outgoing stream (4–6 Mbps), and each Instagram-style vertical destination uses about one CPU core.
+Server sizing: each destination is one more outgoing stream (about 2.5 Mbps: OBS sends 720p since V7), and each Instagram-style vertical destination uses about one CPU core.
 
 ## 3d. Show it on the CoGolfers website
 
@@ -315,9 +315,10 @@ The watch page plays the show with our own player instead of YouTube's. YouTube 
 5. Clubs get an embed code on the event's Streaming tab: `<iframe src="https://<server>/embed/<event>">`.
 
 Sizing:
-- Each live event uses about one CPU core per quality (two by default) on the server.
+- The agent sets OBS (laptop and cloud) to send 720p at 2.5 Mbps with 2 s keyframes. The server passes that straight through as the top quality and only encodes 480p: well under 1 CPU core per live event. An older agent, or OBS in *Advanced* output mode, gets the full encode (about 2 cores) and a warning on the event.
 - Disk use is about 1.6 GB per hour, kept `HLS_RETENTION_DAYS` days (14) as replays under `MEDIA_DIR/hls` (or `HLS_DIR`).
-- Change qualities with `HLS_RENDITIONS` (e.g. `720:2500,480:1000,360:600`), or turn the whole thing off with `HLS_ENABLED=false`.
+- Qualities: `HLS_RENDITIONS=auto` (default) passes the programme through; `HLS_LADDER` lists what to encode (e.g. `720:2500` for 720p only, the cheapest). `PROGRAMME_HEIGHT` / `PROGRAMME_KBPS` set what OBS sends. A fixed `HLS_RENDITIONS=720:2500,480:1000` always encodes everything. `HLS_ENABLED=false` turns the player off.
+- The player saves bandwidth by itself: it stops downloading 30 s after the tab is hidden, asks "Still watching?" after 40 minutes without a tap, and uses 480p on mobile data or Data Saver and in phone-sized players (viewers can still pick 720p).
 - Migration 022 runs on start.
 
 ## 4. Cloud mode (OBS on the server)

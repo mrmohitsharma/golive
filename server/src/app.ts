@@ -121,6 +121,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const hls = new HlsService(config, repo, secrets, log, cdnFetch);
   await hls.reload();
   outputs.hls = hls;
+  hls.engineVideo = (tid) => hub.engineState(tid).video;
   relay.hooks = { hlsStart: (tid, _dir, s) => hls.started(tid, s), hlsEnd: (tid, _dir, s) => hls.ended(tid, s) };
   const invoices = new InvoiceService(repo);
   const payments = new PaymentsService(config, repo, billing, cashfreeFetch, secrets);

@@ -101,26 +101,56 @@ export class HlsService {
     return this.on && t.outputs?.watch?.enabled !== false;
   }
 
+  /** What OBS reports it sends (set in app.ts from the hub). */
+  engineVideo: (tournamentId: string) => { outputHeight: number; kbps: number | null } | null | undefined = () => null;
+
+  private static parse(list: string) {
+    return list.split(',').map((p) => {
+      const [h, k] = p.split(':').map(Number);
+      return { height: h, kbps: k };
+    });
+  }
+
+  /**
+   * The qualities to make. In 'auto' mode, a programme OBS already sends at 720p (or less) and
+   * a sane bitrate is passed through as the top quality: no re-encode, almost no CPU. A bigger
+   * or unknown programme (an older agent, OBS in Advanced output mode) is encoded as before.
+   */
   spec(t: TournamentRow): HlsSpec {
-    return {
-      dir: path.join(this.root, t.id),
-      renditions: this.config.HLS_RENDITIONS.split(',').map((p) => {
-        const [h, k] = p.split(':').map(Number);
-        return { height: h, kbps: k };
-      }),
-      preset: this.config.HLS_PRESET,
-      segmentSec: this.config.HLS_SEGMENT_SEC,
-    };
+    const c = this.config;
+    let renditions: HlsSpec['renditions'];
+    if (c.HLS_RENDITIONS === 'auto') {
+      const ladder = HlsService.parse(c.HLS_LADDER);
+      const v = this.engineVideo(t.id);
+      const fits = v && v.outputHeight > 0 && v.outputHeight <= c.PROGRAMME_HEIGHT && v.kbps != null && v.kbps <= c.PROGRAMME_KBPS * 1.25;
+      renditions = fits ? [{ height: v.outputHeight, kbps: v.kbps!, copy: true }, ...ladder.filter((r) => r.height < v.outputHeight)] : ladder;
+    } else renditions = HlsService.parse(c.HLS_RENDITIONS);
+    return { dir: path.join(this.root, t.id), renditions, preset: c.HLS_PRESET, segmentSec: c.HLS_SEGMENT_SEC };
   }
 
   target(t: TournamentRow): RelayTarget {
     const hls = this.spec(t);
-    return { id: 'watch', platform: 'watch', url: hls.dir, vertical: false, hls };
+    // The URL carries the recipe, so a change (e.g. the agent reports 720p) restarts the encode.
+    const recipe = hls.renditions.map((r) => (r.copy ? 'copy' : `${r.height}:${r.kbps}`)).join(',');
+    return { id: 'watch', platform: 'watch', url: `${hls.dir}#${recipe}`, vertical: false, hls };
   }
 
   // ------------------------------------------------------------------ sessions
 
+  /** Sessions whose master playlist is written (and corrected): only those are offered to viewers. */
+  private ready = new Set<string>();
+
   started(tournamentId: string, session: string): void {
+    // FFmpeg writes the master after the first segments; fix its bandwidth figures, then publish.
+    const dir = path.join(this.root, tournamentId, session);
+    let tries = 0;
+    const poll = setInterval(() => {
+      if (++tries > 240 || fixMaster(dir)) {
+        clearInterval(poll);
+        if (tries <= 240) this.ready.add(session);
+      }
+    }, 250);
+    poll.unref();
     void this.repo.db
       .query('INSERT INTO watch_sessions (tournament_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING', [tournamentId, session])
       .catch((err) => this.log.warn({ err: (err as Error).message }, 'watch session insert failed'));
@@ -191,7 +221,7 @@ export class HlsService {
     const current = rows.find((r) => !r.ended_at);
     const url = (s: string, f: string) => `${this.base}/hls/${t.id}/${s}/${f}`;
     return {
-      live: liveNow && current && this.wanted(t) ? url(current.name, 'master.m3u8') : null,
+      live: liveNow && current && this.ready.has(current.name) && this.wanted(t) ? url(current.name, 'master.m3u8') : null,
       replays: rows
         .filter((r) => r.ended_at && (r.duration_sec ?? 0) >= 10)
         .map((r) => ({ url: url(r.name, 'replay.m3u8'), startedAt: r.started_at.toISOString(), durationSec: r.duration_sec ?? 0 })),
@@ -325,7 +355,55 @@ export function finalize(dir: string, segmentSec: number): { durationSec: number
     fs.writeFileSync(path.join(vdir, 'vod.m3u8'), [...head, ...body, '#EXT-X-ENDLIST', ''].join('\n'));
     top = Math.max(top, total);
   }
+  fixMaster(dir);
   const master = path.join(dir, 'master.m3u8');
   if (fs.existsSync(master)) fs.writeFileSync(path.join(dir, 'replay.m3u8'), fs.readFileSync(master, 'utf8').replace(/live\.m3u8/g, 'vod.m3u8'));
   return { durationSec: top, bytes };
+}
+
+/**
+ * FFmpeg cannot measure a copied stream's bitrate, so the master playlist under-states it
+ * (e.g. 176 kbps for 2.5 Mbps video) and players would pick it on slow links. Rewrites each
+ * BANDWIDTH from the real segment sizes (peak, +10%). Returns false until the master and a
+ * first segment of every quality exist.
+ */
+export function fixMaster(dir: string): boolean {
+  const master = path.join(dir, 'master.m3u8');
+  if (!fs.existsSync(master)) return false;
+  const lines = fs.readFileSync(master, 'utf8').split('\n');
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(v\w+)\/live\.m3u8$/.exec(lines[i].trim());
+    if (!m || !lines[i - 1]?.startsWith('#EXT-X-STREAM-INF:')) continue;
+    const vdir = path.join(dir, m[1]);
+    const durs = new Map<string, number>();
+    try {
+      const pl = fs.readFileSync(path.join(vdir, 'live.m3u8'), 'utf8').split('\n');
+      for (let j = 0; j < pl.length; j++) {
+        const d = /^#EXTINF:([\d.]+)/.exec(pl[j]);
+        if (d && pl[j + 1]) durs.set(pl[j + 1].trim(), Number(d[1]));
+      }
+    } catch {
+      return false;
+    }
+    let peak = 0;
+    for (const [f, d] of durs) {
+      if (d < 1) continue;
+      try {
+        peak = Math.max(peak, (fs.statSync(path.join(vdir, f)).size * 8) / d);
+      } catch {}
+    }
+    if (!peak) return false;
+    const bw = Math.round(peak * 1.1);
+    const cur = Number(/BANDWIDTH=(\d+)/.exec(lines[i - 1])?.[1] ?? 0);
+    if (cur < bw * 0.8) {
+      lines[i - 1] = lines[i - 1].replace(/BANDWIDTH=\d+/, `BANDWIDTH=${bw}`);
+      changed = true;
+    }
+  }
+  if (changed) {
+    fs.writeFileSync(master + '.tmp', lines.join('\n'));
+    fs.renameSync(master + '.tmp', master);
+  }
+  return true;
 }

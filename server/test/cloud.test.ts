@@ -80,7 +80,8 @@ describe('cloud production mode', () => {
     engine.send({ type: 'engine.hello' });
     const cfg = await engine.type('engine.config');
     assert.equal(cfg.mode, 'cloud');
-    assert.deepEqual(cfg.canvas, { width: 1920, height: 1080, fps: 30, videoKbps: 6000 });
+    assert.deepEqual(cfg.canvas, { width: 1920, height: 1080, fps: 30, videoKbps: 2500 });
+    assert.deepEqual(cfg.encoder, { height: 720, videoKbps: 2500 }, 'scenes laid out at 1080p, OBS sends 720p');
     await director.next((m) => m.type === 'production' && m.production.cloud.status === 'running');
     engine.close();
   });
