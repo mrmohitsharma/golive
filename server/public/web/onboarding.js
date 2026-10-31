@@ -6,6 +6,7 @@ import { state, get, post, patch, el, toast, guard, go } from './core.js';
 import { info, openGuide } from './guide.js';
 import { mainStreamCard } from './streams.js';
 import { startTour } from './tour.js';
+import { goLiveSteps } from './golive-steps.js';
 
 const STEPS = [
   { n: 1, key: 'event', label: 'Create event' },
@@ -103,8 +104,17 @@ function navButtons(n, nextLabel = 'Next', onNext = null) {
     el('button', { class: 'btn primary', onclick: guard(async () => { if (onNext) await onNext(); else openStep(n + 1); }), text: nextLabel }));
 }
 
+const onControlPage = () => /\/web\/e\/[^/]+\/control\/?$/.test(location.pathname);
+
 async function openStep(n) {
   n = Math.max(1, Math.min(4, n));
+  if (n === 4 && onControlPage()) {
+    closePanel();
+    const row = document.querySelector('.gl-steps');
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row?.querySelector('.gl-step.current')?.focus({ preventScroll: true });
+    return;
+  }
   clearInterval(S.poll);
   S.open = n;
   if ((S.ob.setup?.step ?? 1) !== n) await save({ setup: { step: Math.max(n, 1) } });
@@ -233,44 +243,20 @@ async function stepStream() {
 // ------------------------------------------------------------------ step 4: go live
 async function stepLive() {
   const id = S.eventId;
-  const body = el('div');
+  // The same step buttons as on top of the control room; the ones that need the control
+  // room take you there (and this panel closes, so the steps continue in one place).
+  const steps = goLiveSteps({ id, context: 'setup', onLeave: closePanel });
   const draw = async () => {
-    const [st, d] = await Promise.all([get(`/api/tournaments/${id}/state`), get(`/api/tournaments/${id}/destinations`)]);
-    const prod = st.production;
-    const e = st.engine ?? {};
-    const cams = st.cameras ?? [];
-    const sending = cams.filter((c) => c.status === 'live').length;
-    const live = e.streaming?.active;
-    const m = d.outputs.main;
-    const cloud = prod.mode === 'cloud';
-    const mixerReady = e.connected && e.obsConnected;
-    const row = (ok, text, extra) => el('li', { class: ok ? 'done' : '' }, el('span', { class: 'tick', text: ok ? '✓' : '' }), el('span', { style: 'flex:1' }, text), extra ?? null);
-    if (live && !S.facts.live) { S.facts.live = true; renderBar(); }
-    body.replaceChildren(
-      live ? el('div', { class: 'banner ok', style: 'margin-bottom:12px' },
-        el('strong', { text: '🎉 You are live!' }), ' Share the link so people can watch.') : null,
-      el('ol', { class: 'checklist golive' },
-        row(mixerReady, cloud ? `Cloud OBS ${mixerReady ? 'is ready' : prod.cloud?.status === 'starting' ? 'is starting (about a minute)' : 'is off: Start show turns it on'}` : `Laptop OBS ${mixerReady ? 'is connected' : 'is not connected: run the agent on the laptop'}`,
-          cloud ? null : info('obs', 'How to connect Laptop OBS')),
-        row(sending > 0, `${sending} of ${cams.length} camera${cams.length === 1 ? '' : 's'} sending video`),
-        row(m.ready && !m.paused, `Main stream: ${m.label}${m.paused ? ' (paused)' : m.ready ? '' : ' (needs setup)'}`),
-        row(live, live ? 'On air' : 'Go live from the control room')),
-      el('div', { class: 'row', style: 'margin-top:12px;flex-wrap:wrap' },
-        !live && cloud ? el('button', { class: 'btn', onclick: guard(async () => {
-          const r = await post(`/api/tournaments/${id}/start-show`, { privacy: 'unlisted' });
-          toast(r.problems?.length ? r.problems.join(' ') : 'Show started: Cloud OBS is getting ready', Boolean(r.problems?.length));
-          await draw();
-        }), text: mixerReady ? 'Start show' : 'Start show (turns on Cloud OBS)' }) : null,
-        el('a', { class: 'btn primary', href: `/web/e/${id}/control`, onclick: (ev) => { ev.preventDefault(); go(`/web/e/${id}/control`); }, text: 'Open control room' }),
-        m.link ? el('button', { class: 'btn', onclick: () => navigator.clipboard?.writeText(m.link).then(() => toast('Watch link copied')), text: 'Copy watch link' }) : null,
-        m.link ? el('a', { class: 'btn', href: m.link, target: '_blank', rel: 'noopener', text: m.id === 'watch' ? 'Open watch page' : `Open on ${m.label}` }) : null),
-      el('p', { class: 'small muted', style: 'margin-top:10px', text: 'In the control room: click a camera to preview it, Take to put it on air, then Go live.' }));
+    const st = await get(`/api/tournaments/${id}/state`);
+    if (st.engine?.streaming?.active && !S.facts.live) { S.facts.live = true; renderBar(); }
+    steps.update(st);
   };
   await draw();
-  S.poll = setInterval(() => draw().catch(() => {}), 5000);
+  S.poll = setInterval(() => draw().catch(() => {}), 4000);
   return frame(4,
     el('h2', { style: 'margin-top:0' }, 'Go live ', info('golive', 'Going live in the control room')),
-    body,
+    el('p', { class: 'muted', text: 'Follow the glowing button. Each step turns green when it is done, and the next one lights up.' }),
+    steps.node,
     el('div', { class: 'row setup-nav' },
       el('button', { class: 'btn', onclick: () => openStep(3), text: '← Previous' }),
       el('div', { class: 'sp' }),
@@ -301,6 +287,10 @@ function welcome() {
     d.showModal();
   });
 }
+
+const onRoute = () => { if (S.open === 4 && onControlPage()) closePanel(); };
+window.addEventListener('gl:route', onRoute);
+window.addEventListener('popstate', onRoute);
 
 /** Called once the app knows who is logged in and which club is selected. */
 export async function startOnboarding() {

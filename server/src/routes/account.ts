@@ -40,6 +40,8 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: Ctx) {
     const b = z
       .object({
         welcomed: z.boolean().optional(),
+        // The Go live step buttons on top of the control room (shown until the director hides them).
+        controlGuide: z.boolean().optional(),
         setup: z
           .object({
             state: z.enum(['active', 'hidden', 'skipped', 'done']).optional(),
@@ -64,6 +66,7 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: Ctx) {
     const next = {
       ...cur,
       ...(b.welcomed !== undefined ? { welcomed: b.welcomed } : {}),
+      ...(b.controlGuide !== undefined ? { controlGuide: b.controlGuide } : {}),
       ...(b.setup ? { setup: { ...(cur.setup ?? {}), ...b.setup } } : {}),
       ...(b.tour ? { tour: { ...(cur.tour ?? {}), ...b.tour, ...(b.tour.seen ? { seen: [...new Set([...(cur.tour?.seen ?? []), ...b.tour.seen])].slice(-60) } : {}) } } : {}),
     };

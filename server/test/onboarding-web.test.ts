@@ -21,6 +21,7 @@ describe('V7 web onboarding: setup and tour progress per user; the main stream',
     await expectOk(api(h, 'PATCH', '/api/me/onboarding', { tour: { state: 'active', step: 3, seen: ['welcome', 'events'] } }, owner.token));
     const r = await expectOk(api(h, 'PATCH', '/api/me/onboarding', { tour: { step: 4, seen: ['events', 'new-event'] } }, owner.token));
     assert.deepEqual(r.onboarding, { welcomed: true, setup: { state: 'active', step: 2, eventId: tid }, tour: { state: 'active', step: 4, seen: ['welcome', 'events', 'new-event'] } });
+    assert.equal((await expectOk(api(h, 'PATCH', '/api/me/onboarding', { controlGuide: false }, owner.token))).onboarding.controlGuide, false);
     assert.equal((await api(h, 'PATCH', '/api/me/onboarding', { setup: { step: 9 } }, owner.token)).status, 400);
     assert.equal((await api(h, 'PATCH', '/api/me/onboarding', { admin: true }, owner.token)).status, 400, 'only known keys');
     assert.equal((await api(h, 'GET', '/api/me/onboarding')).status, 401);

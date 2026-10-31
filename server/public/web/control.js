@@ -1,5 +1,6 @@
 // The control room in the browser: the same live connection and commands as the app.
 import { state, get, post, patch, el, toast, guard, confirmBox, go } from './core.js';
+import { goLiveSteps } from './golive-steps.js';
 
 export const title = 'Control room';
 
@@ -80,6 +81,13 @@ export async function render(view, { id }) {
   const status = el('div', { class: 'row' });
   const pgmBox = el('div', { class: 'cr-mon pgm' }), pvwBox = el('div', { class: 'cr-mon pvw' });
   const pgm = new Whep(pgmBox), pvw = new Whep(pvwBox);
+  // The big box says whether viewers can see it: "Ready" before Go live, "● LIVE" after.
+  const airBadge = el('div', { class: 'cr-air-badge' });
+  pgmBox.append(airBadge);
+  const liveBtn = el('div', { class: 'cr-live-btn' });
+  const guideHost = el('div');
+  const showGuide = el('button', { class: 'btn small ghost', hidden: true, text: 'Show guide' });
+  let steps = null;
   const pgmLabel = el('div', { class: 'cr-label' }), pvwLabel = el('div', { class: 'cr-label' });
   const grid = el('div', { class: 'cr-grid' });
   const side = el('div', { class: 'cr-side' });
@@ -90,10 +98,11 @@ export async function render(view, { id }) {
   let tab = 'Graphics';
 
   const send = (action, extra = {}) => {
-    if (!ws || ws.readyState !== 1) return toast('Not connected to the server yet', true);
+    if (!ws || ws.readyState !== 1) { toast('Not connected to the server yet', true); return false; }
     const requestId = Math.random().toString(36).slice(2);
     pending.set(requestId, action);
     ws.send(JSON.stringify({ type: 'command', action, requestId, ...extra }));
+    return true;
   };
   const cams = () => s.cameras ?? [];
   const camName = (cid) => cams().find((c) => c.id === cid)?.name ?? '–';
@@ -109,10 +118,14 @@ export async function render(view, { id }) {
       b && b.minutes.remainingSeconds != null ? el('span', { class: 'small ' + (b.minutes.remainingSeconds < 600 ? 'pill warn' : 'muted'), text: `${Math.floor(b.minutes.remainingSeconds / 60)} min of credit left` }) : null,
       (e.warnings ?? []).length ? el('span', { class: 'pill warn', title: e.warnings.join('\n'), text: `${e.warnings.length} warning${e.warnings.length > 1 ? 's' : ''}` }) : null,
       el('div', { class: 'sp' }),
+      showGuide,
       el('a', { class: 'btn small', href: `/watch/${id}`, target: '_blank', rel: 'noopener', text: 'Watch page' }),
-      el('a', { class: 'btn small', href: `/web/e/${id}`, onclick: (ev) => { ev.preventDefault(); go(`/web/e/${id}`); }, text: 'Event' }),
-      live ? el('button', { class: 'btn danger', onclick: guard(async () => { if (await confirmBox('End the broadcast?', 'The stream stops on every platform.', 'End broadcast')) send('stream.stop'); }), text: 'End broadcast' })
-        : el('button', { class: 'btn primary', disabled: b && !b.canGoLive, title: b?.reason ?? '', onclick: guard(async () => { if (await confirmBox('Go live now?', 'The programme goes out on YouTube and every platform that is on.', 'Go live', false)) send('stream.start'); }), text: '● Go live' }));
+      el('a', { class: 'btn small', href: `/web/e/${id}`, onclick: (ev) => { ev.preventDefault(); go(`/web/e/${id}`); }, text: 'Event' }));
+    const where = s.outputs?.main?.label ?? 'your main stream';
+    liveBtn.replaceChildren(live
+      ? el('button', { class: 'btn danger cr-golive', onclick: guard(async () => { if (await confirmBox('End the broadcast?', 'The stream stops on every platform.', 'End broadcast')) send('stream.stop'); }), text: '■ End broadcast' })
+      : el('button', { class: 'btn primary cr-golive', 'data-tour': 'go-live', disabled: b && !b.canGoLive, title: b?.reason ?? '', onclick: guard(async () => { if (await confirmBox('Go live now?', `The ON AIR picture goes out to ${where} and every place that is switched on.`, 'Go live', false)) send('stream.start'); }), text: '● GO LIVE' }));
+    steps?.update(s);
   };
 
   const drawMonitors = () => {
@@ -121,8 +134,14 @@ export async function render(view, { id }) {
     const pv = cams().find((c) => c.id === e.previewCameraId);
     pgm.set(on && !e.replayActive && !e.fallbackActive ? on.whepUrl : null);
     pvw.set(pv?.whepUrl ?? null);
-    pgmLabel.replaceChildren(el('span', { class: 'pill live', text: 'PROGRAM' }), ' ', e.replayActive ? 'Replay' : e.fallbackActive ? 'Fallback screen' : on?.name ?? 'Nothing on air');
-    pvwLabel.replaceChildren(el('span', { class: 'pill ok', text: 'PREVIEW' }), ' ', pv?.name ?? 'Pick a camera below');
+    const live = Boolean(e.streaming?.active);
+    pgmLabel.replaceChildren(el('span', { class: 'pill live', text: 'ON AIR' }), ' ', e.replayActive ? 'Replay' : e.fallbackActive ? 'Fallback screen' : on?.name ?? 'Nothing yet: press TAKE');
+    pvwLabel.replaceChildren(el('span', { class: 'pill ok', text: 'NEXT' }), ' ', pv?.name ?? 'pick a camera');
+    pgmBox.classList.toggle('live', live);
+    pgmBox.classList.toggle('off', !live);
+    airBadge.className = 'cr-air-badge ' + (live ? 'live' : 'ready');
+    airBadge.textContent = live ? '● LIVE: viewers see this' : 'Ready · not live yet';
+    steps?.update(s);
   };
 
   const drawGrid = () => {
@@ -243,6 +262,7 @@ export async function render(view, { id }) {
       case 'snapshot': s = { ...s, ...m }; drawAll(); break;
       case 'cameras': { const before = (s.commentators ?? []).map((c) => c.id + c.online).join(); s.cameras = m.cameras; s.commentators = m.commentators; drawMonitors(); drawGrid(); if (tab === 'Audio' && before !== (m.commentators ?? []).map((c) => c.id + c.online).join()) drawSide(); break; }
       case 'engine': s.engine = m.engine ?? m; drawStatus(); drawMonitors(); drawGrid(); break;
+      case 'outputs': s.outputs = m.outputs ?? m; drawStatus(); break;
       case 'graphics': s.graphics = m.graphics ?? m; if (tab === 'Graphics') drawSide(); break;
       case 'audio': s.audio = m.audio ?? m; break;
       case 'production': s.production = m.production ?? m; drawStatus(); break;
@@ -267,26 +287,50 @@ export async function render(view, { id }) {
   // Keyboard: 1–9 preview a camera, Shift+1–9 cut to it, Space or Enter = Take.
   const keys = (e) => {
     if (/input|select|textarea/i.test(e.target.tagName)) return;
+    // Space/Enter on a focused button presses that button (e.g. the glowing Go live step), not TAKE.
+    if ((e.key === ' ' || e.key === 'Enter') && /button|a/i.test(e.target.tagName)) return;
     const n = Number(e.key);
     if (n >= 1 && n <= 9 && cams()[n - 1]) { e.preventDefault(); send(e.shiftKey ? 'cut' : 'preview', { cameraId: cams()[n - 1].id }); }
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); send('take'); }
   };
   const shift = (e) => { if (e.code?.startsWith('Digit') && e.shiftKey) { const n = Number(e.code.slice(5)); if (cams()[n - 1]) { e.preventDefault(); send('cut', { cameraId: cams()[n - 1].id }); } } };
 
+  // The step buttons on top: shown until this director hides them (Show guide brings them back).
+  const setGuide = (on, save = true) => {
+    if (on) {
+      steps = goLiveSteps({ id, context: 'room', send, ready: () => ws?.readyState === 1, onHide: () => setGuide(false) });
+      guideHost.replaceChildren(steps.node);
+      steps.update(s);
+    } else { steps = null; guideHost.replaceChildren(); }
+    showGuide.hidden = on;
+    if (save) patch('/api/me/onboarding', { controlGuide: on }).catch(() => {});
+  };
+  showGuide.onclick = () => setGuide(true);
+
   view.append(
+    guideHost,
     status,
     el('div', { class: 'cr' },
       el('div', { class: 'cr-main' },
-        el('div', { class: 'cr-monitors' }, el('div', {}, pvwLabel, pvwBox), el('div', {}, pgmLabel, pgmBox)),
-        el('div', { class: 'row cr-actions' },
-          el('button', { class: 'btn primary cr-take', onclick: () => send('take'), title: 'Space or Enter', text: 'TAKE ▶' }),
-          el('button', { class: 'btn', onclick: () => send('fallback'), text: 'Fallback screen' }),
-          el('span', { class: 'sp' }),
-          el('span', { class: 'small muted', text: 'Replay' }), el('div', { style: 'width:90px' }, replaySec), el('label', { class: 'check' }, slow, 'Slow-mo'),
-          el('button', { class: 'btn', onclick: () => send('replay', { seconds: Number(replaySec.value), slowmo: slow.checked }), text: '⟲ Replay' })),
+        // Click a camera → NEXT (small) → TAKE → ON AIR (big) → GO LIVE.
+        el('div', { class: 'cr-flow' },
+          el('div', { class: 'cr-next' }, pvwLabel, pvwBox, el('div', { class: 'small muted', style: 'margin-top:4px', text: 'Click a camera below to put it here.' })),
+          el('div', { class: 'cr-take-col' },
+            el('button', { class: 'btn primary cr-take', 'data-tour': 'take', onclick: () => send('take'), title: 'Puts NEXT on air (Space or Enter)', text: 'TAKE ▶' }),
+            el('span', { class: 'small muted', text: 'NEXT → ON AIR' })),
+          el('div', { class: 'cr-onair' }, pgmLabel, pgmBox,
+            el('div', { class: 'row cr-actions' },
+              el('button', { class: 'btn small', onclick: () => send('fallback'), text: 'Fallback screen' }),
+              el('span', { class: 'small muted', text: 'Replay' }), el('div', { style: 'width:84px' }, replaySec), el('label', { class: 'check' }, slow, 'Slow-mo'),
+              el('button', { class: 'btn small', onclick: () => send('replay', { seconds: Number(replaySec.value), slowmo: slow.checked }), text: '⟲ Replay' }),
+              el('span', { class: 'sp' }),
+              liveBtn))),
+        el('div', { class: 'cr-h', text: 'Cameras · click one to put it in NEXT' }),
         grid,
-        el('p', { class: 'small muted', text: 'Click a camera to preview it, then TAKE. Double-click (or Cut) puts it on air at once. Keys: 1–9 preview, Shift+1–9 cut, Space take.' })),
+        el('p', { class: 'small muted', text: 'Click a camera, then TAKE. Double-click (or Cut) puts it on air at once. Keys: 1–9 pick, Shift+1–9 cut, Space take.' })),
       el('div', {}, side, el('h2', { text: 'Alerts' }), alerts)));
+  const ob = await get('/api/me/onboarding').catch(() => null);
+  setGuide(ob?.onboarding?.controlGuide !== false, false);
 
   players = (await get(`/api/tournaments/${id}/players`).catch(() => ({ players: [] }))).players;
   drawAll();
