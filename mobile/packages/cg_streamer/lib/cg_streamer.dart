@@ -23,6 +23,7 @@ class StreamConfig {
     this.audioBitrateKbps = 128,
     this.facing = CameraFacing.back,
     this.keyframeIntervalSec = 2,
+    this.portrait = false,
   });
 
   final int width;
@@ -33,6 +34,20 @@ class StreamConfig {
   final CameraFacing facing;
   final int keyframeIntervalSec;
 
+  /// Vertical 9:16 video (the phone held upright). The encoder then sends height x width.
+  final bool portrait;
+
+  StreamConfig copyWith({bool? portrait, CameraFacing? facing}) => StreamConfig(
+        width: width,
+        height: height,
+        fps: fps,
+        videoBitrateKbps: videoBitrateKbps,
+        audioBitrateKbps: audioBitrateKbps,
+        facing: facing ?? this.facing,
+        keyframeIntervalSec: keyframeIntervalSec,
+        portrait: portrait ?? this.portrait,
+      );
+
   Map<String, Object> toMap() => {
         'width': width,
         'height': height,
@@ -41,6 +56,7 @@ class StreamConfig {
         'audioBitrate': audioBitrateKbps * 1000,
         'facing': facing.name,
         'keyframeInterval': keyframeIntervalSec,
+        'portrait': portrait,
       };
 
   String get label => '${height}p$fps · ${(videoBitrateKbps / 1000).toStringAsFixed(1)} Mbps';
@@ -101,6 +117,54 @@ class DeviceStatus {
       );
 }
 
+/// What the open camera can do. Zoom is in "display" units: 1.0 = the main lens, 0.5 = the
+/// ultra-wide lens where the phone has one.
+class CameraCaps {
+  const CameraCaps({
+    this.zoomMin = 1,
+    this.zoomMax = 1,
+    this.evMin = 0,
+    this.evMax = 0,
+    this.evStep = 1,
+    this.torch = false,
+    this.manualFocus = false,
+    this.focusPoint = false,
+    this.lensSwitch = false,
+  });
+
+  final double zoomMin;
+  final double zoomMax;
+
+  /// Exposure (brightness) range in EV stops.
+  final double evMin;
+  final double evMax;
+  final double evStep;
+  final bool torch;
+  final bool manualFocus;
+
+  /// Tap to focus / meter at a point.
+  final bool focusPoint;
+
+  /// Going below 1x changes to another camera: the picture freezes for about a second.
+  final bool lensSwitch;
+
+  factory CameraCaps.fromMap(Map<Object?, Object?> m) {
+    double d(String k, double def) => (m[k] as num?)?.toDouble() ?? def;
+    final zMin = d('zoomMin', 1), eMin = d('evMin', 0), step = d('evStep', 1);
+    return CameraCaps(
+      zoomMin: zMin,
+      zoomMax: d('zoomMax', 1) < zMin ? zMin : d('zoomMax', 1),
+      evMin: eMin,
+      evMax: d('evMax', 0) < eMin ? eMin : d('evMax', 0),
+      evStep: step > 0 ? step : 0.1,
+      torch: m['torch'] == true,
+      manualFocus: m['manualFocus'] == true,
+      focusPoint: m['focusPoint'] == true,
+      lensSwitch: m['lensSwitch'] == true,
+    );
+  }
+}
+
 class CgStreamer {
   CgStreamer._();
 
@@ -109,6 +173,8 @@ class CgStreamer {
 
   static final StreamController<PublisherEvent> _stateCtl = StreamController.broadcast();
   static final StreamController<int> _bitrateCtl = StreamController.broadcast();
+  static final StreamController<double> _audioCtl = StreamController.broadcast();
+  static final StreamController<bool> _lensCtl = StreamController.broadcast();
   static StreamSubscription<dynamic>? _sub;
 
   static void _ensureListening() {
@@ -125,6 +191,10 @@ class CgStreamer {
             _stateCtl.add(PublisherEvent(state, message: e['message'] as String?));
           case 'bitrate':
             _bitrateCtl.add(((e['bps'] as num?) ?? 0) ~/ 1000);
+          case 'audioLevel':
+            _audioCtl.add(((e['level'] as num?) ?? 0).toDouble().clamp(0, 1));
+          case 'lens':
+            _lensCtl.add(e['switching'] == true);
         }
       },
       onError: (Object err) => _stateCtl.add(PublisherEvent(PublisherState.error, message: '$err')),
@@ -142,6 +212,44 @@ class CgStreamer {
     _ensureListening();
     return _bitrateCtl.stream;
   }
+
+  /// Microphone level 0..1 (peak, smoothed), about 10 times a second.
+  static Stream<double> get audioLevel {
+    _ensureListening();
+    return _audioCtl.stream;
+  }
+
+  /// true while the phone changes lens (ultra-wide <-> main), false when the picture is back.
+  static Stream<bool> get lensSwitching {
+    _ensureListening();
+    return _lensCtl.stream;
+  }
+
+  /// What the open camera supports (changes after switchCamera / initialize).
+  static Future<CameraCaps> cameraCaps() async =>
+      CameraCaps.fromMap(await _channel.invokeMapMethod<Object?, Object?>('cameraCaps') ?? const {});
+
+  /// Zoom in display units (see [CameraCaps]). Returns the zoom actually applied.
+  static Future<double> setZoom(double zoom) async =>
+      ((await _channel.invokeMethod<num>('setZoom', {'zoom': zoom})) ?? zoom).toDouble();
+
+  /// Brightness: exposure compensation in EV stops (0 = auto).
+  static Future<void> setExposureBias(double ev) => _channel.invokeMethod('setExposureBias', {'ev': ev});
+
+  /// Focuses and meters exposure at a point of the preview (x, y from 0 to 1, as seen on screen).
+  static Future<void> focusAt(double x, double y) => _channel.invokeMethod('focusAt', {'x': x, 'y': y});
+
+  /// Continuous autofocus (true) or manual focus (false; then use [setFocusDistance]).
+  static Future<void> setAutoFocus(bool on) => _channel.invokeMethod('setAutoFocus', {'on': on});
+
+  /// Manual focus: 0 = far (infinity), 1 = as close as the lens goes.
+  static Future<void> setFocusDistance(double near) => _channel.invokeMethod('setFocusDistance', {'near': near});
+
+  /// Holds focus and exposure where they are now (or at x, y if given) until unlocked.
+  static Future<void> setAeAfLock(bool lock, {double? x, double? y}) =>
+      _channel.invokeMethod('setAeAfLock', {'lock': lock, 'x': x, 'y': y});
+
+  static Future<void> setTorch(bool on) => _channel.invokeMethod('setTorch', {'on': on});
 
   /// Asks for camera + microphone. Returns true only if both are granted.
   static Future<bool> requestPermissions() async =>

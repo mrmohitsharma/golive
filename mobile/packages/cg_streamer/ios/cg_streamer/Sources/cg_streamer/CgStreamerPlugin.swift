@@ -52,6 +52,28 @@ public class CgStreamerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
                 case "switchCamera":
                     try await engine.switchCamera()
                     result(nil)
+                case "cameraCaps":
+                    result(engine.caps())
+                case "setZoom":
+                    result(try engine.setZoom(Self.cg(args["zoom"]) ?? 1))
+                case "setExposureBias":
+                    try engine.setExposureBias(Float(Self.cg(args["ev"]) ?? 0))
+                    result(nil)
+                case "focusAt":
+                    try engine.focusAt(Self.cg(args["x"]) ?? 0.5, Self.cg(args["y"]) ?? 0.5)
+                    result(nil)
+                case "setAutoFocus":
+                    try engine.setAutoFocus(args["on"] as? Bool ?? true)
+                    result(nil)
+                case "setFocusDistance":
+                    try engine.setFocusDistance(Float(Self.cg(args["near"]) ?? 0))
+                    result(nil)
+                case "setAeAfLock":
+                    try engine.setAeAfLock(args["lock"] as? Bool ?? false, x: Self.cg(args["x"]), y: Self.cg(args["y"]))
+                    result(nil)
+                case "setTorch":
+                    try engine.setTorch(args["on"] as? Bool ?? false)
+                    result(nil)
                 case "setVideoBitrate":
                     try await engine.setVideoBitrate(args["bitrate"] as? Int ?? 2_500_000)
                     result(nil)
@@ -72,6 +94,13 @@ public class CgStreamerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
                 result(FlutterError(code: "native_error", message: StreamEngine.describe(error), details: nil))
             }
         }
+    }
+}
+
+extension CgStreamerPlugin {
+    /// Dart numbers arrive as Double or Int (NSNumber); null stays nil.
+    static func cg(_ v: Any?) -> CGFloat? {
+        (v as? NSNumber).map { CGFloat($0.doubleValue) }
     }
 }
 

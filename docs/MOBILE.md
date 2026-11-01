@@ -83,7 +83,16 @@ Camera quality presets: 720p30 2.5 Mbps (default, 4G) · 720p25 1.5 Mbps (weak s
 - Tools row: **Comments** (the combined viewer comments; tap one to show it on air as a Viewer question, pin it on the watch page, hide it or block the author), **Graphics** (score bug, leaderboard rows/category, hole card auto/now, lower third from the leaderboard or custom text), **Audio** (commentary level/mute, ducking, commentary delay, course master, per-camera trim/mute, live meters), **Save clip**, **Clips**.
 - Status bar: engine (laptop or cloud, with *Start cloud engine*), one pill per platform (YouTube / Facebook / Instagram: LIVE, RETRYING), live time left from credits (amber under 10 minutes, red countdown when credits are out; tap to buy), broadcast status, ingest, warnings. **Go live** creates the YouTube broadcast first if the club has connected YouTube, and the Facebook live video automatically.
 
-**Camera operator:** name the camera, hole, position, quality, lens → **GO LIVE**. Green frame = in preview, red = on air.
+**Camera operator:** name the camera, hole, position, quality, lens → **GO LIVE**. Green frame = in preview, red = on air. On the camera screen:
+- **Left arc = brightness** (exposure, about −2 to +2): drag up/down along the arc; double-tap the arc for 0.
+- **Right arc = zoom**, with **.5 · 1 · 2 · 5** shortcuts. Below 1× uses the ultra-wide lens. Most phones change lens smoothly; older Android phones reopen the camera, so the screen shows *Switching lens…* and the picture freezes for about a second (avoid it while ON AIR). Double-tap the arc for 1×.
+- **Tap the picture** to focus and set brightness there. **Long-press** to lock focus and brightness on that point (**AE/AF LOCK**); tap the picture or the pill to release.
+- **AF / MF:** autofocus, or manual focus with a Far ↔ Near slider (phones that support it).
+- **Light:** the torch, on phones that have one.
+- **Portrait / Landscape:** landscape works either way round and stays upright. Portrait sends vertical 9:16 video: in the 16:9 show it has black bars at the sides, and it fills vertical outputs. Changing it reconnects the camera (a few seconds) and is blocked while ON AIR.
+- **Mic meter:** green/amber/red bar showing sound is coming in.
+- **Padlock:** tap to freeze every control (pocket and sweat touches do nothing); **hold** it to unlock.
+- Zoom, brightness, focus mode and light come back after a reconnect or a portrait/landscape change; switching front/back camera starts again at 1× with the light off.
 
 **Scorer:** pick the hole (arrows or chips) and optionally your group. For each player: tap the box to enter par, −/+ to adjust, long-press to clear. Scores are saved on the phone first and sent in order; with no signal a banner shows how many are waiting and they go out automatically (also after the app restarts). Leaderboard tab.
 

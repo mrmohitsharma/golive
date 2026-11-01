@@ -24,7 +24,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   final Session session;
   CameraInfo camera;
   PublishTarget target;
-  final StreamConfig config;
+  StreamConfig config;
 
   late final ApiClient _api = session.api();
   RealtimeLink? link;
@@ -47,6 +47,25 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   bool _resumeAfterShow = false;
   Map<String, Object?> actual = const {};
 
+  // ---------------------------------------------------------------- camera controls
+  CameraCaps caps = const CameraCaps();
+  double zoom = 1;
+  double ev = 0;
+  bool autoFocus = true;
+  double focusNear = 0;
+  bool aeAfLocked = false;
+  bool torch = false;
+
+  /// Every on-screen control frozen (pocket / sweat touches can't change the shot).
+  bool controlsLocked = false;
+  bool lensSwitching = false;
+  bool get portrait => config.portrait;
+
+  /// Microphone level 0..1 for the meter (its own notifier: 10 updates a second).
+  final ValueNotifier<double> audioLevel = ValueNotifier(0);
+  StreamSubscription<double>? _audioSub;
+  StreamSubscription<bool>? _lensSub;
+
   bool _publisherConnected = false;
   bool _refreshKeyBeforeRetry = false;
   final _backoff = Backoff(base: const Duration(seconds: 1), max: const Duration(seconds: 8));
@@ -68,6 +87,12 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
       uploadKbps = k;
       _notify();
     });
+    _audioSub = CgStreamer.audioLevel.listen((l) => audioLevel.value = l);
+    _lensSub = CgStreamer.lensSwitching.listen((on) {
+      lensSwitching = on;
+      if (!on) unawaited(_refreshCaps());
+      _notify();
+    });
 
     final l = RealtimeLink(
       serverUrl: session.serverUrl,
@@ -84,6 +109,8 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     try {
       actual = await CgStreamer.initialize(config);
       phase = CameraPhase.ready;
+      await _refreshCaps();
+      _capsLater();
     } on PlatformException catch (e) {
       phase = CameraPhase.error;
       message = e.message ?? 'The camera could not be opened.';
@@ -149,10 +176,180 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> switchCamera() async {
     try {
       await CgStreamer.switchCamera();
+      zoom = 1;
+      torch = false;
+      aeAfLocked = false;
+      _notify();
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      await _refreshCaps();
     } on PlatformException catch (e) {
       message = e.message;
       _notify();
     }
+  }
+
+  // ---------------------------------------------------------------- camera controls
+  Future<void> _refreshCaps() async {
+    try {
+      caps = await CgStreamer.cameraCaps();
+      zoom = zoom.clamp(caps.zoomMin, caps.zoomMax).toDouble();
+      _notify();
+    } on PlatformException {
+      // older plugin / camera closed: controls stay hidden
+    } on MissingPluginException {
+      // same
+    }
+  }
+
+  /// The camera opens with the preview a moment after initialize: read what it can do again.
+  void _capsLater() {
+    for (final ms in const [1200, 2500]) {
+      Future<void>.delayed(Duration(milliseconds: ms), () {
+        if (!_disposed) unawaited(_refreshCaps());
+      });
+    }
+  }
+
+  // Dragging an arc sends many values: one native call at a time, always the latest value.
+  final Map<String, double> _pending = {};
+  final Set<String> _busy = {};
+  Future<void> _send(String key, double value, Future<void> Function(double) call) async {
+    _pending[key] = value;
+    if (_busy.contains(key)) return;
+    _busy.add(key);
+    try {
+      while (_pending.containsKey(key)) {
+        final v = _pending.remove(key)!;
+        try {
+          await call(v);
+        } on PlatformException catch (e) {
+          message = e.message;
+          _notify();
+        }
+      }
+    } finally {
+      _busy.remove(key);
+    }
+  }
+
+  void setZoom(double z) {
+    final v = z.clamp(caps.zoomMin, caps.zoomMax).toDouble();
+    if ((v - zoom).abs() < 0.005) return;
+    zoom = v;
+    _notify();
+    unawaited(_send('zoom', v, CgStreamer.setZoom));
+  }
+
+  void setBrightness(double value) {
+    final v = value.clamp(caps.evMin, caps.evMax).toDouble();
+    ev = (v / caps.evStep).round() * caps.evStep;
+    _notify();
+    unawaited(_send('ev', ev, CgStreamer.setExposureBias));
+  }
+
+  /// Tap on the picture: focus and set brightness there (also ends a lock).
+  Future<void> focusAt(double x, double y) async {
+    aeAfLocked = false;
+    _notify();
+    try {
+      await CgStreamer.focusAt(x, y);
+    } on PlatformException catch (e) {
+      message = e.message;
+      _notify();
+    }
+  }
+
+  /// Long-press on the picture: hold focus and brightness on that point.
+  Future<void> lockAt(double x, double y) async {
+    aeAfLocked = true;
+    HapticFeedback.mediumImpact();
+    _notify();
+    try {
+      await CgStreamer.setAeAfLock(true, x: x, y: y);
+    } on PlatformException catch (e) {
+      aeAfLocked = false;
+      message = e.message;
+      _notify();
+    }
+  }
+
+  Future<void> unlockAeAf() async {
+    aeAfLocked = false;
+    _notify();
+    try {
+      await CgStreamer.setAeAfLock(false);
+    } on PlatformException catch (e) {
+      message = e.message;
+      _notify();
+    }
+  }
+
+  Future<void> setAutoFocus(bool on) async {
+    autoFocus = on;
+    _notify();
+    try {
+      await CgStreamer.setAutoFocus(on);
+    } on PlatformException catch (e) {
+      message = e.message;
+      _notify();
+    }
+  }
+
+  void setFocusNear(double near) {
+    focusNear = near.clamp(0, 1).toDouble();
+    _notify();
+    unawaited(_send('focus', focusNear, CgStreamer.setFocusDistance));
+  }
+
+  Future<void> toggleTorch() async {
+    final want = !torch;
+    torch = want;
+    _notify();
+    try {
+      await CgStreamer.setTorch(want);
+    } on PlatformException catch (e) {
+      torch = false;
+      message = e.message;
+      _notify();
+    }
+  }
+
+  void setControlsLocked(bool on) {
+    controlsLocked = on;
+    HapticFeedback.selectionClick();
+    _notify();
+  }
+
+  /// Portrait (9:16) or landscape (16:9). Not while ON AIR: the camera reconnects (a few seconds).
+  /// The screen must already be turned (the caller sets the allowed orientations first).
+  Future<bool> setPortrait(bool on) async {
+    if (on == portrait) return true;
+    if (onAir) {
+      message = 'Change portrait / landscape when this camera is not ON AIR.';
+      _notify();
+      return false;
+    }
+    final resume = wantLive;
+    if (resume) await stopLive();
+    config = config.copyWith(portrait: on);
+    phase = CameraPhase.starting;
+    _notify();
+    // Give the screen time to turn: the camera reads the screen's rotation.
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    try {
+      actual = await CgStreamer.initialize(config);
+      phase = CameraPhase.ready;
+      message = on ? 'Portrait 9:16. In the 16:9 show this camera has black bars at the sides.' : null;
+      await _refreshCaps();
+      _capsLater();
+    } on PlatformException catch (e) {
+      phase = CameraPhase.error;
+      message = e.message ?? 'The camera could not be opened.';
+    }
+    _sendTelemetry();
+    _notify();
+    if (resume && phase == CameraPhase.ready) await goLive();
+    return true;
   }
 
   // ---------------------------------------------------------------- publishing
@@ -334,6 +531,8 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     }
     await _stateSub?.cancel();
     await _kbpsSub?.cancel();
+    await _audioSub?.cancel();
+    await _lensSub?.cancel();
     await _msgSub?.cancel();
     link?.state.removeListener(_notify);
     await link?.close();
@@ -343,6 +542,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void dispose() {
     _disposed = true;
+    audioLevel.dispose();
     super.dispose();
   }
 }

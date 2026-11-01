@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
@@ -90,10 +91,18 @@ class CgStreamerPlugin :
     }
 
     // ---------------------------------------------------------------- ActivityAware
+    // The phone turned round (e.g. landscape left <-> landscape right): keep the picture upright.
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) = StreamEngine.updateOrientation()
+    }
+
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
         activityBinding = binding
         binding.addRequestPermissionsResultListener(this)
+        (appContext.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager)?.registerDisplayListener(displayListener, null)
     }
 
     override fun onDetachedFromActivityForConfigChanges() = onDetachedFromActivity()
@@ -101,6 +110,7 @@ class CgStreamerPlugin :
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) = onAttachedToActivity(binding)
 
     override fun onDetachedFromActivity() {
+        (appContext.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager)?.unregisterDisplayListener(displayListener)
         activityBinding?.removeRequestPermissionsResultListener(this)
         activityBinding = null
         activity = null
@@ -123,6 +133,7 @@ class CgStreamerPlugin :
                         audioBitrate = call.argument<Int>("audioBitrate") ?: 128_000,
                         front = call.argument<String>("facing") == "front",
                         keyframeInterval = call.argument<Int>("keyframeInterval") ?: 2,
+                        portrait = call.argument<Boolean>("portrait") ?: false,
                     )
                     result.success(StreamEngine.initialize(appContext, activity ?: appContext, cfg))
                 }
@@ -139,6 +150,32 @@ class CgStreamerPlugin :
                 }
                 "switchCamera" -> {
                     StreamEngine.switchCamera()
+                    result.success(null)
+                }
+                "cameraCaps" -> result.success(StreamEngine.caps())
+                "setZoom" -> result.success(StreamEngine.setZoom(num(call, "zoom") ?: 1f).toDouble())
+                "setExposureBias" -> {
+                    StreamEngine.setExposureBias(num(call, "ev") ?: 0f)
+                    result.success(null)
+                }
+                "focusAt" -> {
+                    StreamEngine.focusAt(num(call, "x") ?: 0.5f, num(call, "y") ?: 0.5f)
+                    result.success(null)
+                }
+                "setAutoFocus" -> {
+                    StreamEngine.setAutoFocus(call.argument<Boolean>("on") ?: true)
+                    result.success(null)
+                }
+                "setFocusDistance" -> {
+                    StreamEngine.setFocusDistance(num(call, "near") ?: 0f)
+                    result.success(null)
+                }
+                "setAeAfLock" -> {
+                    StreamEngine.setAeAfLock(call.argument<Boolean>("lock") ?: false, num(call, "x"), num(call, "y"))
+                    result.success(null)
+                }
+                "setTorch" -> {
+                    StreamEngine.setTorch(call.argument<Boolean>("on") ?: false)
                     result.success(null)
                 }
                 "setVideoBitrate" -> {
@@ -166,6 +203,9 @@ class CgStreamerPlugin :
             result.error("native_error", e.message ?: e.javaClass.simpleName, null)
         }
     }
+
+    /** Dart numbers arrive as Double or Int. */
+    private fun num(call: MethodCall, key: String): Float? = (call.argument<Any>(key) as? Number)?.toFloat()
 
     private fun hasPermission(p: String) = ContextCompat.checkSelfPermission(appContext, p) == PackageManager.PERMISSION_GRANTED
 
