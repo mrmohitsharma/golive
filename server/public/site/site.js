@@ -275,6 +275,44 @@
     reveals.forEach(function (n) { io.observe(n); });
   } else reveals.forEach(function (n) { n.classList.add('in'); });
 
+  // ---------------------------------------------------------------- Live in 4 steps
+  // The step in the middle of the screen is "on": its scene plays on the drawn screen.
+  var story = document.getElementById('story-steps');
+  if (story) {
+    var sts = story.querySelectorAll('.st');
+    var scenes = document.querySelectorAll('.story-screen .scene');
+    var section = story.closest('.story');
+    whileVisible(section);
+    var current = -1;
+    var show = function (i) {
+      if (i === current) return;
+      current = i;
+      sts.forEach(function (n, k) { n.classList.toggle('on', k === i); n.classList.toggle('done', k < i); });
+      // Restart the scene's animation each time it comes back.
+      scenes.forEach(function (sc, k) {
+        if (k === i) { sc.classList.remove('on'); void sc.getBoundingClientRect(); sc.classList.add('on'); }
+        else sc.classList.remove('on');
+      });
+    };
+    var pick = function () {
+      var mid = window.innerHeight * (window.innerWidth < 900 ? 0.7 : 0.5);
+      var best = 0;
+      sts.forEach(function (n, k) { if (n.getBoundingClientRect().top < mid) best = k; });
+      show(best);
+      var r = story.getBoundingClientRect();
+      var p = Math.min(1, Math.max(0, (mid - r.top) / Math.max(1, r.height - window.innerHeight * 0.3)));
+      story.style.setProperty('--p', (reduced ? 1 : p).toFixed(3));
+    };
+    var ticking = false;
+    window.addEventListener('scroll', function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () { ticking = false; pick(); });
+    }, { passive: true });
+    window.addEventListener('resize', pick);
+    pick();
+  }
+
   // Steps: the connecting line fills as the section scrolls through the viewport.
   var steps = document.getElementById('steps');
   if (steps) {

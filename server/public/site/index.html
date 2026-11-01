@@ -11,9 +11,8 @@
 <meta property="og:url" content="{{BASE_URL}}/">
 <meta name="theme-color" content="#060b16">
 <link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<link rel="preload" href="/site/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/site/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/site/site.css">
 </head>
 <body>
@@ -26,10 +25,10 @@
       <div class="hero-top">
         <h1 id="hero-title"><span class="line"><span>Every event.</span></span><span class="line"><span>Live.</span></span><span class="line"><span>Everywhere.</span></span></h1>
         <div class="hero-side">
-          <p class="lede">Golf days, cricket finals, weddings, concerts, conferences, marathons. {{BRAND}} turns the phones already there into a multi-camera show, mixes it in the cloud and streams it to YouTube, Facebook, Instagram and your own watch page at once.</p>
+          <p class="lede">Golf days, cricket finals, weddings, concerts, conferences, marathons. {{BRAND}} turns the phones already there into a multi-camera show, mixes it in the cloud and streams it to your own watch page, YouTube, Facebook and Instagram at once. Live in 4 steps.</p>
           <div class="hero-cta">
             <a class="btn btn-live" href="/signup"><span class="dot" aria-hidden="true"></span>Start broadcasting free</a>
-            <a class="btn btn-ghost" href="#director">See how it works</a>
+            <a class="btn btn-ghost" href="#how">See the 4 steps</a>
           </div>
           <p class="hero-note">2 cameras and 10 live minutes free on every event. No card needed.</p>
         </div>
@@ -140,72 +139,148 @@
       <div class="section-head" data-reveal>
         <p class="kicker">Everything included</p>
         <h2 id="kit-title">Everything a broadcast truck does. None of the truck.</h2>
-        <p>Cameras, mixing, graphics, replays, commentary and streaming to every platform, in one app and one bill.</p>
+        <p>Cameras, mixing, graphics, replays, commentary, viewer games and streaming to every platform, in one app and one bill.</p>
       </div>
       <dl class="specs" id="specs">
         <div class="spec wide" data-reveal>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
-          <dt>Up to 10 phone cameras per event</dt>
-          <dd>Any Android phone or iPhone becomes a camera. Volunteers scan a QR code, with no account needed. Video holds up on 4G with as little as 1.5 Mbps upload.</dd>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
+          <dt>Phones that shoot like pro cameras</dt>
+          <dd>Any Android phone or iPhone, joined with a QR code and no account. Brightness and zoom on thumb arcs, the 0.5× wide lens, tap to focus, focus lock, torch and a mic you can mute. Pocket mode saves battery while it streams.</dd>
         </div>
         <div class="spec" data-reveal>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z"/></svg>
-          <dt>Mixed in the cloud</dt>
-          <dd>No laptop or strong venue internet. Prefer your own laptop? That works too.</dd>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z"/></svg>
+          <dt>Cloud OBS or Laptop OBS</dt>
+          <dd>We mix the show on our servers, or use OBS on your own laptop. Cloud OBS turns itself off when you stop, so you never pay for a forgotten server.</dd>
         </div>
         <div class="spec" data-reveal>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></svg>
-          <dt>Every platform at once</dt>
-          <dd>YouTube, your Facebook Page and Instagram together. Instagram gets its own vertical version.</dd>
-        </div>
-        <div class="spec" data-reveal>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 8v4l3 2"/></svg>
-          <dt>Replays and clips</dt>
-          <dd>Slow-motion replays on air, highlight clips in 16:9 and 9:16 ready to post.</dd>
-        </div>
-        <div class="spec" data-reveal>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>
-          <dt>Commentary from anywhere</dt>
-          <dd>A commentator talks over the show from their own phone. Event sound dips under their voice.</dd>
-        </div>
-        <div class="spec wide" data-reveal>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
-          <dt>One chat for every viewer</dt>
-          <dd>YouTube comments, Facebook comments and your watch-page chat in one list. Put a viewer's question on screen for the commentator to answer.</dd>
-        </div>
-        <div class="spec" data-reveal>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M10 8.5v5l4-2.5z"/><path d="M8 22h8"/></svg>
           <dt>Your own watch page</dt>
-          <dd>Live video, leaderboard, chat and clips on one shareable page. Embed it on your website.</dd>
+          <dd>Our ad-free player through a fast global network: live video, chat, scores and clips on one link. Embed it on your website.</dd>
         </div>
         <div class="spec" data-reveal>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6z"/></svg>
-          <dt>Never dead air</dt>
-          <dd>If the camera on air drops, a "back soon" screen covers it automatically.</dd>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></svg>
+          <dt>Every platform at once</dt>
+          <dd>YouTube, your Facebook Page, Instagram and any service with a stream key, together. Vertical 9:16 for phone-first platforms.</dd>
         </div>
         <div class="spec wide" data-reveal>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
+          <dt>Games that keep viewers watching</dt>
+          <dd>Quizzes, polls, predictions, spin the wheel and lucky draws pop up over the stream, with prizes from your sponsors. Viewers earn points, climb the Top players list, send live reactions and get a confetti celebration when they win.</dd>
+        </div>
+        <div class="spec" data-reveal>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 8v4l3 2"/></svg>
+          <dt>Graphics, replays and clips</dt>
+          <dd>Scores, leaderboards and name captions on screen. Slow-motion replays on air and highlight clips in 16:9 and 9:16.</dd>
+        </div>
+        <div class="spec" data-reveal>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>
+          <dt>Commentary from anywhere</dt>
+          <dd>A commentator talks over the show from a phone or the website. Event sound dips under their voice.</dd>
+        </div>
+        <div class="spec" data-reveal>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+          <dt>One chat for every viewer</dt>
+          <dd>YouTube, Facebook and watch-page comments in one list. Put a viewer's question on screen.</dd>
+        </div>
+        <div class="spec wide" data-reveal>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+          <dt>Built to stay on air</dt>
+          <dd>Phones reconnect by themselves. If the camera on air drops, or its operator gets a phone call, the show switches to another camera or a "back soon" screen. The director sees ON A CALL, MIC OFF and battery for every phone.</dd>
+        </div>
+        <div class="spec" data-reveal>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           <dt>Pay per live minute</dt>
           <dd>No subscription, no hardware. The app warns you before credits run out.</dd>
         </div>
+        <div class="spec wide" data-reveal>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>
+          <dt>Help at every step</dt>
+          <dd>Setup steps on first login, a product tour, a step-by-step guide, and support tickets with screenshots.</dd>
+        </div>
       </dl>
+      <p class="specs-more" data-reveal><a class="btn btn-ghost" href="/features">See every feature <span aria-hidden="true">→</span></a></p>
     </div>
   </section>
 
-  <section class="section" id="how" aria-labelledby="how-title">
+  <section class="section story" id="how" aria-labelledby="how-title">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <linearGradient id="st-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#d6efff"/></linearGradient>
+  <symbol id="st-pic" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><rect width="160" height="90" fill="url(#st-sky)"/><circle cx="128" cy="20" r="9" fill="#ffe08a"/><path d="M0 62 Q40 40 80 56 T160 50 V90 H0z" fill="#3fae5a"/><path d="M0 74 Q60 60 160 70 V90 H0z" fill="#2f8f48"/><rect x="98" y="34" width="1.6" height="22" fill="#fff"/><path d="M99.6 34 l10 4 -10 4z" fill="#ee3b2f"/><ellipse cx="99" cy="56.5" rx="5" ry="1.4" fill="#1d5e30"/><g class="st-golfer"><circle cx="46" cy="44" r="3.2" fill="#2b1d14"/><rect x="43" y="47" width="6" height="12" rx="2.5" fill="#ee3b2f"/><rect x="44" y="58" width="2" height="9" fill="#24324a"/><rect x="47" y="58" width="2" height="9" fill="#24324a"/><path class="st-club" d="M48 49 L58 40" stroke="#ddd" stroke-width="1.4"/></g></symbol>
+  <symbol id="st-pic2" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice"><rect width="160" height="90" fill="#1d2b44"/><rect y="52" width="160" height="38" fill="#2f8f48"/><g fill="#e8eef5" opacity=".75"><circle cx="20" cy="40" r="3"/><circle cx="34" cy="38" r="3"/><circle cx="48" cy="41" r="3"/><circle cx="62" cy="38" r="3"/><circle cx="76" cy="40" r="3"/><circle cx="90" cy="38" r="3"/><circle cx="104" cy="41" r="3"/><circle cx="118" cy="38" r="3"/><circle cx="132" cy="40" r="3"/><circle cx="146" cy="38" r="3"/></g><rect x="30" y="58" width="100" height="3" fill="#fff" opacity=".6"/><circle cx="80" cy="70" r="4" fill="#fff"/></symbol>
+</defs></svg>
     <div class="wrap">
       <div class="section-head" data-reveal>
         <p class="kicker">How it works</p>
-        <h2 id="how-title">From sign-up to live in five steps.</h2>
-        <p>Most organisers run their first test broadcast in under half an hour.</p>
+        <h2 id="how-title">Live in 4 steps.</h2>
+        <p>No crew, no van, no cables. Most organisers run their first test show in under half an hour, and the app walks you through every step.</p>
       </div>
-      <ol class="steps" id="steps">
-        <li><h3>Create your event</h3><p>Sign up, name the event and choose where it streams: YouTube, your Facebook Page or Instagram.</p></li>
-        <li><h3>Hand out camera codes</h3><p>Share the QR code. Each volunteer scans it, names their camera and taps Go live.</p></li>
-        <li><h3>Direct from one device</h3><p>See every camera on your phone or tablet. Pick shots, add scores, play replays.</p></li>
-        <li><h3>Go live everywhere</h3><p>One tap starts the show on every platform you chose, plus your watch page.</p></li>
-        <li><h3>Keep the highlights</h3><p>The full video stays on your channel. Clips are ready before the crowd gets home.</p></li>
-      </ol>
+      <div class="story-grid">
+        <div class="story-stage" aria-hidden="false">
+          <div class="story-screen">
+        <!-- 1. Create the event -->
+        <svg class="scene" data-scene="0" viewBox="0 0 480 300" role="img" aria-label="A new event form: name typed in, Cloud OBS chosen, Create pressed, event ready.">
+          <rect x="40" y="20" width="400" height="260" rx="16" fill="#0e1828" stroke="#1f2d44" stroke-width="2"/>
+          <circle cx="62" cy="40" r="5" fill="#ee3b2f"/><circle cx="78" cy="40" r="5" fill="#f5b53d"/><circle cx="94" cy="40" r="5" fill="#22b863"/>
+          <text x="70" y="82" font-size="24" font-weight="800" fill="#e8eef5" class="disp">New event</text>
+          <text x="70" y="112" font-size="12" fill="#93a2b6">Event name</text>
+          <rect x="70" y="120" width="340" height="38" rx="8" fill="#060b16" stroke="#2c3d5a"/>
+          <text x="84" y="145" font-size="16" fill="#fff">Monsoon Golf Open</text>
+          <rect class="st-typing" x="82" y="126" width="170" height="26" fill="#060b16"/>
+          <rect class="st-caret" x="84" y="130" width="2" height="20" fill="#f5b53d"/>
+          <text x="70" y="186" font-size="12" fill="#93a2b6">Mixed by</text>
+          <g class="st-chip st-chip-a"><rect x="70" y="194" width="140" height="34" rx="17" fill="#060b16" stroke="#2c3d5a"/><text x="140" y="216" text-anchor="middle" font-size="13" font-weight="600" fill="#e8eef5">☁ Cloud OBS</text></g>
+          <g><rect x="222" y="194" width="140" height="34" rx="17" fill="#060b16" stroke="#2c3d5a"/><text x="292" y="216" text-anchor="middle" font-size="13" font-weight="600" fill="#93a2b6">💻 Laptop OBS</text></g>
+          <g class="st-create"><rect x="70" y="240" width="140" height="28" rx="14" fill="#ee3b2f"/><text x="140" y="259" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">Create event</text></g>
+          <g class="st-ready"><rect x="250" y="238" width="160" height="32" rx="16" fill="#22b863"/><text x="330" y="259" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">✓ Event ready</text></g>
+        </svg>
+
+        <!-- 2. Phones join with a QR code -->
+        <svg class="scene" data-scene="1" viewBox="0 0 480 300" role="img" aria-label="Three phones scan the event QR code and each becomes a live camera.">
+          <rect x="185" y="95" width="110" height="110" rx="12" fill="#fff"/>
+          <g fill="#0b1322"><rect x="187.5" y="97.5" width="5" height="5"/><rect x="187.5" y="102.5" width="5" height="5"/><rect x="187.5" y="107.5" width="5" height="5"/><rect x="187.5" y="112.5" width="5" height="5"/><rect x="187.5" y="117.5" width="5" height="5"/><rect x="187.5" y="122.5" width="5" height="5"/><rect x="187.5" y="127.5" width="5" height="5"/><rect x="187.5" y="137.5" width="5" height="5"/><rect x="187.5" y="142.5" width="5" height="5"/><rect x="187.5" y="152.5" width="5" height="5"/><rect x="187.5" y="167.5" width="5" height="5"/><rect x="187.5" y="172.5" width="5" height="5"/><rect x="187.5" y="177.5" width="5" height="5"/><rect x="187.5" y="182.5" width="5" height="5"/><rect x="187.5" y="187.5" width="5" height="5"/><rect x="187.5" y="192.5" width="5" height="5"/><rect x="187.5" y="197.5" width="5" height="5"/><rect x="192.5" y="97.5" width="5" height="5"/><rect x="192.5" y="127.5" width="5" height="5"/><rect x="192.5" y="137.5" width="5" height="5"/><rect x="192.5" y="142.5" width="5" height="5"/><rect x="192.5" y="152.5" width="5" height="5"/><rect x="192.5" y="157.5" width="5" height="5"/><rect x="192.5" y="167.5" width="5" height="5"/><rect x="192.5" y="197.5" width="5" height="5"/><rect x="197.5" y="97.5" width="5" height="5"/><rect x="197.5" y="107.5" width="5" height="5"/><rect x="197.5" y="112.5" width="5" height="5"/><rect x="197.5" y="117.5" width="5" height="5"/><rect x="197.5" y="127.5" width="5" height="5"/><rect x="197.5" y="137.5" width="5" height="5"/><rect x="197.5" y="142.5" width="5" height="5"/><rect x="197.5" y="147.5" width="5" height="5"/><rect x="197.5" y="157.5" width="5" height="5"/><rect x="197.5" y="167.5" width="5" height="5"/><rect x="197.5" y="177.5" width="5" height="5"/><rect x="197.5" y="182.5" width="5" height="5"/><rect x="197.5" y="187.5" width="5" height="5"/><rect x="197.5" y="197.5" width="5" height="5"/><rect x="202.5" y="97.5" width="5" height="5"/><rect x="202.5" y="107.5" width="5" height="5"/><rect x="202.5" y="112.5" width="5" height="5"/><rect x="202.5" y="117.5" width="5" height="5"/><rect x="202.5" y="127.5" width="5" height="5"/><rect x="202.5" y="137.5" width="5" height="5"/><rect x="202.5" y="157.5" width="5" height="5"/><rect x="202.5" y="167.5" width="5" height="5"/><rect x="202.5" y="177.5" width="5" height="5"/><rect x="202.5" y="182.5" width="5" height="5"/><rect x="202.5" y="187.5" width="5" height="5"/><rect x="202.5" y="197.5" width="5" height="5"/><rect x="207.5" y="97.5" width="5" height="5"/><rect x="207.5" y="107.5" width="5" height="5"/><rect x="207.5" y="112.5" width="5" height="5"/><rect x="207.5" y="117.5" width="5" height="5"/><rect x="207.5" y="127.5" width="5" height="5"/><rect x="207.5" y="142.5" width="5" height="5"/><rect x="207.5" y="152.5" width="5" height="5"/><rect x="207.5" y="157.5" width="5" height="5"/><rect x="207.5" y="167.5" width="5" height="5"/><rect x="207.5" y="177.5" width="5" height="5"/><rect x="207.5" y="182.5" width="5" height="5"/><rect x="207.5" y="187.5" width="5" height="5"/><rect x="207.5" y="197.5" width="5" height="5"/><rect x="212.5" y="97.5" width="5" height="5"/><rect x="212.5" y="127.5" width="5" height="5"/><rect x="212.5" y="137.5" width="5" height="5"/><rect x="212.5" y="142.5" width="5" height="5"/><rect x="212.5" y="152.5" width="5" height="5"/><rect x="212.5" y="167.5" width="5" height="5"/><rect x="212.5" y="197.5" width="5" height="5"/><rect x="217.5" y="97.5" width="5" height="5"/><rect x="217.5" y="102.5" width="5" height="5"/><rect x="217.5" y="107.5" width="5" height="5"/><rect x="217.5" y="112.5" width="5" height="5"/><rect x="217.5" y="117.5" width="5" height="5"/><rect x="217.5" y="122.5" width="5" height="5"/><rect x="217.5" y="127.5" width="5" height="5"/><rect x="217.5" y="142.5" width="5" height="5"/><rect x="217.5" y="152.5" width="5" height="5"/><rect x="217.5" y="157.5" width="5" height="5"/><rect x="217.5" y="167.5" width="5" height="5"/><rect x="217.5" y="172.5" width="5" height="5"/><rect x="217.5" y="177.5" width="5" height="5"/><rect x="217.5" y="182.5" width="5" height="5"/><rect x="217.5" y="187.5" width="5" height="5"/><rect x="217.5" y="192.5" width="5" height="5"/><rect x="217.5" y="197.5" width="5" height="5"/><rect x="222.5" y="137.5" width="5" height="5"/><rect x="222.5" y="147.5" width="5" height="5"/><rect x="222.5" y="152.5" width="5" height="5"/><rect x="227.5" y="97.5" width="5" height="5"/><rect x="227.5" y="102.5" width="5" height="5"/><rect x="227.5" y="117.5" width="5" height="5"/><rect x="227.5" y="142.5" width="5" height="5"/><rect x="227.5" y="152.5" width="5" height="5"/><rect x="227.5" y="157.5" width="5" height="5"/><rect x="227.5" y="167.5" width="5" height="5"/><rect x="227.5" y="177.5" width="5" height="5"/><rect x="232.5" y="97.5" width="5" height="5"/><rect x="232.5" y="117.5" width="5" height="5"/><rect x="232.5" y="132.5" width="5" height="5"/><rect x="232.5" y="142.5" width="5" height="5"/><rect x="232.5" y="167.5" width="5" height="5"/><rect x="232.5" y="172.5" width="5" height="5"/><rect x="232.5" y="182.5" width="5" height="5"/><rect x="232.5" y="187.5" width="5" height="5"/><rect x="232.5" y="192.5" width="5" height="5"/><rect x="232.5" y="197.5" width="5" height="5"/><rect x="237.5" y="97.5" width="5" height="5"/><rect x="237.5" y="107.5" width="5" height="5"/><rect x="237.5" y="112.5" width="5" height="5"/><rect x="237.5" y="117.5" width="5" height="5"/><rect x="237.5" y="127.5" width="5" height="5"/><rect x="237.5" y="132.5" width="5" height="5"/><rect x="237.5" y="157.5" width="5" height="5"/><rect x="237.5" y="162.5" width="5" height="5"/><rect x="237.5" y="167.5" width="5" height="5"/><rect x="237.5" y="182.5" width="5" height="5"/><rect x="237.5" y="187.5" width="5" height="5"/><rect x="237.5" y="192.5" width="5" height="5"/><rect x="237.5" y="197.5" width="5" height="5"/><rect x="242.5" y="107.5" width="5" height="5"/><rect x="242.5" y="112.5" width="5" height="5"/><rect x="242.5" y="117.5" width="5" height="5"/><rect x="242.5" y="122.5" width="5" height="5"/><rect x="242.5" y="157.5" width="5" height="5"/><rect x="242.5" y="182.5" width="5" height="5"/><rect x="242.5" y="187.5" width="5" height="5"/><rect x="242.5" y="192.5" width="5" height="5"/><rect x="247.5" y="97.5" width="5" height="5"/><rect x="247.5" y="102.5" width="5" height="5"/><rect x="247.5" y="107.5" width="5" height="5"/><rect x="247.5" y="112.5" width="5" height="5"/><rect x="247.5" y="117.5" width="5" height="5"/><rect x="247.5" y="122.5" width="5" height="5"/><rect x="247.5" y="127.5" width="5" height="5"/><rect x="247.5" y="132.5" width="5" height="5"/><rect x="247.5" y="137.5" width="5" height="5"/><rect x="247.5" y="142.5" width="5" height="5"/><rect x="247.5" y="147.5" width="5" height="5"/><rect x="247.5" y="162.5" width="5" height="5"/><rect x="247.5" y="167.5" width="5" height="5"/><rect x="247.5" y="172.5" width="5" height="5"/><rect x="247.5" y="177.5" width="5" height="5"/><rect x="247.5" y="182.5" width="5" height="5"/><rect x="247.5" y="197.5" width="5" height="5"/><rect x="252.5" y="142.5" width="5" height="5"/><rect x="252.5" y="147.5" width="5" height="5"/><rect x="252.5" y="152.5" width="5" height="5"/><rect x="252.5" y="157.5" width="5" height="5"/><rect x="252.5" y="167.5" width="5" height="5"/><rect x="252.5" y="172.5" width="5" height="5"/><rect x="252.5" y="187.5" width="5" height="5"/><rect x="252.5" y="197.5" width="5" height="5"/><rect x="257.5" y="97.5" width="5" height="5"/><rect x="257.5" y="102.5" width="5" height="5"/><rect x="257.5" y="107.5" width="5" height="5"/><rect x="257.5" y="112.5" width="5" height="5"/><rect x="257.5" y="117.5" width="5" height="5"/><rect x="257.5" y="122.5" width="5" height="5"/><rect x="257.5" y="127.5" width="5" height="5"/><rect x="257.5" y="157.5" width="5" height="5"/><rect x="257.5" y="162.5" width="5" height="5"/><rect x="257.5" y="167.5" width="5" height="5"/><rect x="257.5" y="187.5" width="5" height="5"/><rect x="257.5" y="192.5" width="5" height="5"/><rect x="262.5" y="97.5" width="5" height="5"/><rect x="262.5" y="127.5" width="5" height="5"/><rect x="262.5" y="162.5" width="5" height="5"/><rect x="262.5" y="172.5" width="5" height="5"/><rect x="262.5" y="177.5" width="5" height="5"/><rect x="262.5" y="182.5" width="5" height="5"/><rect x="262.5" y="187.5" width="5" height="5"/><rect x="262.5" y="192.5" width="5" height="5"/><rect x="267.5" y="97.5" width="5" height="5"/><rect x="267.5" y="107.5" width="5" height="5"/><rect x="267.5" y="112.5" width="5" height="5"/><rect x="267.5" y="117.5" width="5" height="5"/><rect x="267.5" y="127.5" width="5" height="5"/><rect x="267.5" y="142.5" width="5" height="5"/><rect x="267.5" y="162.5" width="5" height="5"/><rect x="267.5" y="167.5" width="5" height="5"/><rect x="267.5" y="172.5" width="5" height="5"/><rect x="267.5" y="177.5" width="5" height="5"/><rect x="267.5" y="182.5" width="5" height="5"/><rect x="272.5" y="97.5" width="5" height="5"/><rect x="272.5" y="107.5" width="5" height="5"/><rect x="272.5" y="112.5" width="5" height="5"/><rect x="272.5" y="117.5" width="5" height="5"/><rect x="272.5" y="127.5" width="5" height="5"/><rect x="272.5" y="137.5" width="5" height="5"/><rect x="272.5" y="152.5" width="5" height="5"/><rect x="272.5" y="177.5" width="5" height="5"/><rect x="272.5" y="182.5" width="5" height="5"/><rect x="272.5" y="192.5" width="5" height="5"/><rect x="277.5" y="97.5" width="5" height="5"/><rect x="277.5" y="107.5" width="5" height="5"/><rect x="277.5" y="112.5" width="5" height="5"/><rect x="277.5" y="117.5" width="5" height="5"/><rect x="277.5" y="127.5" width="5" height="5"/><rect x="277.5" y="142.5" width="5" height="5"/><rect x="277.5" y="147.5" width="5" height="5"/><rect x="277.5" y="162.5" width="5" height="5"/><rect x="277.5" y="167.5" width="5" height="5"/><rect x="277.5" y="172.5" width="5" height="5"/><rect x="277.5" y="187.5" width="5" height="5"/><rect x="282.5" y="97.5" width="5" height="5"/><rect x="282.5" y="127.5" width="5" height="5"/><rect x="282.5" y="142.5" width="5" height="5"/><rect x="282.5" y="152.5" width="5" height="5"/><rect x="282.5" y="157.5" width="5" height="5"/><rect x="282.5" y="182.5" width="5" height="5"/><rect x="282.5" y="197.5" width="5" height="5"/><rect x="287.5" y="97.5" width="5" height="5"/><rect x="287.5" y="102.5" width="5" height="5"/><rect x="287.5" y="107.5" width="5" height="5"/><rect x="287.5" y="112.5" width="5" height="5"/><rect x="287.5" y="117.5" width="5" height="5"/><rect x="287.5" y="122.5" width="5" height="5"/><rect x="287.5" y="127.5" width="5" height="5"/><rect x="287.5" y="137.5" width="5" height="5"/><rect x="287.5" y="142.5" width="5" height="5"/><rect x="287.5" y="147.5" width="5" height="5"/><rect x="287.5" y="157.5" width="5" height="5"/><rect x="287.5" y="162.5" width="5" height="5"/><rect x="287.5" y="167.5" width="5" height="5"/><rect x="287.5" y="177.5" width="5" height="5"/><rect x="287.5" y="182.5" width="5" height="5"/><rect x="287.5" y="197.5" width="5" height="5"/></g>
+          <rect class="st-scanline" x="187" y="98" width="106" height="3" fill="#ee3b2f" opacity=".85"/>
+          <text x="240" y="228" text-anchor="middle" font-size="12" fill="#93a2b6">Scan to join as a camera</text>
+          <path class="st-beam b1" d="M106 88 Q150 100 185 128" fill="none" stroke="#22b863" stroke-width="2" stroke-dasharray="4 5"/><path class="st-beam b2" d="M374 150 L297 150" fill="none" stroke="#22b863" stroke-width="2" stroke-dasharray="4 5"/><path class="st-beam b3" d="M106 214 Q150 200 185 172" fill="none" stroke="#22b863" stroke-width="2" stroke-dasharray="4 5"/>
+          <g class="st-phone p1" transform="translate(40 28)"><rect width="64" height="112" rx="10" fill="#0b1322" stroke="#3a4a66" stroke-width="2"/><rect x="5" y="10" width="54" height="92" rx="4" fill="#142136"/><g class="st-phone-on"><use href="#st-pic" x="5" y="10" width="54" height="92" preserveAspectRatio="xMidYMid slice"/><rect x="9" y="14" width="30" height="11" rx="3" fill="rgba(0,0,0,.6)"/><text x="24" y="22.5" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff">CAM 1</text><circle cx="50" cy="19.5" r="3" fill="#22b863"/></g><rect x="24" y="4" width="16" height="2.5" rx="1.2" fill="#3a4a66"/></g><g class="st-phone p2" transform="translate(376 94)"><rect width="64" height="112" rx="10" fill="#0b1322" stroke="#3a4a66" stroke-width="2"/><rect x="5" y="10" width="54" height="92" rx="4" fill="#142136"/><g class="st-phone-on"><use href="#st-pic2" x="5" y="10" width="54" height="92" preserveAspectRatio="xMidYMid slice"/><rect x="9" y="14" width="30" height="11" rx="3" fill="rgba(0,0,0,.6)"/><text x="24" y="22.5" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff">CAM 2</text><circle cx="50" cy="19.5" r="3" fill="#22b863"/></g><rect x="24" y="4" width="16" height="2.5" rx="1.2" fill="#3a4a66"/></g><g class="st-phone p3" transform="translate(40 160)"><rect width="64" height="112" rx="10" fill="#0b1322" stroke="#3a4a66" stroke-width="2"/><rect x="5" y="10" width="54" height="92" rx="4" fill="#142136"/><g class="st-phone-on"><use href="#st-pic" x="5" y="10" width="54" height="92" preserveAspectRatio="xMidYMid slice"/><rect x="9" y="14" width="30" height="11" rx="3" fill="rgba(0,0,0,.6)"/><text x="24" y="22.5" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff">CAM 3</text><circle cx="50" cy="19.5" r="3" fill="#22b863"/></g><rect x="24" y="4" width="16" height="2.5" rx="1.2" fill="#3a4a66"/></g>
+          <g class="st-count"><rect x="300" y="250" width="150" height="30" rx="15" fill="#22b863"/><text x="375" y="270" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">3 cameras live</text></g>
+        </svg>
+
+        <!-- 3. Where viewers watch -->
+        <svg class="scene" data-scene="2" viewBox="0 0 480 300" role="img" aria-label="Choosing the main stream: your own watch page, with YouTube and Facebook switched on too.">
+          <rect x="60" y="16" width="360" height="268" rx="16" fill="#0e1828" stroke="#1f2d44" stroke-width="2"/>
+          <text x="84" y="52" font-size="20" font-weight="800" fill="#e8eef5">Where viewers watch</text>
+          <g class="st-opt st-opt-main"><rect x="84" y="66" width="312" height="44" rx="10" fill="#060b16" stroke="#2c3d5a"/><circle cx="108" cy="88" r="11" fill="#ee3b2f"/><path d="M104 82v12l9-6z" fill="#fff"/><text x="128" y="85" font-size="14" font-weight="700" fill="#fff">Your watch page</text><text x="128" y="101" font-size="11" fill="#93a2b6">Our player · no ads · works anywhere</text><text class="st-tick" x="378" y="94" text-anchor="middle" font-size="18" font-weight="800" fill="#22b863">✓</text></g>
+          <text x="84" y="138" font-size="12" fill="#93a2b6">Also stream to</text>
+          <g><rect x="84" y="148" width="312" height="36" rx="10" fill="#060b16" stroke="#2c3d5a"/><rect x="98" y="158" width="22" height="16" rx="4" fill="#ff0033"/><path d="M106 162v8l6-4z" fill="#fff"/><text x="132" y="171" font-size="14" font-weight="600" fill="#e8eef5">YouTube</text><g class="st-tog t1"><rect x="346" y="157" width="36" height="18" rx="9" class="st-tog-bg"/><circle cx="355" cy="166" r="7" fill="#fff" class="st-knob"/></g></g>
+          <g><rect x="84" y="190" width="312" height="36" rx="10" fill="#060b16" stroke="#2c3d5a"/><rect x="98" y="200" width="22" height="16" rx="4" fill="#1877f2"/><text x="109" y="213" text-anchor="middle" font-size="12" font-weight="800" fill="#fff">f</text><text x="132" y="213" font-size="14" font-weight="600" fill="#e8eef5">Facebook Page</text><g class="st-tog t2"><rect x="346" y="199" width="36" height="18" rx="9" class="st-tog-bg"/><circle cx="355" cy="208" r="7" fill="#fff" class="st-knob"/></g></g>
+          <g><rect x="84" y="232" width="312" height="36" rx="10" fill="#060b16" stroke="#2c3d5a"/><rect x="98" y="242" width="22" height="16" rx="5" fill="#d62976"/><circle cx="109" cy="250" r="4" fill="none" stroke="#fff" stroke-width="1.6"/><text x="132" y="255" font-size="14" font-weight="600" fill="#e8eef5">Instagram</text><g class="st-tog"><rect x="346" y="241" width="36" height="18" rx="9" class="st-tog-bg"/><circle cx="355" cy="250" r="7" fill="#fff" class="st-knob"/></g></g>
+        </svg>
+
+        <!-- 4. Go live -->
+        <svg class="scene" data-scene="3" viewBox="0 0 480 300" role="img" aria-label="Control room: a camera picked in the NEXT box, Take moves it to ON AIR, Go live starts the show and viewers react.">
+          <rect x="20" y="16" width="440" height="268" rx="16" fill="#0e1828" stroke="#1f2d44" stroke-width="2"/>
+          <text x="40" y="44" font-size="11" font-weight="700" fill="#22b863" letter-spacing="1">NEXT</text>
+          <rect x="40" y="52" width="120" height="68" rx="6" fill="#060b16" stroke="#22b863" stroke-width="2.5"/>
+          <use class="st-next" href="#st-pic" x="42" y="54" width="116" height="64" preserveAspectRatio="xMidYMid slice"/>
+          <g class="st-take"><rect x="54" y="134" width="92" height="30" rx="8" fill="#22b863"/><text x="100" y="154" text-anchor="middle" font-size="13" font-weight="800" fill="#fff">TAKE ▸</text></g>
+          <g class="st-golive"><rect x="40" y="226" width="120" height="40" rx="20" fill="#ee3b2f"/><text class="st-gl-txt" x="100" y="251" text-anchor="middle" font-size="14" font-weight="800" fill="#fff">GO LIVE</text></g>
+          <text x="182" y="44" font-size="11" font-weight="700" fill="#ee3b2f" letter-spacing="1">ON AIR</text>
+          <rect x="182" y="52" width="258" height="146" rx="8" fill="#060b16" stroke="#ee3b2f" stroke-width="3"/>
+          <use class="st-air" href="#st-pic" x="185" y="55" width="252" height="140" preserveAspectRatio="xMidYMid slice"/>
+          <g class="st-live"><rect x="194" y="62" width="52" height="20" rx="4" fill="#ee3b2f"/><circle cx="204" cy="72" r="3.5" fill="#fff" class="st-blink"/><text x="226" y="76.5" text-anchor="middle" font-size="11" font-weight="800" fill="#fff">LIVE</text></g>
+          <g class="st-viewers"><rect x="182" y="210" width="130" height="30" rx="15" fill="#142136"/><text x="247" y="230" text-anchor="middle" font-size="13" font-weight="700" fill="#e8eef5">👀 1,284 watching</text></g>
+          <g class="st-link"><rect x="322" y="210" width="118" height="30" rx="15" fill="#142136"/><text x="381" y="230" text-anchor="middle" font-size="12" font-weight="700" fill="#22b863">🔗 Link copied</text></g>
+          <g class="st-react" font-size="18"><text x="410" y="190" class="r1">👏</text><text x="390" y="190" class="r2">🔥</text><text x="420" y="190" class="r3">⛳</text><text x="400" y="190" class="r4">👏</text></g>
+        </svg>
+          </div>
+        </div>
+        <ol class="story-steps" id="story-steps">
+          <li class="st" data-step="0"><span class="st-n">1</span><div><h3>Create your event</h3><p>Sign up and name your event. Choose <strong>Cloud OBS</strong> (we mix the show on our servers, nothing to install) or <strong>Laptop OBS</strong> on your own computer.</p></div></li>
+          <li class="st" data-step="1"><span class="st-n">2</span><div><h3>Add phone cameras</h3><p>Share the camera QR code or link on WhatsApp. Volunteers scan it, name their camera and tap Go live. No accounts, any Android phone or iPhone.</p></div></li>
+          <li class="st" data-step="2"><span class="st-n">3</span><div><h3>Choose where viewers watch</h3><p>Your own ad-free watch page, YouTube, your Facebook Page, Instagram or any service with a stream key. Pick a main stream and switch on as many extra places as you like.</p></div></li>
+          <li class="st" data-step="3"><span class="st-n">4</span><div><h3>Go live</h3><p>In the control room: pick a camera, press <strong>Take</strong>, press <strong>Go live</strong>. Share the watch link and you're on air everywhere at once.</p></div></li>
+        </ol>
+      </div>
     </div>
   </section>
 
@@ -252,6 +327,9 @@
         <details><summary>Do I need special cameras or equipment?</summary><p>No. Any recent Android phone or iPhone works as a camera. A tripod or clamp helps keep the shot steady. The director needs one phone or tablet.</p></details>
         <details><summary>What internet do the cameras need?</summary><p>About 2.5 Mbps upload per camera at 720p on 4G, or 1.5 Mbps on a weak signal. With cloud mixing nothing else at the venue needs a connection.</p></details>
         <details><summary>Do viewers need to install anything?</summary><p>No. They watch on YouTube, Facebook, Instagram or your watch page in any browser.</p></details>
+        <details><summary>Do I need a YouTube channel?</summary><p>No. Every event can stream to its own watch page with our ad-free player, which works on any phone or computer and can be embedded on your website. Add YouTube, Facebook or Instagram as well if you like.</p></details>
+        <details><summary>What if a camera operator gets a phone call?</summary><p>On Android the video keeps going and the phone pauses only the sound during the call. If that camera is on air, the show switches to another camera automatically and the director sees ON A CALL. When the operator returns to the app the camera picks up again.</p></details>
+        <details><summary>Can viewers play along?</summary><p>Yes. Quizzes, polls, predictions, spin the wheel and lucky draws pop up on the watch page while the video keeps playing. Viewers earn points, see the Top players and win prizes you set up.</p></details>
         <details><summary>Is it really live?</summary><p>The director sees the cameras with under a second of delay. Viewers on YouTube and Facebook are usually 10 to 30 seconds behind, which is normal for those platforms.</p></details>
         <details><summary>Does the video go on my own YouTube channel?</summary><p>Yes. You connect your channel once and every broadcast appears there, so the views, subscribers and recording are yours.</p></details>
         <details><summary>What happens if my credits run out mid-show?</summary><p>The director is warned at 10 minutes and again at 2 minutes left. If credits reach zero the show keeps going for a few grace minutes so you can top up, then it ends cleanly.</p></details>
@@ -269,7 +347,7 @@
   </section>
 </main>
 {{> footer}}
-<script src="/site/scenes.js"></script>
+<script src="/site/scenes.js" defer></script>
 <script src="/site/site.js" defer></script>
 </body>
 </html>

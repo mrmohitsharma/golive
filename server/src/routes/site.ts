@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +22,7 @@ const PAGES: Record<string, string> = {
   '/terms': 'terms.html',
   '/privacy': 'privacy.html',
   '/delete-account': 'delete-account.html',
+  '/features': 'features.html',
 };
 
 const ASSETS: Record<string, string> = {
@@ -35,7 +37,38 @@ const ASSETS: Record<string, string> = {
   'hls-1.5.20.light.min.js': 'text/javascript; charset=utf-8',
   'hls.js.LICENSE.txt': 'text/plain; charset=utf-8',
   'player.js': 'text/javascript; charset=utf-8',
+  'features.js': 'text/javascript; charset=utf-8',
+  // Barlow (SIL Open Font License), served here instead of Google Fonts: no extra connections.
+  'barlow-400.woff2': 'font/woff2',
+  'barlow-600.woff2': 'font/woff2',
+  'barlow-condensed-700.woff2': 'font/woff2',
+  'barlow-condensed-800.woff2': 'font/woff2',
+  'fonts-OFL.txt': 'text/plain; charset=utf-8',
 };
+
+/** Short content hash of a site file, for ?v= cache busting (cached per process in production). */
+const hashes = new Map<string, string>();
+function versionOf(file: string): string | null {
+  if (!siteDir || !ASSETS[file]) return null;
+  const prod = process.env.NODE_ENV === 'production';
+  const hit = prod ? hashes.get(file) : undefined;
+  if (hit) return hit;
+  try {
+    const h = crypto.createHash('sha1').update(fs.readFileSync(path.join(siteDir, file))).digest('hex').slice(0, 10);
+    hashes.set(file, h);
+    return h;
+  } catch {
+    return null;
+  }
+}
+
+/** Adds ?v=<hash> to /site/<file> links so browsers can keep them for a year. */
+export function versionAssets(html: string): string {
+  return html.replace(/(["'(])\/site\/([A-Za-z0-9._-]+)(?=["')])/g, (m, pre: string, file: string) => {
+    const v = versionOf(file);
+    return v ? `${pre}/site/${file}?v=${v}` : m;
+  });
+}
 
 /**
  * Public website: landing page, sign-up / sign-in, account (credits), and the legal pages
@@ -82,8 +115,9 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: Ctx) {
       .replace('{{> header}}', header)
       .replace('{{> footer}}', footer)
       .replace(/\{\{([A-Z_]+)\}\}/g, (m, k: string) => tokens[k] ?? m);
-    cache.set(file, html);
-    return html;
+    const out = versionAssets(html);
+    cache.set(file, out);
+    return out;
   };
 
   const send = (reply: FastifyReply, file: string, cacheable: boolean) => {
@@ -110,8 +144,14 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: Ctx) {
     const type = ASSETS[file];
     if (!type || !siteDir) throw new HttpError(404, 'not_found', 'Not found.');
     reply.type(type);
-    reply.header('Cache-Control', 'public, max-age=3600');
-    return reply.send(fs.readFileSync(path.join(siteDir, file)));
+    // Versioned links (?v=<hash>, added to every page) change when the file changes: keep a year.
+    const versioned = typeof (req.query as { v?: unknown }).v === 'string';
+    reply.header('Cache-Control', versioned ? 'public, max-age=31536000, immutable' : 'public, max-age=3600');
+    if (file.endsWith('.woff2')) reply.header('Access-Control-Allow-Origin', '*');
+    let body = fs.readFileSync(path.join(siteDir, file));
+    // The stylesheet's own links (fonts) get versions too.
+    if (file.endsWith('.css')) body = Buffer.from(versionAssets(body.toString('utf8')));
+    return reply.send(body);
   });
 
   /** Standard prices for the website (a club may have its own deal; the app shows that). */
