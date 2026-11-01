@@ -42,7 +42,9 @@ class _ScorerScreenState extends State<ScorerScreen> {
     super.initState();
     _book.addListener(_changed);
     _init();
-    _poll = Timer.periodic(const Duration(seconds: 20), (_) => _loadBoard());
+    _poll = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) _loadBoard();
+    });
   }
 
   @override

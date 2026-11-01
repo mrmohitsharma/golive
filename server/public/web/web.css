@@ -247,3 +247,8 @@ dialog.welcome { max-width:520px; text-align:left; }
 .cr-idle { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:10px 14px; margin-bottom:12px; font-size:13.5px; }
 .cr-idle.warn { border-color:var(--warn); background:rgba(242,179,61,.1); }
 .cr-grid .empty { grid-column:1/-1; text-align:left; }
+
+/* Camera tile flags from the phone: ON A CALL, PAUSED, MIC OFF */
+.cr-flags { position:absolute; top:6px; left:6px; display:flex; gap:4px; flex-wrap:wrap; pointer-events:none; }
+.cr-flag { font-size:10px; font-weight:800; letter-spacing:.04em; padding:2px 6px; border-radius:4px; background:rgba(0,0,0,.75); color:#fff; border:1px solid rgba(255,255,255,.35); }
+.cr-flag.warn { background:#b26a00; border-color:#ffb300; }

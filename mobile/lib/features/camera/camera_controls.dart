@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -313,49 +314,90 @@ class FocusMarker extends StatelessWidget {
       );
 }
 
-/// Microphone level: green / amber / red bar, so the operator can see sound is coming in.
+/// Microphone button with its level: green / amber / red bar so the operator sees sound is
+/// coming in. Tap to mute (MIC OFF, red) or unmute.
 class MicMeter extends StatelessWidget {
-  const MicMeter({super.key, required this.level});
+  const MicMeter({super.key, required this.level, this.muted = false, this.onTap});
   final ValueNotifier<double> level;
+  final bool muted;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.mic, size: 16, color: Colors.white70),
-          const SizedBox(width: 6),
-          ValueListenableBuilder<double>(
-            valueListenable: level,
-            builder: (context, l, _) {
-              // Shown in decibels (-60 dB .. 0 dB) so quiet speech still moves the bar.
-              final db = l <= 0.001 ? -60.0 : 20 * math.log(l) / math.ln10;
-              final f = ((db + 60) / 60).clamp(0.0, 1.0);
-              final color = f > 0.92 ? Broadcast.onAir : (f > 0.75 ? Broadcast.warning : Broadcast.preview);
-              return Semantics(
-                label: 'Microphone level',
-                value: '${(f * 100).round()}%',
-                child: Container(
-                  width: 54,
-                  height: 6,
-                  decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(3)),
-                  alignment: Alignment.centerLeft,
-                  child: FractionallySizedBox(
-                    widthFactor: f,
-                    child: Container(decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
-                  ),
-                ),
-              );
-            },
+    return Semantics(
+      button: true,
+      label: muted ? 'Microphone off. Tap to turn it on' : 'Microphone on. Tap to mute',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: muted ? Broadcast.onAir : Colors.black54,
+            borderRadius: BorderRadius.circular(20),
           ),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(muted ? Icons.mic_off : Icons.mic, size: 18, color: Colors.white),
+              const SizedBox(width: 6),
+              if (muted)
+                const Text('MIC OFF', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12.5))
+              else
+                ValueListenableBuilder<double>(
+                  valueListenable: level,
+                  builder: (context, l, _) {
+                    // Shown in decibels (-60 dB .. 0 dB) so quiet speech still moves the bar.
+                    final db = l <= 0.001 ? -60.0 : 20 * math.log(l) / math.ln10;
+                    final f = ((db + 60) / 60).clamp(0.0, 1.0);
+                    final color = f > 0.92 ? Broadcast.onAir : (f > 0.75 ? Broadcast.warning : Broadcast.preview);
+                    return Container(
+                      width: 54,
+                      height: 6,
+                      decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(3)),
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        widthFactor: f,
+                        child: Container(decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
+}
+
+/// "Live for 12:34": ticks by itself, so the rest of the camera screen isn't redrawn every second.
+class LiveClock extends StatefulWidget {
+  const LiveClock({super.key, required this.since, required this.builder});
+  final DateTime since;
+  final Widget Function(Duration) builder;
+
+  @override
+  State<LiveClock> createState() => _LiveClockState();
+}
+
+class _LiveClockState extends State<LiveClock> {
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(DateTime.now().difference(widget.since));
 }
 
 /// Small round tool button (AF, light, portrait…) with a short label under the icon.

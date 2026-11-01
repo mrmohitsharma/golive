@@ -372,6 +372,8 @@ class CameraTelemetry {
     this.fps,
     this.thermal,
     this.error,
+    this.micMuted,
+    this.inCall,
   });
 
   final String state;
@@ -384,6 +386,12 @@ class CameraTelemetry {
   final int? fps;
   final String? thermal;
   final String? error;
+
+  /// The operator muted the phone's mic (video still goes out).
+  final bool? micMuted;
+
+  /// A phone call is ringing or in progress on the camera phone.
+  final bool? inCall;
 
   static CameraTelemetry? fromJson(Map<String, dynamic>? j) => j == null
       ? null
@@ -398,6 +406,8 @@ class CameraTelemetry {
           fps: (j['fps'] as num?)?.round(),
           thermal: j['thermal'] as String?,
           error: j['error'] as String?,
+          micMuted: j['micMuted'] as bool?,
+          inCall: j['inCall'] as bool?,
         );
 
   Map<String, dynamic> toJson() => {
@@ -411,6 +421,8 @@ class CameraTelemetry {
         if (fps != null) 'fps': fps,
         if (thermal != null) 'thermal': thermal,
         if (error != null) 'error': error,
+        if (micMuted != null) 'micMuted': micMuted,
+        if (inCall != null) 'inCall': inCall,
       };
 }
 

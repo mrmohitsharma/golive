@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cg_streamer/cg_streamer.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -45,6 +47,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
+    _idle?.cancel();
     _cam.close().whenComplete(_cam.dispose);
     SystemChrome.setPreferredOrientations(const []);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -137,9 +140,13 @@ class _CameraScreenState extends State<CameraScreen> {
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: ListenableBuilder(
-          listenable: _cam,
-          builder: (context, _) => _buildBody(context),
+        body: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) => _touched(),
+          child: ListenableBuilder(
+            listenable: _cam,
+            builder: (context, _) => _buildBody(context),
+          ),
         ),
       ),
     );
@@ -159,7 +166,12 @@ class _CameraScreenState extends State<CameraScreen> {
       return Stack(
         fit: StackFit.expand,
         children: [
-          if (cam.phase != CameraPhase.error) const CgCameraPreview(),
+          // A fresh preview view after the app comes back on iPhone (the old one can stay blank).
+          if (cam.phase != CameraPhase.error)
+            KeyedSubtree(
+              key: ValueKey(defaultTargetPlatform == TargetPlatform.iOS ? cam.resumeCount : 0),
+              child: const CgCameraPreview(),
+            ),
           // Tap = focus and brightness there; long-press = lock them.
           Positioned.fill(
             child: GestureDetector(
@@ -273,6 +285,7 @@ class _CameraScreenState extends State<CameraScreen> {
                                 }),
                     if (locked) _pill('CONTROLS LOCKED · hold the padlock to unlock', Colors.white),
                     if (cam.lensSwitching) _pill('Switching lens…', Colors.white),
+                    if (cam.inCall) _pill('📞 On a call: your video is still live, the sound is paused', Broadcast.warning),
                   ]),
                   const Spacer(),
                   if (cam.message != null || cam.phase == CameraPhase.paused) _messageBanner(cam),
@@ -287,9 +300,88 @@ class _CameraScreenState extends State<CameraScreen> {
             ),
           ),
           if (cam.phase == CameraPhase.starting) const Center(child: CircularProgressIndicator()),
+          if (_pocket) _pocketScreen(cam, frameColor),
         ],
       );
     });
+  }
+
+  // ---------------------------------------------------------------- battery
+  // While live: the screen dims after 30 s without a touch (a touch brings it back), or the
+  // operator picks Pocket mode (black screen, preview not drawn). Video quality never changes.
+  static const _dimAfter = Duration(seconds: 30);
+  Timer? _idle;
+  bool _dimmed = false;
+  bool _pocket = false;
+
+  void _touched() {
+    if (_dimmed) {
+      _dimmed = false;
+      CgStreamer.setScreenDim(false).catchError((Object _) {});
+    }
+    _idle?.cancel();
+    _idle = Timer(_dimAfter, () {
+      if (!mounted || _pocket || !_cam.wantLive) return;
+      _dimmed = true;
+      CgStreamer.setScreenDim(true).catchError((Object _) {});
+    });
+  }
+
+  void _enterPocket() {
+    setState(() => _pocket = true);
+    _idle?.cancel();
+    CgStreamer.setPreviewEnabled(false).catchError((Object _) {});
+    CgStreamer.setScreenDim(true).catchError((Object _) {});
+  }
+
+  void _leavePocket() {
+    setState(() => _pocket = false);
+    _dimmed = false;
+    CgStreamer.setPreviewEnabled(true).catchError((Object _) {});
+    CgStreamer.setScreenDim(false).catchError((Object _) {});
+    _touched();
+  }
+
+  Widget _pocketScreen(CameraSession cam, Color frame) => Positioned.fill(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _leavePocket,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black,
+              border: Border.all(color: frame == Colors.transparent ? Colors.black : frame, width: cam.onAir ? 10 : 6),
+            ),
+            alignment: Alignment.center,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                cam.onAir ? 'ON AIR' : (cam.phase == CameraPhase.live ? 'LIVE TO CONTROL ROOM' : cam.phase.name.toUpperCase()),
+                style: TextStyle(color: cam.onAir ? Broadcast.onAir : Colors.white70, fontSize: 22, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Pocket mode · still streaming${cam.micMuted ? ' · MIC OFF' : ''}${cam.inCall ? ' · on a call' : ''}',
+                style: const TextStyle(color: Colors.white54),
+              ),
+              const SizedBox(height: 4),
+              const Text('Tap anywhere to wake', style: TextStyle(color: Colors.white38, fontSize: 12)),
+            ]),
+          ),
+        ),
+      );
+
+  // ---------------------------------------------------------------- mic
+  Future<void> _goLive(CameraSession cam) async {
+    await cam.goLive();
+    if (!mounted) return;
+    _touched();
+    _hint(cam.micMuted
+        ? '🔇 Your mic is OFF. Tap the mic button to let the show hear you.'
+        : '🎤 Your mic is ON: the show can hear you. Tap the mic button to mute.');
+  }
+
+  Future<void> _toggleMic(CameraSession cam) async {
+    await cam.setMicMuted(!cam.micMuted);
+    if (mounted) _hint(cam.micMuted ? '🔇 Mic OFF: silence is sent, the director sees MIC OFF.' : '🎤 Mic ON: the show can hear you.');
   }
 
   Widget _pill(String text, Color color, {VoidCallback? onTap}) => GestureDetector(
@@ -346,7 +438,7 @@ class _CameraScreenState extends State<CameraScreen> {
         _chip(Icons.place, '${cam.camera.name} · ${cam.camera.assignment}'),
         const SizedBox(width: 8),
         if (cam.phase == CameraPhase.live) ...[
-          _chip(Icons.timer, formatDuration(cam.liveFor)),
+          if (cam.liveSince != null) LiveClock(since: cam.liveSince!, builder: (d) => _chip(Icons.timer, formatDuration(d))),
           const SizedBox(width: 8),
           _chip(Icons.upload, formatKbps(cam.uploadKbps)),
           const SizedBox(width: 8),
@@ -424,7 +516,8 @@ class _CameraScreenState extends State<CameraScreen> {
         label: cam.portrait ? 'Landscape' : 'Portrait',
         onTap: ready ? _togglePortrait : null,
       ),
-      MicMeter(level: cam.audioLevel),
+      MicMeter(level: cam.audioLevel, muted: cam.micMuted, onTap: ready ? () => _toggleMic(cam) : null),
+      ToolButton(icon: Icons.nightlight_round, label: 'Pocket', onTap: ready ? _enterPocket : null),
     ];
     final padlock = Semantics(
       button: true,
@@ -466,7 +559,7 @@ class _CameraScreenState extends State<CameraScreen> {
         ),
         onPressed: switch (cam.phase) {
           CameraPhase.starting || CameraPhase.error => null,
-          _ => live ? cam.stopLive : cam.goLive,
+          _ => live ? cam.stopLive : () => _goLive(cam),
         },
         icon: Icon(live ? Icons.stop : Icons.fiber_manual_record),
         label: Text(live ? 'STOP' : 'GO LIVE', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),

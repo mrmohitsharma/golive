@@ -178,6 +178,28 @@ class CgStreamerPlugin :
                     StreamEngine.setTorch(call.argument<Boolean>("on") ?: false)
                     result.success(null)
                 }
+                "setMicMuted" -> {
+                    StreamEngine.setMicMuted(call.argument<Boolean>("muted") ?: false)
+                    result.success(null)
+                }
+                "resume" -> {
+                    StreamEngine.onResumed()
+                    result.success(null)
+                }
+                "setPreviewEnabled" -> {
+                    StreamEngine.setPreviewEnabled(call.argument<Boolean>("on") ?: true)
+                    result.success(null)
+                }
+                "setScreenDim" -> {
+                    // Only this app's window: the phone's own brightness setting is untouched.
+                    val dim = call.argument<Boolean>("dim") ?: false
+                    activity?.window?.let { w ->
+                        val a = w.attributes
+                        a.screenBrightness = if (dim) 0.02f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                        w.attributes = a
+                    }
+                    result.success(null)
+                }
                 "setVideoBitrate" -> {
                     StreamEngine.setVideoBitrate(call.argument<Int>("bitrate") ?: 2_500_000)
                     result.success(null)

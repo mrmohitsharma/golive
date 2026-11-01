@@ -1,4 +1,5 @@
 import AVFoundation
+import CallKit
 import HaishinKit
 import SRTHaishinKit
 import UIKit
@@ -46,11 +47,17 @@ final class StreamEngine {
     /// factor 1 is the ultra-wide lens and the main lens starts at the first switch-over factor.
     private var zoomBase: CGFloat = 1
     private let meter = AudioMeter()
+    private var micMuted = false
+    private var previewOn = true
+    private var savedBrightness: CGFloat?
+    private let calls = CallWatcher()
 
     private init() {
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
             Task { @MainActor in
+                // The phone's own brightness belongs to the user outside this app.
+                StreamEngine.shared.restoreBrightness()
                 StreamEngine.shared.emitState("interrupted", message: "App moved to the background. iOS pauses the camera until you return to the app.")
             }
         })
@@ -59,6 +66,11 @@ final class StreamEngine {
                 StreamEngine.shared.emitState("resumed")
             }
         })
+        calls.onChange = { active in
+            Task { @MainActor in
+                StreamEngine.shared.callChanged(active)
+            }
+        }
         observers.append(nc.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { _ in
             Task { @MainActor in
                 await StreamEngine.shared.updateOrientation()
@@ -119,6 +131,7 @@ final class StreamEngine {
         try await attachCamera(mixer)
         try await mixer.attachAudio(AVCaptureDevice.default(for: .audio))
         await mixer.addOutput(meter)
+        await applyMute()
         try? await mixer.setFrameRate(Float64(fps))
         try? await mixer.configuration(video: 0) { unit in
             try unit.setFrameRate(Float64(fps))
@@ -348,11 +361,84 @@ final class StreamEngine {
         await mixer.setVideoOrientation(orientation)
     }
 
+    // MARK: mic, calls, screen
+
+    /// Silence is sent while muted, so the sound track stays and the director's mix doesn't break.
+    func setMicMuted(_ muted: Bool) async {
+        micMuted = muted
+        await applyMute()
+    }
+
+    private func applyMute() async {
+        guard let mixer else { return }
+        var settings = await mixer.audioMixerSettings
+        settings.isMuted = micMuted
+        await mixer.setAudioMixerSettings(settings)
+    }
+
+    /// A call rings or is answered: iOS takes the microphone (HaishinKit keeps the video going
+    /// while the app is on screen). When every call has ended, ask for the mic back: iOS doesn't
+    /// always say "resume", and then the stream would stay silent.
+    func callChanged(_ active: Bool) {
+        onEvent?(["type": "call", "active": active])
+        guard !active else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try? AVAudioSession.sharedInstance().setActive(true)
+            NotificationCenter.default.post(
+                name: AVAudioSession.interruptionNotification,
+                object: AVAudioSession.sharedInstance(),
+                userInfo: [
+                    AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.ended.rawValue,
+                    AVAudioSessionInterruptionOptionKey: AVAudioSession.InterruptionOptions.shouldResume.rawValue,
+                ]
+            )
+        }
+    }
+
+    /// The app is on screen again: restart capture if iOS stopped it and redraw the preview.
+    func resume() async {
+        guard let mixer else { return }
+        await mixer.startCapturing()
+        guard previewOn else { return }
+        for view in previews {
+            await mixer.removeOutput(view)
+            await mixer.addOutput(view)
+        }
+        await updateOrientation()
+    }
+
+    /// Pocket mode: stop drawing the preview (saves battery). Capture and streaming go on.
+    func setPreviewEnabled(_ on: Bool) async {
+        previewOn = on
+        guard let mixer else { return }
+        for view in previews {
+            if on { await mixer.addOutput(view) } else { await mixer.removeOutput(view) }
+        }
+    }
+
+    /// Low brightness while nobody touches the phone; the user's brightness comes back after.
+    func setScreenDim(_ dim: Bool) {
+        if dim {
+            if savedBrightness == nil { savedBrightness = UIScreen.main.brightness }
+            UIScreen.main.brightness = 0.02
+        } else {
+            restoreBrightness()
+        }
+    }
+
+    func restoreBrightness() {
+        if let b = savedBrightness {
+            UIScreen.main.brightness = b
+            savedBrightness = nil
+        }
+    }
+
     // MARK: preview
 
     func attachPreview(_ view: MTHKView) async {
         if !previews.contains(where: { $0 === view }) { previews.append(view) }
-        if let mixer { await mixer.addOutput(view) }
+        if let mixer, previewOn { await mixer.addOutput(view) }
     }
 
     func detachPreview(_ view: MTHKView) async {
@@ -446,6 +532,9 @@ final class StreamEngine {
         interruptTask = nil
         controls = Controls()
         device = nil
+        micMuted = false
+        previewOn = true
+        restoreBrightness()
         if let mixer {
             await mixer.removeOutput(meter)
             await mixer.stopRunning()
@@ -501,6 +590,25 @@ final class StreamEngine {
         }
         if let e = error as? EngineError, case .message(let m) = e { return m }
         return error.localizedDescription
+    }
+}
+
+/// Tells when a phone or VoIP call (CallKit) starts and when every call has ended.
+final class CallWatcher: NSObject, CXCallObserverDelegate {
+    private let observer = CXCallObserver()
+    var onChange: ((Bool) -> Void)?
+    private var active = false
+
+    override init() {
+        super.init()
+        observer.setDelegate(self, queue: .main)
+    }
+
+    func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
+        let now = callObserver.calls.contains { !$0.hasEnded }
+        guard now != active else { return }
+        active = now
+        onChange?(now)
     }
 }
 

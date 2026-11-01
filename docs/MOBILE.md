@@ -90,7 +90,9 @@ Camera quality presets: 720p30 2.5 Mbps (default, 4G) · 720p25 1.5 Mbps (weak s
 - **AF / MF:** autofocus, or manual focus with a Far ↔ Near slider (phones that support it).
 - **Light:** the torch, on phones that have one.
 - **Portrait / Landscape:** landscape works either way round and stays upright. Portrait sends vertical 9:16 video: in the 16:9 show it has black bars at the sides, and it fills vertical outputs. Changing it reconnects the camera (a few seconds) and is blocked while ON AIR.
-- **Mic meter:** green/amber/red bar showing sound is coming in.
+- **Mic button:** the bar shows sound is coming in (green/amber/red). Tap it to mute: silence is sent (the sound track stays, so the director's mix doesn't break) and the control room tile shows **MIC OFF**. Going live shows a reminder that the mic is on (or off).
+- **Battery:** while live, the screen dims after 30 s without a touch (a touch brings it back). **Pocket** turns the screen black and stops drawing the preview, which saves the most; the stream continues, and the ON AIR frame and status stay visible. Tap anywhere to wake. Video quality never changes.
+- **Calls and notifications:** a notification doesn't interrupt anything. On Android, during a call the video stays live and Android silences the mic; the screen shows *On a call*, and the director sees **ON A CALL** (if that camera was on air and auto-fallback is on, the show switches to the preview camera or another working one, else to the fallback scene). On iPhone, the video continues while the call screen is small, but iOS pauses the camera if the app leaves the screen (the director sees **PAUSED**, with the same automatic switch). Coming back to Go Live redraws the preview and reopens the camera if another app took it; the mic comes back after the call.
 - **Padlock:** tap to freeze every control (pocket and sweat touches do nothing); **hold** it to unlock.
 - Zoom, brightness, focus mode and light come back after a reconnect or a portrait/landscape change; switching front/back camera starts again at 1× with the light off.
 

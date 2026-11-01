@@ -461,8 +461,18 @@ export class Hub {
       case 'telemetry': {
         if (!client.cameraId || !client.tournamentId) return;
         const t = sanitizeTelemetry(msg.telemetry);
-        this.liveFor(client.tournamentId).telemetry.set(client.cameraId, { t, at: Date.now() });
+        const l = this.liveFor(client.tournamentId);
+        const before = l.telemetry.get(client.cameraId)?.t;
+        l.telemetry.set(client.cameraId, { t, at: Date.now() });
         await this.repo.saveTelemetry(client.cameraId, t).catch(() => {});
+        // A call or the app leaving the screen: tell the director at once, and take the camera
+        // off air if it is showing. MIC OFF / ON A CALL badges update straight away.
+        const call = t.inCall === true && before?.inCall !== true;
+        const paused = t.state === 'paused' && before?.state !== 'paused';
+        if (call || paused) await this.cameraInterrupted(client.tournamentId, client.cameraId, call ? 'call' : 'paused');
+        if (call || paused || (t.micMuted ?? false) !== (before?.micMuted ?? false) || (t.inCall ?? false) !== (before?.inCall ?? false)) {
+          await this.pushCameras(client.tournamentId).catch(() => {});
+        }
         return;
       }
 
@@ -786,6 +796,21 @@ export class Hub {
     });
   }
 
+  /** Camera tiles only (status, telemetry badges) to control rooms: no OBS resync. */
+  async pushCameras(tournamentId: string): Promise<void> {
+    const [cams, coms] = await Promise.all([this.repo.camerasForTournament(tournamentId), this.repo.commentatorsForTournament(tournamentId)]);
+    this.toTournament(
+      tournamentId,
+      {
+        type: 'cameras',
+        cameras: cams.map((c) => this.cameraDto(c)),
+        commentators: coms.map((m) => this.commentatorDto(m)),
+        mediaServer: { reachable: this.health.reachable, error: this.health.error },
+      },
+      'watch',
+    );
+  }
+
   /** After REST changes to cameras/commentators: resync OBS and refresh apps. */
   async camerasChanged(tournamentId: string): Promise<void> {
     const t = await this.repo.tournamentById(tournamentId);
@@ -855,6 +880,42 @@ export class Hub {
       if (wasReachable && !snap.reachable) this.alert(tournamentId, 'error', `Video ingest server unreachable: ${snap.error ?? 'unknown error'}`);
       this.autoFallback(t, cams);
     }
+  }
+
+  /**
+   * A camera phone got a call (Android keeps sending video, the sound goes silent) or the app
+   * left the screen (iPhone pauses the camera). Alert the director; if it is on air and
+   * auto-fallback is on, cut to another working camera (the one in preview first), or to
+   * the fallback scene when there is none.
+   */
+  async cameraInterrupted(tid: string, cameraId: string, why: 'call' | 'paused'): Promise<void> {
+    const t = await this.repo.tournamentById(tid);
+    if (!t) return;
+    const cams = await this.repo.camerasForTournament(tid);
+    const cam = cams.find((c) => c.id === cameraId);
+    const name = cam?.name ?? 'A camera';
+    const what = why === 'call' ? `${name} is on a phone call (video continues, its sound is paused).` : `${name} is paused: the phone left the Go Live app.`;
+    const l = this.liveFor(tid);
+    const e = l.engine;
+    const onAir = e.programmeCameraId === cameraId && !e.fallbackActive && !e.replayActive;
+    if (!onAir || !t.auto_fallback || !l.engineClient || !e.obsConnected) {
+      this.alert(tid, 'warning', what);
+      return;
+    }
+    const usable = (c: CameraRow) => {
+      if (c.id === cameraId || !this.healthFor(c.stream_path).online) return false;
+      const tel = this.telemetryFor(tid, c.id);
+      return !tel?.inCall && tel?.state !== 'paused';
+    };
+    const next = cams.find((c) => c.id === e.previewCameraId && usable(c)) ?? cams.find(usable);
+    const r = next
+      ? this.dispatch(tid, 'cut', next.id, null, null, { sceneName: sceneNameFor(next.stream_path) })
+      : this.dispatch(tid, 'fallback', null, null, null, {});
+    this.alert(
+      tid,
+      'warning',
+      r.ok ? `${what} Switched the show to ${next ? next.name : 'the fallback scene'} automatically.` : `${what} Could not switch automatically: ${r.error}`,
+    );
   }
 
   private autoFallback(t: TournamentRow, cams: CameraRow[]): void {
@@ -948,5 +1009,7 @@ export function sanitizeTelemetry(raw: unknown): CameraTelemetry {
     fps: num(r.fps, 0, 240),
     thermal: str(r.thermal, 20),
     error: str(r.error),
+    micMuted: typeof r.micMuted === 'boolean' ? r.micMuted : null,
+    inCall: typeof r.inCall === 'boolean' ? r.inCall : null,
   };
 }

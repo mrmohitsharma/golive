@@ -74,6 +74,18 @@ public class CgStreamerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
                 case "setTorch":
                     try engine.setTorch(args["on"] as? Bool ?? false)
                     result(nil)
+                case "setMicMuted":
+                    await engine.setMicMuted(args["muted"] as? Bool ?? false)
+                    result(nil)
+                case "resume":
+                    await engine.resume()
+                    result(nil)
+                case "setPreviewEnabled":
+                    await engine.setPreviewEnabled(args["on"] as? Bool ?? true)
+                    result(nil)
+                case "setScreenDim":
+                    engine.setScreenDim(args["dim"] as? Bool ?? false)
+                    result(nil)
                 case "setVideoBitrate":
                     try await engine.setVideoBitrate(args["bitrate"] as? Int ?? 2_500_000)
                     result(nil)

@@ -3,6 +3,7 @@ package com.cogolfers.cg_streamer
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.media.AudioManager
 import android.hardware.camera2.CaptureRequest
 import android.os.Handler
 import android.os.SystemClock
@@ -15,6 +16,7 @@ import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.audio.CustomAudioEffect
 import com.pedro.encoder.input.sources.audio.MicrophoneSource
 import com.pedro.encoder.input.sources.video.Camera2Source
+import com.pedro.encoder.input.video.CameraCallbacks
 import com.pedro.encoder.input.video.CameraHelper
 import com.pedro.library.srt.SrtStream
 import com.pedro.library.util.BitrateAdapter
@@ -105,7 +107,12 @@ object StreamEngine : ConnectChecker {
         if (!videoOk) throw IllegalStateException("This camera cannot record ${cfg.width}x${cfg.height} at ${cfg.fps} fps.")
         val audioOk = s.prepareAudio(44100, true, cfg.audioBitrate)
         if (!audioOk) throw IllegalStateException("The microphone could not be prepared.")
-        (s.audioSource as? MicrophoneSource)?.setAudioEffect(LevelMeter)
+        (s.audioSource as? MicrophoneSource)?.let {
+            it.setAudioEffect(LevelMeter)
+            if (micMuted) it.mute() else it.unMute()
+        }
+        watchCamera(appContext)
+        startCallWatch(appContext)
 
         // Reconnection is driven from Dart (same policy on Android and iOS).
         s.getStreamClient().setReTries(0)
@@ -446,6 +453,138 @@ object StreamEngine : ConnectChecker {
         }
     }
 
+    // ---------------------------------------------------------------- mic, calls, recovery
+    private var micMuted = false
+    @Volatile private var cameraLost = false
+    private var inCall = false
+    private var availability: CameraManager.AvailabilityCallback? = null
+
+    /** Silence is sent while muted, so the sound track stays and the director's mix doesn't break. */
+    fun setMicMuted(muted: Boolean) {
+        micMuted = muted
+        (stream?.audioSource as? MicrophoneSource)?.let { if (muted) it.mute() else it.unMute() }
+    }
+
+    /**
+     * Another app (a video call, the phone app on some phones, the system) can take the camera.
+     * RootEncoder then stops getting frames and never reopens it: the preview and the stream
+     * go black. Watch for that and reopen the camera as soon as it is free again.
+     */
+    private fun watchCamera(appContext: Context) {
+        val cam = cam() ?: return
+        cam.setCameraCallback(object : CameraCallbacks {
+            override fun onCameraChanged(facing: CameraHelper.Facing) {}
+            override fun onCameraOpened() {
+                if (cameraLost) {
+                    cameraLost = false
+                    main.post { emitState("resumed") }
+                    reapplySoon()
+                }
+            }
+            override fun onCameraDisconnected() = lost("Another app is using the camera. It comes back by itself when the camera is free.")
+            override fun onCameraError(error: String) = lost("The camera stopped ($error). Reopening it…")
+        })
+        if (availability == null) {
+            val cb = object : CameraManager.AvailabilityCallback() {
+                override fun onCameraAvailable(cameraId: String) {
+                    if (cameraLost && cameraId == cam()?.getCurrentCameraId()) main.postDelayed({ reopen() }, 300)
+                }
+            }
+            availability = cb
+            (appContext.getSystemService(Context.CAMERA_SERVICE) as? CameraManager)?.registerAvailabilityCallback(cb, main)
+        }
+    }
+
+    private fun lost(message: String) {
+        if (cameraLost) return
+        cameraLost = true
+        main.post { emitState("interrupted", message) }
+        // Some phones never say the camera is free again: try every few seconds as well.
+        main.postDelayed({ retryReopen(0) }, 2000)
+    }
+
+    private fun retryReopen(n: Int) {
+        if (!cameraLost || stream == null || n > 30) return
+        reopen()
+        main.postDelayed({ retryReopen(n + 1) }, 3000)
+    }
+
+    private fun reopen() {
+        if (!cameraLost) return
+        try {
+            cam()?.restart()
+        } catch (e: Exception) {
+            Log.w(TAG, "camera reopen failed: ${e.message}")
+        }
+    }
+
+    /** The app is on screen again: make sure the preview is drawing and the camera is open. */
+    fun onResumed() {
+        val s = stream ?: return
+        if (!prepared) return
+        val view = previewView
+        if (previewOn && view != null && view.holder.surface.isValid && !s.isOnPreview) {
+            try {
+                s.startPreview(view, true)
+            } catch (e: Exception) {
+                Log.w(TAG, "preview restart failed: ${e.message}")
+            }
+        }
+        if (cameraLost) reopen()
+        updateOrientation()
+    }
+
+    /**
+     * Pocket mode: stop drawing the preview (saves the GPU and battery). The camera and the
+     * stream keep running while live.
+     */
+    private var previewOn = true
+    fun setPreviewEnabled(on: Boolean) {
+        previewOn = on
+        val s = stream ?: return
+        if (!prepared) return
+        val view = previewView ?: return
+        try {
+            if (!on && s.isOnPreview) {
+                if (s.isStreaming) s.getGlInterface().deAttachPreview() else s.stopPreview(false)
+            } else if (on) {
+                if (s.isOnPreview) s.getGlInterface().attachPreview(view.holder.surface)
+                else if (view.holder.surface.isValid) s.startPreview(view, true)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "preview on=$on failed: ${e.message}")
+        }
+    }
+
+    /**
+     * A ringing or active call (phone or VoIP) puts the audio system in a call mode. Polled every
+     * 2 s: no phone permission needed. Android silences other apps' microphones during a call,
+     * so the video keeps going with silent sound.
+     */
+    private var callWatch: Runnable? = null
+    private fun startCallWatch(appContext: Context) {
+        if (callWatch != null) return
+        val am = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        val r = object : Runnable {
+            override fun run() {
+                if (stream == null) {
+                    callWatch = null
+                    return
+                }
+                val m = am.mode
+                val now = m == AudioManager.MODE_RINGTONE || m == AudioManager.MODE_IN_CALL || m == AudioManager.MODE_IN_COMMUNICATION ||
+                    (android.os.Build.VERSION.SDK_INT >= 30 && m == AudioManager.MODE_CALL_SCREENING)
+                if (now != inCall) {
+                    inCall = now
+                    emit(mapOf("type" to "call", "active" to now))
+                }
+                main.postDelayed(this, 2000)
+            }
+        }
+        callWatch = r
+        main.post(r)
+    }
+
     /** The phone turned round (landscape left <-> right, or portrait upside down): keep the picture upright. */
     fun updateOrientation() {
         val s = stream ?: return
@@ -488,6 +627,15 @@ object StreamEngine : ConnectChecker {
     }
 
     fun release() {
+        callWatch?.let { main.removeCallbacks(it) }
+        callWatch = null
+        inCall = false
+        cameraLost = false
+        previewOn = true
+        availability?.let { cb ->
+            (appCtx?.getSystemService(Context.CAMERA_SERVICE) as? CameraManager)?.unregisterAvailabilityCallback(cb)
+        }
+        availability = null
         controls.zoom = 1f
         controls.torch = false
         controls.locked = false

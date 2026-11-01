@@ -16,6 +16,10 @@ export interface CameraTelemetry {
   fps?: number | null;
   thermal?: string | null;
   error?: string | null;
+  /** The operator muted the phone's microphone (video still goes out). */
+  micMuted?: boolean | null;
+  /** A phone call is ringing or in progress on the camera phone. */
+  inCall?: boolean | null;
 }
 
 export interface CameraHealth {

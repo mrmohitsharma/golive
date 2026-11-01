@@ -162,6 +162,16 @@ class CameraTile extends StatelessWidget {
                         warn: (t.battery ?? 100) < 20 && t.charging != true,
                       ),
                     ),
+                  if (t?.inCall == true || t?.micMuted == true)
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: Row(children: [
+                        if (t?.inCall == true) _miniBadge(Icons.phone_in_talk, 'ON A CALL', warn: true),
+                        if (t?.inCall == true && t?.micMuted == true) const SizedBox(width: 4),
+                        if (t?.micMuted == true) _miniBadge(Icons.mic_off, 'MIC OFF'),
+                      ]),
+                    ),
                   if (live)
                     Positioned(
                       right: 6,

@@ -1,4 +1,5 @@
 import 'package:cg_streamer/cg_streamer.dart';
+import 'package:cogolfer_live/core/models.dart';
 import 'package:cogolfer_live/features/camera/camera_controls.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,5 +28,12 @@ void main() {
     final bad = CameraCaps.fromMap({'zoomMin': 2, 'zoomMax': 1, 'evStep': 0});
     expect([bad.zoomMin, bad.zoomMax, bad.evStep], [2, 2, 0.1]);
     expect(const StreamConfig().copyWith(portrait: true).toMap()['portrait'], true);
+  });
+
+  test('telemetry carries MIC OFF and ON A CALL to the control room', () {
+    const t = CameraTelemetry(state: 'live', micMuted: true, inCall: true);
+    final back = CameraTelemetry.fromJson(t.toJson())!;
+    expect([back.micMuted, back.inCall], [true, true]);
+    expect(CameraTelemetry.fromJson({'state': 'live'})!.micMuted, isNull);
   });
 }

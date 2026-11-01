@@ -175,6 +175,7 @@ class CgStreamer {
   static final StreamController<int> _bitrateCtl = StreamController.broadcast();
   static final StreamController<double> _audioCtl = StreamController.broadcast();
   static final StreamController<bool> _lensCtl = StreamController.broadcast();
+  static final StreamController<bool> _callCtl = StreamController.broadcast();
   static StreamSubscription<dynamic>? _sub;
 
   static void _ensureListening() {
@@ -195,6 +196,8 @@ class CgStreamer {
             _audioCtl.add(((e['level'] as num?) ?? 0).toDouble().clamp(0, 1));
           case 'lens':
             _lensCtl.add(e['switching'] == true);
+          case 'call':
+            _callCtl.add(e['active'] == true);
         }
       },
       onError: (Object err) => _stateCtl.add(PublisherEvent(PublisherState.error, message: '$err')),
@@ -224,6 +227,26 @@ class CgStreamer {
     _ensureListening();
     return _lensCtl.stream;
   }
+
+  /// true while a phone call rings or is in progress on this phone (Android: the call audio
+  /// mode; iOS: CallKit). The camera keeps sending video; the OS silences the mic.
+  static Stream<bool> get phoneCall {
+    _ensureListening();
+    return _callCtl.stream;
+  }
+
+  /// Mutes the microphone: silence is sent, so the sound track stays and the mix doesn't break.
+  static Future<void> setMicMuted(bool muted) => _channel.invokeMethod('setMicMuted', {'muted': muted});
+
+  /// The app is back on screen (after a call, a notification, the home screen): reconnects the
+  /// preview and reopens the camera if another app took it.
+  static Future<void> resume() => _channel.invokeMethod('resume');
+
+  /// Battery: low screen brightness while nobody touches the phone (restored with false).
+  static Future<void> setScreenDim(bool dim) => _channel.invokeMethod('setScreenDim', {'dim': dim});
+
+  /// Battery: stop drawing the camera preview (pocket mode). Streaming is not affected.
+  static Future<void> setPreviewEnabled(bool on) => _channel.invokeMethod('setPreviewEnabled', {'on': on});
 
   /// What the open camera supports (changes after switchCamera / initialize).
   static Future<CameraCaps> cameraCaps() async =>

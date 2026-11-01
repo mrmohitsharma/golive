@@ -50,7 +50,10 @@ class _TournamentScreenState extends State<TournamentScreen> {
     _load();
     _loadInvites();
     _loadWatch();
-    _poll = Timer.periodic(const Duration(seconds: 5), (_) => _load(quiet: true));
+    // Refresh only while the app is on screen (no network or battery use in the background).
+    _poll = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) _load(quiet: true);
+    });
   }
 
   @override

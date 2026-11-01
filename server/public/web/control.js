@@ -171,6 +171,11 @@ export async function render(view, { id }) {
       el('img', { src: `/api/cameras/${c.id}/thumbnail.jpg?token=${encodeURIComponent(state.token)}&t=${t}`, alt: '', onerror: (ev) => ev.target.style.visibility = 'hidden' }),
       el('div', { class: 'cr-cam-name' }, el('b', { text: `${i + 1} ` }), c.name, c.hole ? ` · ${s.tournament.profile?.positionLabel ?? 'Hole'} ${c.hole}` : ''),
       el('span', { class: 'cr-dot ' + c.status, title: c.status }),
+      // What the phone reports: a call (sound paused), the app off screen, its mic muted.
+      el('div', { class: 'cr-flags' },
+        c.telemetry?.inCall ? el('span', { class: 'cr-flag warn', text: 'ON A CALL' }) : null,
+        c.telemetry?.state === 'paused' ? el('span', { class: 'cr-flag warn', text: 'PAUSED' }) : null,
+        c.telemetry?.micMuted ? el('span', { class: 'cr-flag', text: 'MIC OFF' }) : null),
       el('button', { class: 'btn small', onclick: (ev) => { ev.stopPropagation(); send('cut', { cameraId: c.id }); }, text: 'Cut' }))),
       cams().length ? null : el('div', { class: 'empty', text: 'No cameras yet: phones join with the camera QR (Event > Cameras & people).' }));
   };

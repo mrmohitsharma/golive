@@ -148,6 +148,29 @@ describe('real-time control', () => {
     assert.equal(msg.cameras.find((c: any) => c.id === camB.id).onAir, true);
   });
 
+  it('MIC OFF reaches the control room at once; a call on the on-air camera switches the show to a working camera', async () => {
+    phone.send({ type: 'telemetry', telemetry: { state: 'live', micMuted: true } });
+    const muted = await director.next((m) => m.type === 'cameras' && m.cameras.some((c: any) => c.id === camA.id && c.telemetry?.micMuted === true));
+    assert.ok(muted);
+    // Cam A on air, Cam B (online) in preview.
+    engine.send({ type: 'engine.state', state: { obsConnected: true, studioMode: true, programmeCameraId: camA.id, previewCameraId: camB.id } });
+    await director.next((m) => m.type === 'engine' && m.engine.programmeCameraId === camA.id);
+    phone.send({ type: 'telemetry', telemetry: { state: 'live', micMuted: true, inCall: true } });
+    const cut = await engine.next((m) => m.type === 'command' && m.action === 'cut');
+    assert.equal(cut.cameraId, camB.id);
+    engine.send({ type: 'command.result', id: cut.id, ok: true });
+    const alert = await director.next((m) => m.type === 'alert' && /phone call/.test(m.message));
+    assert.match(alert.message, /Cam A is on a phone call.*Switched the show to Cam B/);
+    engine.send({ type: 'engine.state', state: { obsConnected: true, studioMode: true, programmeCameraId: camB.id } });
+    await director.next((m) => m.type === 'engine' && m.engine.programmeCameraId === camB.id);
+    // A call on a camera that is not on air: only an alert.
+    phone.send({ type: 'telemetry', telemetry: { state: 'live', inCall: false } });
+    phone.send({ type: 'telemetry', telemetry: { state: 'live', inCall: true } });
+    const a2 = await director.next((m) => m.type === 'alert' && /phone call/.test(m.message) && !/Switched/.test(m.message));
+    assert.ok(a2);
+    phone.send({ type: 'telemetry', telemetry: { state: 'live', inCall: false, micMuted: false } });
+  });
+
   it('auto-cuts to fallback when the programme camera drops', async () => {
     h.setMediaPaths([]);
     await h.app.poller.pollOnce();

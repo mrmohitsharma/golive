@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cg_streamer/cg_streamer.dart';
 import 'package:flutter/foundation.dart';
@@ -65,6 +66,16 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   final ValueNotifier<double> audioLevel = ValueNotifier(0);
   StreamSubscription<double>? _audioSub;
   StreamSubscription<bool>? _lensSub;
+  StreamSubscription<bool>? _callSub;
+
+  /// The operator muted the mic (silence is sent; the director sees MIC OFF).
+  bool micMuted = false;
+
+  /// A phone call rings or is in progress: video goes on, the OS silences the mic.
+  bool inCall = false;
+
+  /// Bumped when the app comes back on screen, so the screen can rebuild the preview view.
+  int resumeCount = 0;
 
   bool _publisherConnected = false;
   bool _refreshKeyBeforeRetry = false;
@@ -84,7 +95,15 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _stateSub = CgStreamer.states.listen(_onPublisher);
     _kbpsSub = CgStreamer.uploadKbps.listen((k) {
+      // Redraw only for a visible change (saves rebuilding the screen every second).
+      final changed = (k - uploadKbps).abs() >= math.max(100, uploadKbps ~/ 10);
       uploadKbps = k;
+      if (changed) _notify();
+    });
+    _callSub = CgStreamer.phoneCall.listen((on) {
+      inCall = on;
+      if (on) HapticFeedback.heavyImpact();
+      _sendTelemetry(force: true);
       _notify();
     });
     _audioSub = CgStreamer.audioLevel.listen((l) => audioLevel.value = l);
@@ -118,10 +137,12 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     await CgStreamer.setKeepScreenOn(true);
     await _refreshDevice();
 
-    _telemetryTimer = Timer.periodic(const Duration(seconds: 2), (_) => _sendTelemetry());
+    // Changes go out at once; otherwise a heartbeat every 5 s (the server treats 15 s as stale).
+    _telemetryTimer = Timer.periodic(const Duration(seconds: 5), (_) => _sendTelemetry(force: true));
     _deviceTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refreshDevice());
+    // Only the reconnect countdown needs a redraw every second (the live clock ticks by itself).
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (phase == CameraPhase.live || retryAt != null) _notify();
+      if (retryAt != null) _notify();
     });
     _notify();
   }
@@ -186,6 +207,20 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
       message = e.message;
       _notify();
     }
+  }
+
+  Future<void> setMicMuted(bool muted) async {
+    micMuted = muted;
+    HapticFeedback.selectionClick();
+    _notify();
+    try {
+      await CgStreamer.setMicMuted(muted);
+    } on PlatformException catch (e) {
+      micMuted = !muted;
+      message = e.message;
+    }
+    _sendTelemetry(force: true);
+    _notify();
   }
 
   // ---------------------------------------------------------------- camera controls
@@ -340,6 +375,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
       actual = await CgStreamer.initialize(config);
       phase = CameraPhase.ready;
       message = on ? 'Portrait 9:16. In the 16:9 show this camera has black bars at the sides.' : null;
+      if (micMuted) await CgStreamer.setMicMuted(true);
       await _refreshCaps();
       _capsLater();
     } on PlatformException catch (e) {
@@ -482,7 +518,11 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
         CameraPhase.error => 'error',
       };
 
-  void _sendTelemetry() {
+  String? _lastTelemetry;
+
+  /// Sends phone status to the control room when something the director sees changed
+  /// (state, mic, call, battery…); [force] = the 5 s heartbeat with the current upload rate.
+  void _sendTelemetry({bool force = false}) {
     final l = link;
     if (l == null || !l.isConnected) return;
     final t = CameraTelemetry(
@@ -496,8 +536,15 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
       fps: actual['fps'] as int?,
       thermal: device?.thermal,
       error: phase == CameraPhase.reconnecting || phase == CameraPhase.error ? message : null,
+      micMuted: micMuted,
+      inCall: inCall,
     );
-    l.send({'type': 'telemetry', 'telemetry': t.toJson()});
+    final json = t.toJson();
+    // What matters for the director, without the numbers that change every second.
+    final sig = '${json['state']}|${json['battery']}|${json['charging']}|${json['appState']}|${json['resolution']}|${json['thermal']}|${json['error']}|$micMuted|$inCall';
+    if (!force && sig == _lastTelemetry) return;
+    _lastTelemetry = sig;
+    l.send({'type': 'telemetry', 'telemetry': json});
   }
 
   // ---------------------------------------------------------------- lifecycle
@@ -506,7 +553,13 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     final bg = state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.detached;
     if (bg == appInBackground) return;
     appInBackground = bg;
-    if (!bg) unawaited(_refreshDevice());
+    if (!bg) {
+      unawaited(_refreshDevice());
+      // Back from a call, a notification or the home screen: redraw the preview and reopen
+      // the camera if another app took it (this was the blank screen after a call).
+      resumeCount++;
+      unawaited(CgStreamer.resume().catchError((Object _) {}));
+    }
     _sendTelemetry();
     _notify();
   }
@@ -526,6 +579,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
       await CgStreamer.stop();
       await CgStreamer.dispose();
       await CgStreamer.setKeepScreenOn(false);
+      await CgStreamer.setScreenDim(false);
     } on PlatformException {
       // ignore during teardown
     }
@@ -533,6 +587,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     await _kbpsSub?.cancel();
     await _audioSub?.cancel();
     await _lensSub?.cancel();
+    await _callSub?.cancel();
     await _msgSub?.cancel();
     link?.state.removeListener(_notify);
     await link?.close();

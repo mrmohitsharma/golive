@@ -189,7 +189,7 @@ Director → server: `command {action, cameraId?, requestId, seconds?, slowmo?}`
 
 ### Camera phone (`camera.join {cameraId}`)
 
-← `camera.joined` / `camera.updated {camera}`, `camera.removed`, `tally {onAir, preview}`. → `telemetry {state, bitrateKbps, battery, charging, durationSec, appState, resolution, fps, thermal, error}`.
+← `camera.joined` / `camera.updated {camera}`, `camera.removed`, `tally {onAir, preview}`. → `telemetry {state, bitrateKbps, battery, charging, durationSec, appState, resolution, fps, thermal, error, micMuted, inCall}`, sent when something the director sees changes and as a 5 s heartbeat. A change of `micMuted`/`inCall`/`state` pushes `cameras` to control rooms at once. `inCall` turning on, or `state` becoming `paused`, raises an alert; if that camera is on air and auto-fallback is on, the server cuts to the preview camera (or another online camera not on a call/paused), else to the fallback scene.
 
 ### OBS agent (`engine.hello`)
 
