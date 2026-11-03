@@ -5,7 +5,8 @@ One repository, one codebase. Each version is developed on its own branch, merge
 ```
 main          what the live server runs; only finished, tested versions are merged here
 v6-dev        V6: onboarding + viewership engine (done, not yet merged to main)
-v7-dev        work on the next version (V7), branched from v6-dev so it carries all of V6
+v7-dev        V7: web app, own watch player (Bunny CDN), camera controls, viewer games, viewer-minute billing (done, not yet merged to main)
+v8-dev        work on the next version (V8), branched from v7-dev so it carries all of V6 and V7
 v5.0, v6.0…   tags: frozen snapshots of each released version
 ```
 
@@ -14,16 +15,17 @@ v5.0, v6.0…   tags: frozen snapshots of each released version
 | V1 to V4 | (before this repo) | Multi-camera director, cloud OBS, multistreaming, billing |
 | V5 | `v5.0` | Viewer comments, admin panel, Cashfree, public website and legal pages, Go Live rename |
 | V6 | `v6.0` when released | On `v6-dev`: 5-minute onboarding and the viewership engine (influencers, games, prizes, reports) |
-| V7 | `v7.0` when released | On `v7-dev`: the web app — super admin (clubs, users, events, money, SMS, safety, system, reports, audit log, log in as) and the owner/director web with the control room |
+| V7 | `v7.0` when released | On `v7-dev`: the web app (super admin and the owner/director web with the control room), first-login setup and product tour, Cloud OBS / Laptop OBS with auto-stop, our own HLS watch player through Bunny CDN, the redesigned watch page (games pop-up, points, Top players, reactions, celebrations), camera app controls (brightness/zoom arcs, focus, lock, torch, mic mute, portrait, pocket mode, call handling), support tickets, the new website with Features page, and viewer-minute billing |
+| V8 | `v8.0` when released | On `v8-dev`: next version, started from V7 |
 
 ## Working on the next version
 
 ```bash
 git fetch origin
-git checkout v6-dev            # first time: git checkout -b v6-dev origin/v6-dev
+git checkout v8-dev            # first time: git checkout -b v8-dev origin/v8-dev
 # ...make changes...
-git add -A && git commit -m "V6: what changed"
-git push origin v6-dev
+git add -A && git commit -m "V8: what changed"
+git push origin v8-dev
 ```
 
 Small changes can go on their own branch from `v6-dev` (for example `v6-onboarding-wizard`) and be merged back with a pull request.
@@ -49,7 +51,7 @@ Fix it on a branch from `main` (`hotfix-<name>`), merge into `main`, tag it `v5.
 
 ```bash
 git checkout v5.0              # look at or run V5 exactly as released
-git checkout v6-dev            # back to current work
+git checkout v8-dev            # back to current work
 ```
 
 On the server, `git checkout v5.0` and rebuild to roll back. Database changes are additive (new tables and columns), so an older version runs on a newer database; check `server/migrations` before rolling back across a version that removed anything.
