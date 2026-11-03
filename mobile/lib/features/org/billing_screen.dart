@@ -303,6 +303,8 @@ class _BillingScreenState extends State<BillingScreen> with WidgetsBindingObserv
         WalletKind.viewership => Icons.campaign,
         WalletKind.messages => Icons.sms,
         WalletKind.viewers => Icons.visibility,
+        WalletKind.branding => Icons.branding_watermark,
+        WalletKind.ticker => Icons.text_rotation_none,
       };
 
   static String _date(DateTime d) {

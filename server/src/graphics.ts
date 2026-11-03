@@ -3,6 +3,7 @@ import type { Repo, TournamentRow } from './repo.js';
 import type { ScoringRepo, LeaderboardRow } from './scoring.js';
 import { DEFAULT_PAR } from './scoring.js';
 import { defaultGraphics, type GraphicsState } from './protocol.js';
+import { brandingOf, overlayBranding } from './branding.js';
 
 export function mergeGraphics(stored: unknown): GraphicsState {
   const d = defaultGraphics();
@@ -131,6 +132,8 @@ export class GraphicsService {
           }
         : null,
       replay: g.replay,
+      // V8: logo watermark (bottom right) and the scrolling ticker (bottom), theme colours.
+      branding: overlayBranding(brandingOf(t)),
       updatedAt: new Date().toISOString(),
     };
   }

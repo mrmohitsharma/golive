@@ -43,6 +43,10 @@ export interface TournamentRow {
   auto_fallback: boolean;
   archived: boolean;
   graphics: Record<string, unknown>;
+  /** V8 branding (theme, logo, watermark, ticker); see branding.ts. */
+  branding?: Record<string, unknown>;
+  branding_paid_at?: Date | null;
+  ticker_paid_at?: Date | null;
   audio: Record<string, unknown>;
   cloud_engine: Record<string, unknown>;
   yt_broadcast_id: string | null;
@@ -376,7 +380,7 @@ export class Repo {
     );
   }
 
-  async setTournamentJson(id: string, column: 'graphics' | 'audio' | 'cloud_engine', value: object): Promise<void> {
+  async setTournamentJson(id: string, column: 'graphics' | 'audio' | 'cloud_engine' | 'branding', value: object): Promise<void> {
     await this.db.query(`UPDATE tournaments SET ${column} = $2 WHERE id = $1`, [id, JSON.stringify(value)]);
   }
 

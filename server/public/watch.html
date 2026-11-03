@@ -15,6 +15,19 @@
   button { font:inherit; }
   .wrap { max-width:1240px; margin:0 auto; padding:16px; }
   header.top { display:flex; align-items:center; gap:12px; margin-bottom:12px; min-width:0; }
+  /* V8: TV-channel bar. The event's logo (or Go Live's) on the left, LIVE bug and clock on the right. */
+  @font-face { font-family:'Barlow Condensed'; font-weight:700 800; font-display:swap; src:url(/site/barlow-condensed-800.woff2) format('woff2'); }
+  header.top.tv { background:linear-gradient(90deg, var(--panel2), var(--panel) 60%, var(--bg)); border:1px solid var(--line); border-left:4px solid var(--gold); border-radius:12px; padding:8px 14px; }
+  .logo { flex:none; height:44px; max-width:150px; display:flex; align-items:center; }
+  .logo img { max-height:44px; max-width:150px; object-fit:contain; display:block; }
+  .logo .gl { display:flex; align-items:center; gap:7px; font-weight:800; font-size:15px; letter-spacing:.08em; color:var(--ink); }
+  .logo .gl svg { width:30px; height:30px; }
+  .clock { flex:none; font-variant-numeric:tabular-nums; font-weight:800; font-size:14px; color:var(--ink); background:rgba(0,0,0,.35); border-radius:6px; padding:4px 8px; letter-spacing:.04em; }
+  .theme-label { color:var(--muted); }
+  body.f-sport h1, body.f-sport .tabs button, body.f-sport .pill, body.f-sport .sheet h3, body.f-sport .me-card .big { font-family:'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif; letter-spacing:.02em; }
+  body.f-sport h1 { font-size:26px; text-transform:uppercase; }
+  body.f-elegant h1, body.f-elegant .sheet h3 { font-family:'Playfair Display', Georgia, 'Times New Roman', serif; font-weight:700; letter-spacing:.01em; }
+  body.f-festive h1, body.f-festive .sheet h3 { font-family:'Trebuchet MS', 'Segoe UI', system-ui, sans-serif; font-weight:800; }
   .brand { font-weight:800; letter-spacing:.06em; font-size:11px; color:var(--gold); text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   h1 { font-size:21px; margin:1px 0 0; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .sub { color:var(--muted); font-size:13px; }
@@ -203,6 +216,13 @@
     .wrap.event { padding:0; height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
     .wrap.event header.top { padding:8px 12px 6px; margin:0; flex:none; }
     .wrap.event h1 { font-size:16px; }
+    .wrap.event header.top.tv { border-radius:0; border-width:0 0 1px 0; border-left:0; padding:8px 12px; }
+    .wrap.event .logo, .wrap.event .logo img { height:34px; max-height:34px; max-width:110px; }
+    .wrap.event .logo .gl span { display:none; }
+    body.f-sport .wrap.event h1 { font-size:19px; }
+    .wrap.event header.top.tv h1 { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.1; }
+    .wrap.event header.top.tv .brand, .wrap.event header.top.tv .sub { display:none; }
+    .wrap.event .clock { font-size:12px; padding:3px 6px; }
     .wrap.event .grid { display:flex; flex-direction:column; flex:1; min-height:0; gap:0; }
     .wrap.event .main { flex:none; position:relative; z-index:55; background:var(--bg); }
     .wrap.event .player { border-radius:0; }
@@ -1080,20 +1100,47 @@
     if (sideTab === 'games') { drawFans(); loadFans(); }
   }
 
+  // ------------------------------------------------------------ V8: event theme (colours, type) and TV clock
+  const GL_MARK = '<svg viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="#ee3b2f"/><circle cx="15" cy="15" r="10.5" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="46 20" stroke-linecap="round"/><path d="M12.6 10.4v9.2l7.4-4.6z" fill="#fff"/></svg>';
+  let themeSig = '';
+  function applyTheme(b) {
+    if (!b || !b.colors) return;
+    const sig = JSON.stringify(b.colors) + b.font;
+    if (sig === themeSig) return;
+    themeSig = sig;
+    const r = document.documentElement.style;
+    const c = b.colors;
+    r.setProperty('--bg', c.bg); r.setProperty('--panel', c.panel); r.setProperty('--panel2', c.panel2); r.setProperty('--line', c.line);
+    r.setProperty('--ink', c.ink); r.setProperty('--muted', c.muted); r.setProperty('--gold', c.accent); r.setProperty('--live', c.live);
+    document.body.classList.remove('f-sport', 'f-elegant', 'f-festive', 'f-clean');
+    document.body.classList.add('f-' + b.font);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', c.bg);
+  }
+  const clock = el('span', { class: 'clock', 'aria-label': 'Time' });
+  const tickClock = () => { clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
+  tickClock();
+  setInterval(tickClock, 15000);
+
   async function tournament() {
     try {
       const d = await api('/api/public/tournaments/' + id);
       const t = d.tournament;
       tInfo = t;
       document.title = t.name + ' · Go Live';
-      const sig = JSON.stringify([t.name, t.venue, t.live, d.onAir && d.onAir.hole, Boolean(t.youtube), t.facebookUrl]);
+      applyTheme(d.branding);
+      const sig = JSON.stringify([t.name, t.venue, t.live, d.onAir && d.onAir.hole, Boolean(t.youtube), t.facebookUrl, d.branding && d.branding.logoUrl]);
       if (sig !== last) {
         last = sig;
-        head.replaceChildren(el('div', { style: 'flex:1;min-width:0' },
-          el('div', { class: 'brand', text: t.orgName ? 'Go Live · ' + t.orgName : 'Go Live' }),
+        const logo = el('div', { class: 'logo' });
+        if (d.branding && d.branding.logoUrl) logo.append(el('img', { src: d.branding.logoUrl, alt: t.orgName || t.name, decoding: 'async' }));
+        else logo.innerHTML = '<div class="gl">' + GL_MARK + '<span>GO LIVE</span></div>';
+        head.className = 'top tv';
+        head.replaceChildren(logo, el('div', { style: 'flex:1;min-width:0' },
+          el('div', { class: 'brand', text: t.orgName || 'Go Live' }),
           el('h1', { text: t.name }),
           el('div', { class: 'sub', text: [t.venue, d.onAir && d.onAir.hole ? 'On camera: hole ' + d.onAir.hole : null].filter(Boolean).join(' · ') })),
-          livePill(t.live));
+          clock, livePill(t.live));
         drawBar();
         placeLayer();
       }

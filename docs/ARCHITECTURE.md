@@ -124,6 +124,13 @@ Responses are cached 5 s in memory, so thousands of viewers polling every 10 s c
 - **Payments:** Cashfree hosted checkout. The server creates the order, the app opens `/pay/<id>`, Cashfree returns to `/pay/<id>/done` and calls the webhook; credits are added only after `GET /pg/orders/{id}` reports `PAID` for the same amount.
 - **Prices** live in the database (`platform_settings`, per-club `overrides`) and are edited in `/admin`, so no redeploy is needed to change them.
 
+## Event branding (V8)
+
+- **Theme:** 18 presets in 4 groups (sports, wedding & family, cultural & religious, corporate & awards) set the watch page colours and type and the overlay colours; the default follows the kind of event, and the owner can override the main colour. Free.
+- **Own logo:** PNG, JPG or WebP up to 1.5 MB (checked by its first bytes; SVG refused), stored in `MEDIA_DIR/branding/<event>-<hash>.<ext>` and served from `/api/public/branding/:file` with a one-year cache. Shown top left of the watch page; the Go Live logo when there is none. Bought per event (`brandingPrice`, default 100 credits).
+- **Watermark and ticker:** drawn by the graphics overlay (OBS browser source), so they are part of the stream on every platform and in clips. Watermark bottom right (size, see-through), on by default with the Go Live logo. Ticker: the organiser's lines with a sponsor message after every two, a label, three speeds; bought per event (`tickerPrice`, default 0 = free); switched on/off and edited live from the control room.
+- Stored in `tournaments.branding` (jsonb); prices in admin pricing, per-club overrides as usual.
+
 ## Replays and clips
 
 MediaMTX records every camera continuously in 1-second fMP4 segments (retention `RECORDING_RETENTION`, default 72 h).

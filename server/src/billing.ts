@@ -41,6 +41,9 @@ export const pricingSchema = z.object({
   viewerTier2Pct: z.number().min(1).max(100).default(80),
   viewerTier3From: z.number().int().min(0).max(100_000_000).default(50_000),
   viewerTier3Pct: z.number().min(1).max(100).default(60),
+  /** V8: own logo on the watch page + logo watermark in the video, per event; the ticker, per event. */
+  brandingPrice: z.number().min(0).max(1_000_000).default(100),
+  tickerPrice: z.number().min(0).max(1_000_000).default(0),
   /** Free viewer-minutes a new club gets once, for any events. */
   welcomeViewerMinutes: z.number().int().min(0).max(10_000_000).default(100),
 });
@@ -63,6 +66,8 @@ export const DEFAULT_PRICING: Pricing = {
   viewerTier3From: 50_000,
   viewerTier3Pct: 60,
   welcomeViewerMinutes: 100,
+  brandingPrice: 100,
+  tickerPrice: 0,
 };
 
 /**
@@ -117,7 +122,7 @@ export interface OrgBillingRow {
 export interface WalletTxRow {
   id: string;
   org_id: string;
-  kind: 'purchase' | 'cameras' | 'minutes' | 'admin' | 'refund' | 'destinations' | 'viewership' | 'messages' | 'viewers';
+  kind: 'purchase' | 'cameras' | 'minutes' | 'admin' | 'refund' | 'destinations' | 'viewership' | 'messages' | 'viewers' | 'branding' | 'ticker';
   amount_cc: string;
   quantity: number | null;
   tournament_id: string | null;
@@ -473,6 +478,33 @@ export class BillingService {
       }
     });
     await this.walletChanged(t.org_id);
+  }
+
+  /** Buys the own-logo pack or the ticker for one event (once). Free when the price is 0 or billing is off. */
+  async buyAddon(t: TournamentRow, what: 'branding' | 'ticker', by: string): Promise<void> {
+    const col = what === 'branding' ? 'branding_paid_at' : 'ticker_paid_at';
+    if (t[col]) return;
+    const p = await this.pricingFor(t.org_id);
+    const price = what === 'branding' ? p.brandingPrice : p.tickerPrice;
+    const cc = this.enabled ? toCc(price) : 0;
+    const b = await this.orgBilling(t.org_id);
+    if (this.enabled && b.suspended) throw new HttpError(403, 'club_suspended', suspendedText(b));
+    const label = what === 'branding' ? 'Own logo and watermark' : 'Scrolling ticker';
+    await this.repo.tx(async (c) => {
+      const r = await c.query(`UPDATE tournaments SET ${col} = now() WHERE id = $1 AND ${col} IS NULL`, [t.id]);
+      if (!r.rowCount || cc <= 0) return;
+      const left = await this.debit(c, t.org_id, cc, { kind: what, quantity: 1, tournamentId: t.id, note: label, by });
+      if (left === null) throw new HttpError(402, 'insufficient_credits', `${label} costs ${fromCc(cc)} credits; the club has ${fromCc(b.balance_cc)}. Buy credits first.`);
+    });
+    if (cc > 0) await this.walletChanged(t.org_id);
+  }
+
+  /** Whether an add-on is usable for this event: bought, or free (price 0 / billing off). */
+  async addonOn(t: TournamentRow, what: 'branding' | 'ticker'): Promise<boolean> {
+    if (what === 'branding' ? t.branding_paid_at : t.ticker_paid_at) return true;
+    if (!this.enabled) return true;
+    const p = await this.pricingFor(t.org_id);
+    return (what === 'branding' ? p.brandingPrice : p.tickerPrice) <= 0;
   }
 
   /**

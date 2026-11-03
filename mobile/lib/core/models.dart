@@ -1372,7 +1372,7 @@ class CreditPack {
       CreditPack(id: '${j['id']}', label: '${j['label']}', priceInr: _d(j['priceInr']), credits: _d(j['credits']));
 }
 
-enum WalletKind { purchase, cameras, minutes, admin, refund, destinations, viewership, messages, viewers }
+enum WalletKind { purchase, cameras, minutes, admin, refund, destinations, viewership, messages, viewers, branding, ticker }
 
 class WalletTx {
   const WalletTx({required this.kind, required this.credits, this.quantity, this.tournamentName, this.note, required this.at});
@@ -1393,6 +1393,8 @@ class WalletTx {
         WalletKind.viewership => 'Influencers & games',
         WalletKind.messages => 'SMS messages (${quantity ?? 0})',
         WalletKind.viewers => 'Viewer-minutes (${quantity ?? 0})',
+        WalletKind.branding => 'Own logo & watermark',
+        WalletKind.ticker => 'Scrolling ticker',
       };
 
   factory WalletTx.fromJson(Map<String, dynamic> j) => WalletTx(

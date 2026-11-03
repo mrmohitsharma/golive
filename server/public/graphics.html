@@ -90,6 +90,28 @@
   #lb .cols span:nth-child(3), #lb .cols span:nth-child(4) { text-align: right; }
 
   #offline { position: absolute; right: 16px; bottom: 12px; font: 600 14px/1 var(--font); color: rgba(255,255,255,.5); }
+
+  /* ---------- V8: logo watermark (bottom right) and scrolling ticker (bottom), theme colours */
+  body.elegant { --font: "Playfair Display", Georgia, "DejaVu Serif", serif; }
+  #wm { position: absolute; right: 56px; bottom: 52px; display: flex; align-items: center; gap: 12px; transition: bottom .45s var(--ease), opacity .45s; filter: drop-shadow(0 2px 6px rgba(0,0,0,.45)); }
+  body.ticker #wm { bottom: 112px; }
+  body.ticker #lt, body.ticker #q { bottom: 132px; }
+  #wm img { display: block; object-fit: contain; }
+  #wm.small img { max-width: 130px; max-height: 64px; } #wm.medium img { max-width: 200px; max-height: 96px; } #wm.large img { max-width: 280px; max-height: 134px; }
+  #wm .gl { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 2px; color: #fff; }
+  #wm .gl svg { width: 46px; height: 46px; } #wm.small .gl svg { width: 34px; height: 34px; } #wm.large .gl svg { width: 60px; height: 60px; }
+  #wm .gl span { font-size: 30px; } #wm.small .gl span { font-size: 22px; } #wm.large .gl span { font-size: 38px; }
+  #tk { position: absolute; left: 0; right: 0; bottom: 30px; height: 64px; display: flex; background: rgba(8,10,14,.9); border-top: 3px solid var(--gold); box-shadow: 0 -8px 30px rgba(0,0,0,.35); --off: 0; }
+  #tk.hide { transform: translateY(120px) !important; }
+  #tk .lbl { flex: none; position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 0 30px; background: var(--red); font-weight: 800; font-size: 30px; letter-spacing: 4px; text-transform: uppercase; }
+  #tk .lbl::after { content: ""; position: absolute; right: -24px; top: 0; border-style: solid; border-width: 64px 24px 0 0; border-color: var(--red) transparent transparent transparent; }
+  #tk .lbl .dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; animation: pulse 1.6s infinite; }
+  #tk .run { flex: 1; position: relative; overflow: hidden; margin-left: 28px; }
+  #tk .track { position: absolute; left: 0; top: 0; height: 100%; display: flex; align-items: center; white-space: nowrap; will-change: transform; }
+  #tk .it { display: inline-flex; align-items: center; font-size: 32px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; padding-right: 34px; }
+  #tk .it::after { content: "◆"; color: var(--gold); font-size: 18px; margin-left: 34px; }
+  #tk .it .sp { color: #111; background: var(--gold); padding: 4px 12px; border-radius: 4px; font-size: 20px; letter-spacing: 2px; margin-right: 14px; }
+  #tk .it.sponsor { color: var(--gold); }
 </style>
 </head>
 <body>
@@ -125,6 +147,10 @@
     <div class="body"><div class="who" id="qWho"></div><div class="text" id="qText"></div></div>
   </div>
 
+  <div id="wm" class="block hide"></div>
+
+  <div id="tk" class="block hide"><div class="lbl"><span class="dot"></span><span id="tkLabel">LIVE</span></div><div class="run"><div class="track" id="tkTrack"></div></div></div>
+
   <div id="offline"></div>
 
 <script>
@@ -137,8 +163,55 @@
   var show = function (el, on) { el.classList.toggle('hide', !on); };
   var under = function (tp) { return typeof tp === 'string' && tp.charAt(0) === '-'; };
 
+  var GL = '<svg viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="#ee3b2f"/><circle cx="15" cy="15" r="10.5" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="46 20" stroke-linecap="round"/><path d="M12.6 10.4v9.2l7.4-4.6z" fill="#fff"/></svg><span>GO LIVE</span>';
+  var tickerSig = null, tickerAnim = null;
+
+  // V8 branding: theme colours, the logo watermark and the scrolling ticker.
+  function brand(b) {
+    if (!b) return;
+    var root = document.documentElement.style;
+    root.setProperty('--green', b.colors.panel);
+    root.setProperty('--gold', b.colors.accent);
+    root.setProperty('--red', b.colors.live);
+    document.body.classList.toggle('elegant', b.font === 'elegant');
+    var wm = $('wm');
+    show(wm, !!b.watermark);
+    if (b.watermark) {
+      wm.className = 'block ' + b.watermark.size;
+      wm.style.opacity = b.watermark.opacity;
+      var want = b.watermark.logoUrl || 'gl';
+      if (wm.dataset.src !== want) {
+        wm.dataset.src = want;
+        wm.innerHTML = b.watermark.logoUrl ? '<img alt="" src="' + esc(b.watermark.logoUrl) + '">' : '<div class="gl">' + GL + '</div>';
+      }
+    }
+    var tk = b.ticker;
+    document.body.classList.toggle('ticker', !!tk);
+    show($('tk'), !!tk);
+    if (!tk) { tickerSig = null; return; }
+    $('tkLabel').textContent = tk.label;
+    var sig = JSON.stringify([tk.items, tk.pxPerSec]);
+    if (sig === tickerSig) return;
+    tickerSig = sig;
+    var one = tk.items.map(function (it) {
+      return '<span class="it' + (it.sponsor ? ' sponsor' : '') + '">' + (it.sponsor ? '<span class="sp">SPONSOR</span>' : '') + esc(it.text) + '</span>';
+    }).join('');
+    var track = $('tkTrack');
+    // Two copies side by side, moved by one copy's width: a seamless loop.
+    track.innerHTML = one + one;
+    if (tickerAnim) tickerAnim.cancel();
+    requestAnimationFrame(function () {
+      var w = track.scrollWidth / 2;
+      var run = track.parentNode.clientWidth;
+      // Short text: start off the right edge so it still scrolls across the screen.
+      if (w < run) { track.innerHTML = Array(Math.ceil(run / Math.max(1, w)) + 1).fill(one).join('') + Array(Math.ceil(run / Math.max(1, w)) + 1).fill(one).join(''); w = track.scrollWidth / 2; }
+      tickerAnim = track.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(' + -w + 'px)' }], { duration: (w / tk.pxPerSec) * 1000, iterations: Infinity });
+    });
+  }
+
   function render(s) {
     window.__graphicsState = s;
+    brand(s.branding);
     // Score bug
     show($('bug'), !!s.scoreBug);
     if (s.scoreBug) {

@@ -84,6 +84,11 @@ export const TOPICS = [
         'Make a stream-key destination vertical (9:16) for phone-first platforms.',
         'Embed the player on your website with the code on the Streaming tab.',
       ]],
+      ['Branding and theme', [
+        'Event > Branding & theme: pick the theme closest to your event (cricket, football, wedding, festival, conference…) and a main colour. Free.',
+        'Your logo shows at the top left of the watch page and as the watermark at the bottom right of the video. Without it, the Go Live logo is used.',
+        'The scrolling ticker runs along the bottom of the video, like a news channel: your lines plus sponsor messages. Switch it on or off and edit it live in the control room (Graphics).',
+      ]],
     ],
   },
   {

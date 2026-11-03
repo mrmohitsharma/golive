@@ -1,5 +1,5 @@
 // The control room in the browser: the same live connection and commands as the app.
-import { state, get, post, patch, el, toast, guard, confirmBox, go } from './core.js';
+import { state, get, post, patch, el, toast, guard, confirmBox, go, dialog } from './core.js';
 import { goLiveSteps } from './golive-steps.js';
 
 export const title = 'Control room';
@@ -215,6 +215,30 @@ export async function render(view, { id }) {
           toggle('Hole card', g.holeCard?.visible, { holeCard: { visible: !g.holeCard?.visible } }),
           toggle('Auto hole card', g.holeCard?.auto, { holeCard: { auto: !g.holeCard?.auto } }),
           g.question?.visible ? el('button', { class: 'btn primary', onclick: () => gpatch({ question: { visible: false } }), text: 'Viewer question: ON' }) : null));
+      // V8: ticker and watermark, live from the control room (full settings: Event > Branding & theme).
+      const brandBox = el('div', { style: 'margin-top:16px' }, el('span', { class: 'small muted', text: 'Loading ticker…' }));
+      body.append(brandBox);
+      get(`/api/tournaments/${id}/branding`).then((v) => {
+        const b = v.branding;
+        const bpatch = guard(async (p, msg) => { await patch(`/api/tournaments/${id}/branding`, p); toast(msg); drawSide(); });
+        const editLines = guard(async () => {
+          const r = await dialog({ title: 'Ticker lines', text: 'One line each. A sponsor message scrolls after every two lines.', ok: 'Save', fields: [
+            { name: 'lines', label: 'Your lines', type: 'textarea', value: b.ticker.lines.join('\n') },
+            { name: 'sponsors', label: 'Sponsor messages', type: 'textarea', value: b.ticker.sponsors.join('\n') }] });
+          if (!r) return;
+          const split = (t) => String(t ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
+          await bpatch({ ticker: { lines: split(r.lines), sponsors: split(r.sponsors) } }, 'Ticker saved');
+        });
+        brandBox.replaceChildren(
+          el('label', { text: 'Ticker and watermark' }),
+          el('div', { class: 'small muted', style: 'margin-bottom:6px', text: v.tickerItems.length ? v.tickerItems.map((x) => x.text).join('  ◆  ').slice(0, 140) : 'No ticker lines yet.' }),
+          el('div', { class: 'row', style: 'flex-wrap:wrap' },
+            v.owned.ticker
+              ? el('button', { class: 'btn ' + (b.ticker.enabled ? 'primary' : ''), disabled: !v.tickerItems.length || undefined, onclick: () => bpatch({ ticker: { enabled: !b.ticker.enabled } }, b.ticker.enabled ? 'Ticker off' : 'Ticker on air'), text: `Ticker: ${b.ticker.enabled ? 'ON' : 'off'}` })
+              : el('a', { class: 'btn', href: `/web/e/${id}/branding`, text: 'Set up the ticker' }),
+            v.owned.ticker ? el('button', { class: 'btn', onclick: editLines, text: 'Edit lines' }) : null,
+            el('button', { class: 'btn ' + (b.watermark.enabled ? 'primary' : ''), onclick: () => bpatch({ watermark: { enabled: !b.watermark.enabled } }, b.watermark.enabled ? 'Watermark off' : 'Watermark on'), text: `Watermark: ${b.watermark.enabled ? 'ON' : 'off'}` })));
+      }).catch(() => brandBox.replaceChildren());
     } else if (tab === 'Audio') {
       const a = s.audio ?? {};
       const apatch = guard(async (p) => { await patch(`/api/tournaments/${id}/audio`, p); });
