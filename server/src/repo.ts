@@ -72,6 +72,11 @@ export interface TournamentRow {
   billed_minutes: number;
   grace_seconds: number;
   live_session_at: Date | null;
+  /** Viewer-minute billing (bigint columns come back as strings). */
+  viewer_sec_counted?: string;
+  viewer_sec_free?: string;
+  viewer_sec_billable?: string;
+  viewer_cc_billed?: string;
   chat_enabled: boolean;
   chat_slow_sec: number;
   created_at: Date;

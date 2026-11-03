@@ -136,6 +136,8 @@ export async function render(view, { id }) {
       el('span', { class: 'pill ' + (e.connected && e.obsConnected ? 'ok' : 'bad'), text: e.connected && e.obsConnected ? 'Engine ready' : 'Engine not connected' }),
       s.production?.mode === 'cloud' ? el('span', { class: 'small muted', text: `Cloud OBS: ${s.production.cloud.status}` }) : null,
       b && b.minutes.remainingSeconds != null ? el('span', { class: 'small ' + (b.minutes.remainingSeconds < 600 ? 'pill warn' : 'muted'), text: `${Math.floor(b.minutes.remainingSeconds / 60)} min of credit left` }) : null,
+      // Viewer-minutes so far (watch page + YouTube + Facebook) and the credits still available.
+      b?.enabled ? el('span', { class: 'small muted', title: 'Viewer-minutes: every minute one viewer watches, on the watch page, YouTube and Facebook.' + (b.viewers?.freeLeft ? ` ${b.viewers.freeLeft.toLocaleString('en-IN')} free viewer-minutes left.` : ''), text: `👁 ${(b.viewers?.minutes ?? 0).toLocaleString('en-IN')} viewer-min · ${Math.floor(b.balance).toLocaleString('en-IN')} credits available` }) : null,
       (e.warnings ?? []).length ? el('span', { class: 'pill warn', title: e.warnings.join('\n'), text: `${e.warnings.length} warning${e.warnings.length > 1 ? 's' : ''}` }) : null,
       el('div', { class: 'sp' }),
       showGuide,

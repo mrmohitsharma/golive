@@ -73,6 +73,7 @@
   let me = null, tab = 'overview', clubId = null, timer = null;
   const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
   const cr = (n) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const num = (n) => Math.round(Number(n || 0)).toLocaleString('en-IN');
   const when = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '–';
   const day = (iso) => iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '–';
 
@@ -235,7 +236,7 @@
     return el('div', { class: 'panel' }, el('div', { class: 'head' }, q), box);
   }
 
-  const kindText = { purchase: 'Bought credits', cameras: 'Extra cameras', minutes: 'Live minutes', admin: 'Adjusted by CoGolfers', refund: 'Refund', destinations: 'Extra destinations', viewership: 'Influencers & games', messages: 'SMS messages' };
+  const kindText = { purchase: 'Bought credits', cameras: 'Extra cameras', minutes: 'Live minutes', admin: 'Adjusted by CoGolfers', refund: 'Refund', destinations: 'Extra destinations', viewership: 'Influencers & games', messages: 'SMS messages', viewers: 'Viewer-minutes' };
 
   async function club(id) {
     const d = await call('GET', `/api/admin/orgs/${id}`);
@@ -259,8 +260,14 @@
       toast(on ? 'Club suspended' : 'Club active again'); reload();
     });
 
+    const freeVm = el('input', { type: 'number', min: '0', step: '1', value: d.freeViewerMinutes, style: 'width:140px' });
+    const saveFreeVm = guard(async () => {
+      await call('PATCH', `/api/admin/orgs/${id}/billing`, { freeViewerMinutes: Number(freeVm.value) || 0 });
+      toast('Free viewer-minutes saved'); reload();
+    });
+
     // Custom pricing
-    const keys = [['freeCameras', 'Free cameras / tournament', '1'], ['freeMinutes', 'Free live minutes / tournament', '1'], ['cameraPrice', 'Credits per extra camera', '0.01'], ['minutePrice', 'Credits per live minute', '0.01'], ['graceMinutes', 'Grace minutes', '1'], ['freeDestinations', 'Free destinations / event', '1'], ['destinationPrice', 'Credits per extra destination', '0.01'], ['viewershipPrice', 'Credits for Influencers & games / event', '0.01'], ['viewershipMessages', 'SMS included with it', '1'], ['messagePrice', 'Credits per SMS after that', '0.01']];
+    const keys = [['freeCameras', 'Free cameras / tournament', '1'], ['freeMinutes', 'Free live minutes / tournament', '1'], ['cameraPrice', 'Credits per extra camera', '0.01'], ['minutePrice', 'Credits per live minute', '0.01'], ['graceMinutes', 'Grace minutes', '1'], ['freeDestinations', 'Free destinations / event', '1'], ['destinationPrice', 'Credits per extra destination', '0.01'], ['viewershipPrice', 'Credits for Influencers & games / event', '0.01'], ['viewershipMessages', 'SMS included with it', '1'], ['messagePrice', 'Credits per SMS after that', '0.01'], ['viewerMinutePrice', 'Credits per viewer-minute (X)', '0.01'], ['viewerTier2From', 'Tier 2 from viewer-min / event', '1'], ['viewerTier2Pct', 'Tier 2 price, % of X', '1'], ['viewerTier3From', 'Tier 3 from viewer-min / event', '1'], ['viewerTier3Pct', 'Tier 3 price, % of X', '1']];
     const inputs = Object.fromEntries(keys.map(([k, , step]) => [k, el('input', { type: 'number', min: '0', step, value: d.overrides[k] ?? '', placeholder: `Default ${d.platformPricing[k]}` })]));
     const savePricing = guard(async () => {
       const overrides = {};
@@ -277,12 +284,16 @@
         stat('Balance', cr(d.balance) + ' credits'),
         stat('Free cameras', String(d.pricing.freeCameras), `then ${cr(d.pricing.cameraPrice)} credits each`),
         stat('Free minutes', String(d.pricing.freeMinutes), `then ${cr(d.pricing.minutePrice)} credits / min`),
+        stat('Free viewer-minutes left', num(d.freeViewerMinutes), `then ${cr(d.pricing.viewerMinutePrice)} credits / viewer-min`),
         stat('Billing contact', d.details.phone || '–', [d.details.name, d.details.gstin && 'GSTIN ' + d.details.gstin].filter(Boolean).join(' · ') || null),
       ),
       el('div', { class: 'cols' },
         el('div', { class: 'panel' }, el('div', { class: 'head' }, el('h3', { text: 'Add or remove credits' })), el('div', { class: 'body' },
           el('div', { class: 'row' }, amt, note, el('button', { class: 'btn primary', onclick: adjust, text: 'Apply' })),
           el('div', { class: 'hint', text: 'Use a minus sign to remove credits. Every change is recorded with your email.' }))),
+        el('div', { class: 'panel' }, el('div', { class: 'head' }, el('h3', { text: 'Free viewer-minutes' })), el('div', { class: 'body' },
+          el('div', { class: 'row' }, freeVm, el('button', { class: 'btn primary', onclick: saveFreeVm, text: 'Set' })),
+          el('div', { class: 'hint', text: 'Welcome allowance left for this club, used before credits on any event (watch page + YouTube + Facebook).' }))),
         el('div', { class: 'panel' }, el('div', { class: 'head' }, el('h3', { text: 'Account status' })), el('div', { class: 'body' },
           el('div', { class: 'row' }, reason, d.suspended ? el('button', { class: 'btn primary', onclick: () => suspend(false), text: 'Reactivate' }) : el('button', { class: 'btn danger', onclick: () => suspend(true), text: 'Suspend' })),
           el('div', { class: 'hint', text: 'A suspended club cannot go live, start a cloud engine, buy cameras or pay.' }))),
@@ -291,9 +302,10 @@
         el('div', { class: 'form' }, keys.map(([k, label]) => el('label', { class: 'f' }, label, inputs[k]))),
         el('div', { class: 'hint', text: 'Leave a box empty to use the platform price. Set the minute price to 0 for unlimited live time.' }))),
       el('h2', { text: 'Tournaments' }),
-      el('div', { class: 'panel' }, table(['Tournament', 'Date', 'Cameras ', 'Extra bought ', 'Live min ', 'Paid min ', ''], d.tournaments.map((t) =>
+      el('div', { class: 'panel' }, table(['Tournament', 'Date', 'Cameras ', 'Extra bought ', 'Live min ', 'Paid min ', 'Viewer-min ', 'Viewer credits ', ''], d.tournaments.map((t) =>
         el('tr', {}, el('td', {}, el('strong', { text: t.name }), t.venue ? el('div', { class: 'muted', text: t.venue }) : null), el('td', { text: t.startsOn || '–' }),
           el('td', { class: 'num', text: String(t.cameras) }), el('td', { class: 'num', text: String(t.extraCameras) }), el('td', { class: 'num', text: String(t.liveMinutes) }), el('td', { class: 'num', text: String(t.paidMinutes) }),
+          el('td', { class: 'num', text: num(t.viewerMinutes ?? 0) }), el('td', { class: 'num', text: cr(t.viewerCredits ?? 0) }),
           el('td', {}, t.liveNow ? el('span', { class: 'pill live', text: 'LIVE' }) : t.archived ? el('span', { class: 'pill grey', text: 'Archived' }) : null))), 'No tournaments yet.')),
       el('h2', { text: 'Credit history' }),
       el('div', { class: 'panel' }, table(['When', 'What', 'Tournament', 'Qty ', 'Credits ', 'By'], d.transactions.map((x) =>
@@ -308,8 +320,8 @@
   // ------------------------------------------------------------------ pricing
   async function pricing() {
     const s = await call('GET', '/api/admin/settings');
-    const fields = [['freeCameras', 'Free cameras per tournament', '1', 'Each tournament can connect this many camera phones at no cost.'], ['cameraPrice', 'Credits per extra camera', '0.01', 'Bought per tournament by the club.'], ['freeMinutes', 'Free live minutes per tournament', '1', 'Counted from Go live to End stream.'], ['minutePrice', 'Credits per live minute', '0.01', 'Charged for each started minute after the free minutes. 0 = unlimited.'], ['graceMinutes', 'Grace minutes when credits run out', '1', 'The director is warned at 10 and 2 minutes left; after the grace period the stream ends.'], ['freeDestinations', 'Free destinations per event', '1', 'Places one event streams to at no cost: each YouTube channel, Facebook Page, Instagram account or other stream key counts as one.'], ['destinationPrice', 'Credits per extra destination', '0.01', 'Bought per event by the club, for each destination beyond the free ones.'], ['viewershipPrice', 'Credits for Influencers & games, per event', '0.01', 'Influencer links, games and prizes, Remind me, reports. Bought per event in the Studio.'], ['viewershipMessages', 'SMS included with it', '1', 'Reminders, draw entries, prize codes and winner messages included per event.'], ['messagePrice', 'Credits per SMS after the included ones', '0.01', 'Charged from the wallet. Prize codes always go out.']];
-    const inputs = Object.fromEntries(fields.map(([k, , step]) => [k, el('input', { type: 'number', min: '0', step, value: s.pricing[k] })]));
+    const fields = [['freeCameras', 'Free cameras per tournament', '1', 'Each tournament can connect this many camera phones at no cost.'], ['cameraPrice', 'Credits per extra camera', '0.01', 'Bought per tournament by the club.'], ['freeMinutes', 'Free live minutes per tournament', '1', 'Counted from Go live to End stream.'], ['minutePrice', 'Credits per live minute', '0.01', 'Charged for each started minute after the free minutes. 0 = unlimited.'], ['graceMinutes', 'Grace minutes when credits run out', '1', 'The director is warned at 10 and 2 minutes left; after the grace period the stream ends.'], ['freeDestinations', 'Free destinations per event', '1', 'Places one event streams to at no cost: each YouTube channel, Facebook Page, Instagram account or other stream key counts as one.'], ['destinationPrice', 'Credits per extra destination', '0.01', 'Bought per event by the club, for each destination beyond the free ones.'], ['viewershipPrice', 'Credits for Influencers & games, per event', '0.01', 'Influencer links, games and prizes, Remind me, reports. Bought per event in the Studio.'], ['viewershipMessages', 'SMS included with it', '1', 'Reminders, draw entries, prize codes and winner messages included per event.'], ['messagePrice', 'Credits per SMS after the included ones', '0.01', 'Charged from the wallet. Prize codes always go out.'], ['viewerMinutePrice', 'Credits per viewer-minute (X)', '0.01', 'X: 0.01 to 1.0 credit for each minute one viewer watches while live, on top of live minutes. Counted on the watch page and embeds (exact), YouTube and Facebook (their "watching now" count each minute). 0 = off.'], ['viewerTier2From', 'Tier 2 starts at (viewer-minutes per event)', '1', 'From this many viewer-minutes in one event, the price drops to the tier 2 percentage. 0 = no tier 2.'], ['viewerTier2Pct', 'Tier 2 price (% of X)', '1', 'e.g. 80 = 20% off.'], ['viewerTier3From', 'Tier 3 starts at (viewer-minutes per event)', '1', 'Must be above tier 2. 0 = no tier 3.'], ['viewerTier3Pct', 'Tier 3 price (% of X)', '1', 'e.g. 60 = 40% off.'], ['welcomeViewerMinutes', 'Free viewer-minutes for a new club', '1', 'Given once when a club is created, usable on any of its events.']];
+    const inputs = Object.fromEntries(fields.map(([k, , step]) => [k, el('input', { type: 'number', min: '0', step, max: k === 'viewerMinutePrice' ? '1' : null, value: s.pricing[k] })]));
     let packs = s.packs.map((p) => ({ ...p }));
     const packBox = el('div');
     const drawPacks = () => packBox.replaceChildren(table(['Id', 'Name', 'Price (₹)', 'Credits', 'Bonus', ''], packs.map((p, i) => {

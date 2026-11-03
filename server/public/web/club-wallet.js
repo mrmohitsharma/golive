@@ -31,7 +31,8 @@ export async function render(view) {
   const p = b.pricing;
   view.append(
     b.suspended ? el('div', { class: 'banner bad', text: `Your club is suspended: ${b.suspendedReason ?? ''}. Contact Go Live support.` }) : null,
-    el('div', { class: 'grid' }, stat(num(b.balance), 'Credits'), stat(`${p.freeCameras} cameras · ${p.freeMinutes} min`, 'Free with every event'), stat(`${num(p.minutePrice)} / min`, 'Live minutes after that'), stat(`${num(p.cameraPrice)}`, 'Each extra camera')),
+    el('div', { class: 'grid' }, stat(num(b.balance), 'Credits'), stat(`${p.freeCameras} cameras · ${p.freeMinutes} min`, 'Free with every event'), stat(`${num(p.minutePrice)} / min`, 'Live minutes after that'), stat(`${num(p.cameraPrice)}`, 'Each extra camera'),
+      stat(`${p.viewerMinutePrice} / viewer-min`, `Viewers (watch page, YouTube, Facebook)${b.freeViewerMinutes ? ` · ${num(b.freeViewerMinutes)} free left` : ''}`)),
     el('h2', { text: 'Buy credits' }),
     !b.enabled ? el('p', { class: 'muted', text: 'Billing is off on this server: everything is free.' })
     : !b.paymentsEnabled ? el('div', { class: 'banner warn', text: 'Online payment is not available yet. Contact Go Live support to add credits.' })

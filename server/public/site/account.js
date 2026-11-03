@@ -137,7 +137,7 @@
         return;
       }
       kids.push(el('div', { class: 'balance' }, [num(b.balance), el('small', { text: 'credits' })]));
-      kids.push(el('p', { style: 'color:var(--muted);margin-bottom:18px', text: 'Every event includes ' + b.pricing.freeCameras + ' cameras and ' + b.pricing.freeMinutes + ' live minutes free; then ' + num(b.pricing.cameraPrice) + ' credits per extra camera and ' + num(b.pricing.minutePrice) + ' per live minute.' }));
+      kids.push(el('p', { style: 'color:var(--muted);margin-bottom:18px', text: 'Every event includes ' + b.pricing.freeCameras + ' cameras and ' + b.pricing.freeMinutes + ' live minutes free; then ' + num(b.pricing.cameraPrice) + ' credits per extra camera and ' + num(b.pricing.minutePrice) + ' per live minute' + (b.pricing.viewerMinutePrice > 0 ? ', plus ' + b.pricing.viewerMinutePrice + ' per viewer-minute (watch page, YouTube, Facebook)' + (b.freeViewerMinutes ? '; ' + num(b.freeViewerMinutes) + ' free viewer-minutes left' : '') : '') + '.' }));
       if (b.suspended) {
         kids.push(el('p', { class: 'notice', text: 'This organisation is paused' + (b.suspendedReason ? ': ' + b.suspendedReason : '.') + ' Contact us to resume.' }));
       } else if (!b.paymentsEnabled) {

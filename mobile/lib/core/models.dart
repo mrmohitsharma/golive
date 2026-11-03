@@ -1331,6 +1331,7 @@ class BillingPricing {
     this.graceMinutes = 5,
     this.freeDestinations = 1,
     this.destinationPrice = 0,
+    this.viewerMinutePrice = 0,
   });
   final int freeCameras;
   final int freeMinutes;
@@ -1339,6 +1340,9 @@ class BillingPricing {
   final int graceMinutes;
   final int freeDestinations;
   final double destinationPrice;
+
+  /// Credits per viewer-minute (watch page, YouTube, Facebook), on top of live minutes.
+  final double viewerMinutePrice;
 
   factory BillingPricing.fromJson(Map<String, dynamic>? j) => j == null
       ? const BillingPricing()
@@ -1350,6 +1354,7 @@ class BillingPricing {
           graceMinutes: (j['graceMinutes'] as num?)?.toInt() ?? 5,
           freeDestinations: (j['freeDestinations'] as num?)?.toInt() ?? 1,
           destinationPrice: _d(j['destinationPrice']),
+          viewerMinutePrice: _d(j['viewerMinutePrice']),
         );
 }
 
@@ -1367,7 +1372,7 @@ class CreditPack {
       CreditPack(id: '${j['id']}', label: '${j['label']}', priceInr: _d(j['priceInr']), credits: _d(j['credits']));
 }
 
-enum WalletKind { purchase, cameras, minutes, admin, refund, destinations, viewership, messages }
+enum WalletKind { purchase, cameras, minutes, admin, refund, destinations, viewership, messages, viewers }
 
 class WalletTx {
   const WalletTx({required this.kind, required this.credits, this.quantity, this.tournamentName, this.note, required this.at});
@@ -1387,6 +1392,7 @@ class WalletTx {
         WalletKind.destinations => note ?? 'Extra destinations',
         WalletKind.viewership => 'Influencers & games',
         WalletKind.messages => 'SMS messages (${quantity ?? 0})',
+        WalletKind.viewers => 'Viewer-minutes (${quantity ?? 0})',
       };
 
   factory WalletTx.fromJson(Map<String, dynamic> j) => WalletTx(
@@ -1472,12 +1478,20 @@ class TournamentBilling {
     this.graceSecondsLeft,
     this.canGoLive = true,
     this.reason,
+    this.viewerMinutes = 0,
+    this.freeViewerMinutesLeft = 0,
   });
   final bool enabled;
   final bool suspended;
   final String? suspendedReason;
   final double balance;
   final BillingPricing pricing;
+
+  /// Viewer-minutes of this event so far (watch page + YouTube + Facebook).
+  final int viewerMinutes;
+
+  /// The club's free (welcome) viewer-minutes left, for any events.
+  final int freeViewerMinutesLeft;
   final int camerasFree;
   final int camerasExtra;
   final int cameraLimit;
@@ -1512,7 +1526,10 @@ class TournamentBilling {
     final mins = (j['minutes'] as Map<String, dynamic>?) ?? const {};
     final grace = (j['grace'] as Map<String, dynamic>?) ?? const {};
     final dest = (j['destinations'] as Map<String, dynamic>?) ?? const {};
+    final viewers = (j['viewers'] as Map<String, dynamic>?) ?? const {};
     return TournamentBilling(
+      viewerMinutes: (viewers['minutes'] as num?)?.toInt() ?? 0,
+      freeViewerMinutesLeft: (viewers['freeLeft'] as num?)?.toInt() ?? 0,
       enabled: (j['enabled'] as bool?) ?? false,
       suspended: (j['suspended'] as bool?) ?? false,
       suspendedReason: j['suspendedReason'] as String?,

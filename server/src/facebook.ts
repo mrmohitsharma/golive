@@ -184,6 +184,14 @@ export class FacebookService {
     return r.data ?? [];
   }
 
+  /** How many people watch the live video now (Graph API live_views), or null when unknown. */
+  async liveViewers(t: TournamentRow): Promise<number | null> {
+    if (!t.fb_live_video_id) return null;
+    const { token } = await this.pageToken(t.org_id);
+    const r = await this.call<{ live_views?: number; status?: string }>('GET', t.fb_live_video_id, { fields: 'live_views,status', access_token: token });
+    return typeof r.live_views === 'number' && r.live_views >= 0 ? r.live_views : null;
+  }
+
   streamUrlFor(t: TournamentRow): string | null {
     return t.fb_stream_url_enc ? this.sealer.open(t.fb_stream_url_enc) : null;
   }

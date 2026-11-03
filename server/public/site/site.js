@@ -339,13 +339,17 @@
   });
 
   // ---------------------------------------------------------------- prices
-  var P = { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5 };
+  var P = { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5, viewerMinutePrice: 0.01, welcomeViewerMinutes: 100 };
   var inrPerCredit = 1;
   function oursCredits(cams, hours) {
     return Math.max(0, cams - P.freeCameras) * P.cameraPrice + Math.max(0, hours * 60 - P.freeMinutes) * P.minutePrice;
   }
   function fillPrices(packs) {
-    document.querySelectorAll('[data-p]').forEach(function (n) { n.textContent = num(P[n.getAttribute('data-p')]); });
+    document.querySelectorAll('[data-p]').forEach(function (n) {
+      var v = P[n.getAttribute('data-p')];
+      // Small prices (credits per viewer-minute) keep their decimals.
+      n.textContent = v != null && v > 0 && v < 1 ? String(+Number(v).toFixed(2)) : num(v);
+    });
     if (packs && packs.length) {
       var body = document.getElementById('packs');
       if (body) {

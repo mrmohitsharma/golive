@@ -67,6 +67,7 @@ export class ViewershipService {
   private pending = new Map<string, Pending>();
   private presence = new Map<string, Map<string, Presence>>();
   private youtubeNow = new Map<string, { viewers: number; at: number }>();
+  private facebookNow = new Map<string, { viewers: number; at: number }>();
   /** Which influencer brought each viewer (for "watching now" per influencer). */
   private refs = new Map<string, string | null>();
   private flushing: Promise<void> | null = null;
@@ -280,18 +281,29 @@ export class ViewershipService {
     return y && this.now() - y.at < 5 * 60_000 ? y.viewers : null;
   }
 
-  /** Once a minute: one row per event with viewers, for the graph and the peak. */
+  setFacebookViewers(tournamentId: string, viewers: number | null): void {
+    if (viewers == null) this.facebookNow.delete(tournamentId);
+    else this.facebookNow.set(tournamentId, { viewers, at: this.now() });
+  }
+
+  facebookViewers(tournamentId: string): number | null {
+    const f = this.facebookNow.get(tournamentId);
+    return f && this.now() - f.at < 5 * 60_000 ? f.viewers : null;
+  }
+
+  /** Once a minute: one row per event with viewers, for the graph, the peak and viewer-minute billing. */
   async snapshotMinute(): Promise<void> {
     const at = new Date(Math.floor(this.now() / 60_000) * 60_000);
-    const ids = new Set([...this.presence.keys(), ...this.youtubeNow.keys()]);
+    const ids = new Set([...this.presence.keys(), ...this.youtubeNow.keys(), ...this.facebookNow.keys()]);
     for (const tid of ids) {
       const w = this.watchingNow(tid);
       const yt = this.youtubeViewers(tid);
-      if (!w.watching && yt == null) continue;
+      const fb = this.facebookViewers(tid);
+      if (!w.watching && yt == null && fb == null) continue;
       await this.repo.db.query(
-        `INSERT INTO viewer_minutes (tournament_id, at, watching, unmuted, youtube) VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (tournament_id, at) DO UPDATE SET watching = EXCLUDED.watching, unmuted = EXCLUDED.unmuted, youtube = EXCLUDED.youtube`,
-        [tid, at, w.watching, w.unmuted, yt],
+        `INSERT INTO viewer_minutes (tournament_id, at, watching, unmuted, youtube, facebook) VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (tournament_id, at) DO UPDATE SET watching = EXCLUDED.watching, unmuted = EXCLUDED.unmuted, youtube = EXCLUDED.youtube, facebook = EXCLUDED.facebook`,
+        [tid, at, w.watching, w.unmuted, yt, fb],
       );
     }
   }

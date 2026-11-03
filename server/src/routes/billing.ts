@@ -48,6 +48,7 @@ export function registerBillingRoutes(app: FastifyInstance, ctx: Ctx) {
     return {
       enabled: billing.enabled,
       balance: fromCc(b.balance_cc),
+      freeViewerMinutes: Math.floor(Number(b.free_viewer_sec ?? 0) / 60),
       pricing,
       packs,
       paymentsEnabled: payments.enabled,

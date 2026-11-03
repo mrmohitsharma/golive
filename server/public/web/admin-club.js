@@ -63,7 +63,12 @@ export async function render(view, { id }) {
     const notes = el('textarea', { rows: 3, value: x.notes ?? '', placeholder: 'Private notes for the Go Live team' });
     view.replaceChildren(
       c.suspended ? el('div', { class: 'banner bad', text: `Suspended: ${c.suspendedReason ?? 'no reason given'}` }) : null,
-      el('div', { class: 'grid' }, stat(num(c.balance), 'Credits'), stat(c.tournaments.length, 'Events'), stat(c.members.length, 'Members'),
+      el('div', { class: 'grid' }, stat(num(c.balance), 'Credits'),
+        el('div', { class: 'stat', style: 'cursor:pointer', title: 'Change the free viewer-minutes left', onclick: guard(async () => {
+          const v = await dialog({ title: 'Free viewer-minutes', text: 'Welcome allowance left for this club: used before credits on any event (watch page + YouTube + Facebook).', ok: 'Save', fields: [{ name: 'm', label: 'Viewer-minutes', type: 'number', value: String(c.freeViewerMinutes ?? 0), required: true }] });
+          if (!v) return; await patch(`/api/admin/orgs/${id}/billing`, { freeViewerMinutes: Number(v.m) || 0 }); toast('Free viewer-minutes saved'); reload();
+        }) }, el('div', { class: 'v', text: num(c.freeViewerMinutes ?? 0) }), el('div', { class: 'l', text: 'Free viewer-minutes left ✎' })),
+        stat(c.tournaments.length, 'Events'), stat(c.members.length, 'Members'),
         stat(inr(c.payments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amountInr, 0)), 'Paid (last 50 payments)'), stat(day(c.org.createdAt), 'Joined')),
       el('h2', { text: 'Actions' }), actions,
       el('h2', { text: 'Team' }), members,

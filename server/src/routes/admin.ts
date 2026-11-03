@@ -164,6 +164,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
       repo.members(orgId),
       q.query(
         `SELECT t.id, t.name, t.venue, t.starts_on, t.archived, t.live_seconds, t.billed_minutes, t.extra_cameras, t.created_at,
+                t.viewer_sec_counted::text AS viewer_sec, t.viewer_cc_billed::text AS viewer_cc,
                 (SELECT count(*) FROM cameras c WHERE c.tournament_id = t.id)::int AS cameras
          FROM tournaments t WHERE t.org_id = $1 ORDER BY t.created_at DESC LIMIT 100`,
         [orgId],
@@ -175,6 +176,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
     return {
       org: { id: org.id, name: org.name, createdAt: org.created_at.toISOString() },
       balance: fromCc(b.balance_cc),
+      freeViewerMinutes: Math.floor(Number(b.free_viewer_sec ?? 0) / 60),
       suspended: b.suspended,
       suspendedReason: b.suspended_reason,
       overrides: b.overrides ?? {},
@@ -192,6 +194,8 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
         paidMinutes: Math.max(0, t.billed_minutes),
         cameras: t.cameras,
         extraCameras: t.extra_cameras,
+        viewerMinutes: Math.floor(Number(t.viewer_sec ?? 0) / 60),
+        viewerCredits: fromCc(t.viewer_cc ?? 0),
         liveNow: streaming.has(t.id),
       })),
       transactions: txs.map(txDto),
@@ -207,13 +211,21 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
         overrides: pricingSchema.partial().optional(),
         suspended: z.boolean().optional(),
         suspendedReason: z.string().trim().max(200).nullable().optional(),
+        // The club's free viewer-minutes left (welcome allowance), set by hand.
+        freeViewerMinutes: z.number().min(0).max(100_000_000).optional(),
       })
       .parse(req.body);
     const b = await billing.updateOrgBilling(orgId, body);
     // A suspension takes effect on live broadcasts straight away.
     if (body.suspended) await billing.tick().catch(() => {});
     if (body.suspended) void ctx.notifier.suspended(orgId, body.suspendedReason ?? null).catch(() => {});
-    return { suspended: b.suspended, suspendedReason: b.suspended_reason, overrides: b.overrides, pricing: await billing.pricingFor(orgId, b) };
+    return {
+      suspended: b.suspended,
+      suspendedReason: b.suspended_reason,
+      overrides: b.overrides,
+      pricing: await billing.pricingFor(orgId, b),
+      freeViewerMinutes: Math.floor(Number(b.free_viewer_sec ?? 0) / 60),
+    };
   });
 
   app.post('/api/admin/orgs/:id/credits', { preHandler: admin }, async (req) => {

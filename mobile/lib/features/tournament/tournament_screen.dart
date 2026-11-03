@@ -221,6 +221,15 @@ class _TournamentScreenState extends State<TournamentScreen> {
         ].join(', '),
         warn: b.low || b.graceActive,
       ),
+      if (b.pricing.viewerMinutePrice > 0)
+        _PlanRow(
+          icon: Icons.visibility_outlined,
+          title: 'Viewer-minutes: ${b.viewerMinutes}',
+          subtitle: [
+            '${formatAmount(b.pricing.viewerMinutePrice)} credits per viewer-minute on the watch page, YouTube and Facebook',
+            if (b.freeViewerMinutesLeft > 0) '${b.freeViewerMinutesLeft} free viewer-minutes left',
+          ].join(', '),
+        ),
       _PlanRow(
         icon: Icons.account_balance_wallet_outlined,
         title: 'Club balance: ${formatAmount(b.balance)} credits',

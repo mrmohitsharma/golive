@@ -302,6 +302,7 @@ class _BillingScreenState extends State<BillingScreen> with WidgetsBindingObserv
         WalletKind.destinations => Icons.cell_tower,
         WalletKind.viewership => Icons.campaign,
         WalletKind.messages => Icons.sms,
+        WalletKind.viewers => Icons.visibility,
       };
 
   static String _date(DateTime d) {
@@ -337,6 +338,7 @@ class _BalanceCard extends StatelessWidget {
             [
               'Extra camera: ${formatAmount(pricing.cameraPrice)} credits per tournament',
               perMinute > 0 ? 'Live time after that: ${formatAmount(perMinute)} credits per minute' : 'Live time after that: no charge',
+              if (pricing.viewerMinutePrice > 0) 'Viewers: ${formatAmount(pricing.viewerMinutePrice)} credits per viewer-minute (watch page, YouTube, Facebook)',
             ].join('\n'),
             style: t.bodySmall?.copyWith(color: Colors.white70),
           ),

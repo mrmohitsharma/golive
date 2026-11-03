@@ -143,6 +143,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const chatReaders = new ChatReaders(config, repo, chat, youtube, facebook, log);
   chat.onChange = (tid) => hub.chatChanged(tid);
   const viewership = new ViewershipService(config, repo, (tid) => hub.engineState(tid).streaming.active);
+  // Viewer-minute billing counts the watch-page seconds already written; flush the rest first.
+  billing.flushViewers = () => viewership.flush();
   const mailer = new Mailer(config, repo, secrets, log);
   await mailer.reload();
   const notifier = new Notifier(config, repo, mailer);
@@ -307,6 +309,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
           if (!t) continue;
           const v = await youtube.videoStatus(t).catch(() => null);
           viewership.setYoutubeViewers(tid, v?.concurrentViewers ?? null);
+          // Facebook Page live viewers (for the graph and viewer-minute billing).
+          viewership.setFacebookViewers(tid, await facebook.liveViewers(t).catch(() => null));
         }
         await viewership.snapshotMinute().catch((err) => log.warn({ err }, 'viewership snapshot failed'));
         // Unclaimed prizes pass to reserves even after the show has ended.

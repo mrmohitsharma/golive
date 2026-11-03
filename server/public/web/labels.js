@@ -10,10 +10,16 @@ export const PRICING_LABELS = {
   viewershipPrice: 'Influencers & games add-on (credits)',
   viewershipMessages: 'SMS included with the add-on',
   messagePrice: 'Credits per extra SMS',
+  viewerMinutePrice: 'Credits per viewer-minute',
+  viewerTier2From: 'Tier 2 from (viewer-minutes per event)',
+  viewerTier2Pct: 'Tier 2 price (% of the viewer-minute price)',
+  viewerTier3From: 'Tier 3 from (viewer-minutes per event)',
+  viewerTier3Pct: 'Tier 3 price (% of the viewer-minute price)',
+  welcomeViewerMinutes: 'Free viewer-minutes for a new club',
 };
 export const TX_LABELS = {
   purchase: 'Credits bought', cameras: 'Extra cameras', minutes: 'Live minutes', admin: 'Admin adjustment', refund: 'Refund',
-  destinations: 'Extra destinations', viewership: 'Influencers & games', messages: 'SMS',
+  destinations: 'Extra destinations', viewership: 'Influencers & games', messages: 'SMS', viewers: 'Viewer-minutes',
 };
 export const ROLE_LABELS = { owner: 'Owner', director: 'Director', scorer: 'Scorer', commentator: 'Commentator', camera: 'Camera' };
 export const FEATURE_LABELS = { cloud: 'Cloud OBS (OBS on our servers)', viewership: 'Influencers & games add-on' };
