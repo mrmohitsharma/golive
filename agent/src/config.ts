@@ -21,7 +21,7 @@ export function loadDotEnv(file = path.resolve(process.cwd(), '.env')): void {
   for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
     const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
     if (!m || line.trim().startsWith('#')) continue;
-    let v = m[2];
+    let v = m[2].trim();
     if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
     if (process.env[m[1]] === undefined) process.env[m[1]] = v;
   }
@@ -30,7 +30,7 @@ export function loadDotEnv(file = path.resolve(process.cwd(), '.env')): void {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
   const need = (k: string) => {
     const v = env[k];
-    if (!v) throw new Error(`Missing ${k}. Copy the .env from the Director app (Tournament > Engine setup).`);
+    if (!v) throw new Error(`Missing ${k}. Copy the settings from the Go Live website: Event > Streaming > Laptop OBS setup.`);
     return v;
   };
   return {
