@@ -34,6 +34,9 @@ const schema = z.object({
   // The legal pages show these; Google and Meta app reviews check them, so fill them in.
   BRAND_NAME: z.string().default('Go Live'),
   SUPPORT_EMAIL: optional,
+  // Where the Go Live agent apps (Windows, Mac) are downloaded from: GitHub release assets built by
+  // .github/workflows/agent-apps.yml. Point it elsewhere to host the files yourself.
+  AGENT_DOWNLOAD_BASE: z.string().default('https://github.com/mrmohitsharma/golive/releases/download/agent-latest'),
   LEGAL_ENTITY: optional, // registered company name, e.g. "Example Media Pvt Ltd"
   LEGAL_ADDRESS: optional, // registered office address
   LEGAL_JURISDICTION: z.string().default('Gurugram, Haryana'),

@@ -12,6 +12,7 @@ export async function render(view, { id, tab = 'overview' }) {
   document.getElementById('title').textContent = t.name;
   document.title = t.name + ' · Go Live';
   const live = s.engine?.streaming?.active;
+  const tabs = t.mode === 'laptop' || tab === 'laptop' ? [...TABS.slice(0, 2), ['laptop', 'Laptop OBS'], ...TABS.slice(2)] : TABS;
   view.append(
     el('div', { class: 'row', style: 'margin-bottom:6px' },
       live ? pill('live', 'LIVE') : pill('', 'Not live'),
@@ -20,10 +21,10 @@ export async function render(view, { id, tab = 'overview' }) {
       el('div', { class: 'sp' }),
       el('a', { class: 'btn small', href: `/watch/${id}`, target: '_blank', rel: 'noopener', text: 'Watch page' }),
       el('a', { class: 'btn small primary', href: `/web/e/${id}/control`, 'data-tour': 'control-btn', text: 'Open control room' })),
-    el('nav', { class: 'tabs', 'data-tour': 'event-tabs' }, TABS.map(([k, l]) => el('a', { href: `/web/e/${id}/${k}`, class: k === tab ? 'on' : null, onclick: (e) => { e.preventDefault(); go(`/web/e/${id}/${k}`); }, text: l }))));
+    el('nav', { class: 'tabs', 'data-tour': 'event-tabs' }, tabs.map(([k, l]) => el('a', { href: `/web/e/${id}/${k}`, class: k === tab ? 'on' : null, onclick: (e) => { e.preventDefault(); go(`/web/e/${id}/${k}`); }, text: l }))));
   const body = el('div');
   view.append(body);
-  const views = { overview, people, streaming, scores, chat, clips, engagement, settings, branding: (b, i) => import('./branding.js').then((m) => m.render(b, i)) };
+  const views = { overview, people, streaming, scores, chat, clips, engagement, settings, branding: (b, i) => import('./branding.js').then((m) => m.render(b, i)), laptop: (b, i, st) => import('./laptop.js').then((m) => m.render(b, i, st)) };
   return (views[tab] ?? overview)(body, id, s);
 }
 const reloadTab = (id, tab) => go(`/web/e/${id}/${tab}`);
@@ -66,7 +67,7 @@ async function overview(body, id, s) {
     el('div', { class: 'card' },
       el('ol', { style: 'margin:0;padding-left:20px;line-height:1.9' },
         el('li', {}, 'Add cameras: phones scan the camera QR below (or open the invite link).'),
-        el('li', {}, prod.mode === 'cloud' ? 'Start the show: we start Cloud OBS and your main stream.' : 'Laptop OBS: run the Go Live agent next to OBS on your laptop (Streaming tab > Laptop OBS setup), then start the show.'),
+        el('li', {}, prod.mode === 'cloud' ? 'Start the show: we start Cloud OBS and your main stream.' : 'Laptop OBS: get the Go Live app on your laptop and link it (Laptop OBS tab), then start the show.'),
         el('li', {}, 'Open the control room, pick a camera and press Go live.')),
       el('div', { class: 'row', style: 'margin-top:12px' },
         el('button', { class: 'btn primary', onclick: guard(async () => {
@@ -204,8 +205,10 @@ async function streaming(body, id, s) {
     }), text: 'Add destination' }),
       billing ? el('span', { class: 'small muted', text: `${billing.destinations.used} of ${billing.destinations.limit} destinations used${billing.destinations.price ? ` · extra ones ${billing.destinations.price} credits` : ''}` }) : null,
       billing?.enabled ? el('button', { class: 'btn small', onclick: buySlots(id, 'destinations', billing, 'streaming'), text: 'Add destination slots' }) : null),
-    setup ? el('div', {}, el('h2', {}, 'Laptop OBS setup ', info('obs', 'How to set up Laptop OBS')),
-      el('div', { class: 'card' }, el('p', { class: 'small', text: 'On the laptop with OBS, run the Go Live agent with these settings:' }),
+    setup ? el('div', {}, el('h2', {}, 'Laptop OBS ', info('obs', 'How to set up Laptop OBS')),
+      el('div', { class: 'card row' }, el('span', { style: 'flex:1', class: 'small', text: 'Get the Go Live app on your laptop and link it with a 6-digit code. It sets OBS up for you.' }),
+        el('a', { class: 'btn primary small', href: `/web/e/${id}/laptop`, onclick: (e) => { e.preventDefault(); go(`/web/e/${id}/laptop`); }, text: 'Set up the laptop' })),
+      el('details', { class: 'card' }, el('summary', { class: 'small', text: 'Advanced: Laptop OBS settings file (command-line agent)' }), el('p', { class: 'small', text: 'For the command-line agent (Node.js): put these settings in its .env file.' }),
         el('pre', { class: 'mono card', style: 'white-space:pre-wrap;user-select:all', text: setup.envFile }),
         el('button', { class: 'btn small', onclick: guard(async () => { if (!(await confirmBox('Make a new engine key?', 'The laptop agent must be restarted with the new key.', 'New key', false))) return; await post(`/api/tournaments/${id}/engine-key/rotate`); reloadTab(id, 'streaming'); }), text: 'New engine key' }))) : null);
 }

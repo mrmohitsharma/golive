@@ -16,7 +16,7 @@ v5.0, v6.0…   tags: frozen snapshots of each released version
 | V5 | `v5.0` | Viewer comments, admin panel, Cashfree, public website and legal pages, Go Live rename |
 | V6 | `v6.0` when released | On `v6-dev`: 5-minute onboarding and the viewership engine (influencers, games, prizes, reports) |
 | V7 | `v7.0` when released | On `v7-dev`: the web app (super admin and the owner/director web with the control room), first-login setup and product tour, Cloud OBS / Laptop OBS with auto-stop, our own HLS watch player through Bunny CDN, the redesigned watch page (games pop-up, points, Top players, reactions, celebrations), camera app controls (brightness/zoom arcs, focus, lock, torch, mic mute, portrait, pocket mode, call handling), support tickets, the new website with Features page, and viewer-minute billing |
-| V8 | `v8.0` when released | On `v8-dev`: next version, started from V7 |
+| V8 | `v8.0` when released | On `v8-dev`: event branding (themes, own logo, watermark, ticker) and the Go Live laptop app (Windows/Mac, 6-digit pairing, OBS set up for you, Laptop OBS wizard) |
 
 ## Working on the next version
 

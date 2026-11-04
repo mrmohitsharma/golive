@@ -59,26 +59,39 @@ docker compose exec server node dist/seed-cli.js orgs
 
 **Updates:** `git pull && docker compose up -d --build`. Migrations run on start.
 
-## 2. Laptop mode (OBS at the course)
+## 2. Laptop mode (OBS at the venue)
 
-1. **OBS Studio 30+ from obsproject.com** (the official builds include the Browser Source needed for graphics). *Tools → WebSocket Server Settings*: enable, port 4455, set a password.
-2. *Settings → Video*: 1920×1080, 30 fps. *Output*: hardware encoder (Apple VT / NVENC), CBR 6000–8000 kbps, keyframe 2 s.
-3. **Node.js 22**, then:
+**The easy way (V8): the Go Live app.** Nothing to install but OBS and the app, nothing to copy.
+
+1. Install **OBS Studio 30+** from obsproject.com (official builds include the Browser Source for graphics).
+2. On the event, open the **Laptop OBS** tab and download the app: **Windows** (`GoLiveAgent-Windows.exe`) or **Mac** (Apple chip / Intel, zipped). The first time, Windows asks "More info > Run anyway"; a Mac asks right-click > Open (the apps are not code-signed yet).
+3. Open the app. It finds OBS, switches its remote control on (`obs-websocket`, port and password written to OBS's own settings while OBS is closed), sets 1920x1080 at 30 fps and Simple output (it asks once), and opens OBS.
+4. It shows a **6-digit code** and opens `/web/pair?code=…` in the browser: pick the event, or type the code on the event's Laptop OBS tab. The tab's four steps tick themselves (app, laptop linked, OBS ready, cameras in OBS).
+5. Next time just open the app: the laptop stays paired with the club (`%APPDATA%\GoLive\agent.json`, `~/Library/Application Support/GoLive/agent.json`). To run another event, press **Use for this event** on that event's Laptop OBS tab; the app switches by itself. **Forget** on the tab removes a lost laptop.
+
+The apps are built by `.github/workflows/agent-apps.yml` (on a Mac runner: tests, `pkg`, ad-hoc `codesign`) whenever `agent/` changes on `main` or `v8-dev`, and published on the `agent-latest` GitHub release. `/download/agent/windows|mac-arm|mac-intel` redirects there (`AGENT_DOWNLOAD_BASE` to host them elsewhere). Build locally with `cd agent && npm ci && npm run apps` (Mac files then need `codesign --sign -`). `GOLIVE_DEFAULT_SERVER` (default `https://gogetslive.com`) is the server baked into the app; `SERVER_URL` overrides it on a laptop.
+
+**The command-line agent (older setups, a fixed studio PC):**
+
+1. OBS *Tools → WebSocket Server Settings*: enable, port 4455, set a password.
+2. **Node.js 22**, then:
 
 ```bash
-cd cogolfer-live-director/agent
+cd golive/agent
 npm ci && npm run build
 cp .env.example .env
 ```
 
-4. In the app: *Tournament → Production → Engine setup (.env)* → **Copy** or **Share** and paste `SERVER_URL`, `TOURNAMENT_ID`, `ENGINE_KEY` into `.env`; add `OBS_PASSWORD`.
-5. `npm start`. Expected:
+3. Event → *Streaming → Advanced: Laptop OBS settings file*: paste `SERVER_URL`, `TOURNAMENT_ID`, `ENGINE_KEY` into `.env`; add `OBS_PASSWORD` (OBS *Show Connect Info > Copy*). On Windows PowerShell use `npm.cmd` (or allow scripts once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`).
+4. `npm start`. Expected:
 
 ```
-connected to OBS 31.x (ws 5.x)
-connected to server https://live.cogolfers.com
-OBS scenes synced: 10 cameras (+10 new, 0 updated, -0 removed)
+connected to OBS 32.x (ws 5.x)
+connected to server https://gogetslive.com
+OBS synced: 1 cameras (+1 new, 0 updated, -0 removed)
 ```
+
+With `TOURNAMENT_ID` and `ENGINE_KEY` set the agent uses them (this is also how the cloud engine runs); without them it runs as the app above.
 
 The agent creates and maintains: one scene per camera (`CG cam-xxxx`), `CG Fallback`, `CG Replay`, and the nested `CG Layers` scene (commentary + graphics) on top of each. Add your own logos/overlays freely; the agent only manages the `CG …` items. When any platform is set up in the app (YouTube, Facebook or Instagram), the agent points OBS at the server (one SRT stream, UDP 8890 outbound) and the server sends it on to each platform. Otherwise set `YOUTUBE_STREAM_KEY` or configure OBS → Stream yourself.
 

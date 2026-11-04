@@ -13,6 +13,10 @@ export interface AgentConfig {
   youtubeServer: string;
   fallbackText: string;
   stateIntervalMs: number;
+  /** App mode (paired laptop): gets the engine token for the laptop's current event instead of the engine key. */
+  tokenSource?: () => Promise<string>;
+  /** App mode: put OBS on a 1920x1080 30 fps canvas and Simple output (the organiser agreed). */
+  laptopDefaults?: boolean;
 }
 
 /** Minimal .env reader so the agent runs with `node dist/index.js` and a .env next to it. */

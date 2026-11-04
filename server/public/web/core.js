@@ -46,7 +46,7 @@ export function signOut(expired = false) {
   const admin = store.get('gl.adminToken');
   if (state.impersonating && admin && !expired) { store.set('baas.token', admin); store.set('gl.adminToken', null); location.href = '/web/admin/users'; return; }
   store.set('baas.token', null); store.set('baas.session', null); store.set('gl.adminToken', null);
-  location.replace('/login?next=' + encodeURIComponent(location.pathname));
+  location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search));
 }
 
 /** el('div', {class:'x', onclick}, child, 'text', [more]) — text is always set as text, never HTML. */

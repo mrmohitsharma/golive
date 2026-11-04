@@ -1,0 +1,55 @@
+# Builds the Go Live agent apps (Windows .exe, Mac Apple Silicon and Intel) and publishes them
+# on the "agent-latest" release, where the event page's download buttons point
+# (server: AGENT_DOWNLOAD_BASE). Runs when the agent changes, or by hand (Actions > Run workflow).
+name: Agent apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      server:
+        description: Server the apps talk to
+        default: https://gogetslive.com
+  push:
+    branches: [main, v8-dev]
+    paths: ['agent/**', '.github/workflows/agent-apps.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+      - name: Install and test
+        working-directory: agent
+        run: |
+          npm ci
+          npm test
+      - name: Build the apps
+        working-directory: agent
+        env:
+          GOLIVE_DEFAULT_SERVER: ${{ inputs.server || 'https://gogetslive.com' }}
+        run: node scripts/build-apps.mjs
+      - name: Sign (ad hoc) and zip the Mac apps
+        working-directory: agent/build
+        run: |
+          for n in GoLiveAgent-Mac-AppleSilicon GoLiveAgent-Mac-Intel; do
+            chmod +x "$n"
+            codesign --force --sign - "$n"
+            mkdir -p "pack-$n" && cp "$n" "pack-$n/Go Live Agent"
+            ditto -c -k --keepParent "pack-$n/Go Live Agent" "$n.zip"
+          done
+          ls -la
+      - name: Publish on the agent-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd agent/build
+          gh release view agent-latest >/dev/null 2>&1 || gh release create agent-latest --title "Go Live agent (latest)" --notes "Windows and Mac apps for Laptop OBS. Download from your event page in Go Live." --prerelease
+          gh release upload agent-latest GoLiveAgent-Windows.exe GoLiveAgent-Mac-AppleSilicon.zip GoLiveAgent-Mac-Intel.zip --clobber

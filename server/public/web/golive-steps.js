@@ -4,7 +4,6 @@
 // only camera); Start show, Take and Go live always wait for the director's click.
 // Used on top of the control room (live commands) and in setup step 4 (navigates there).
 import { el, toast, guard, go, post, confirmBox, store } from './core.js';
-import { openGuide } from './guide.js';
 
 const KEYS = ['start', 'room', 'pick', 'take', 'live', 'share'];
 
@@ -50,11 +49,11 @@ export function goLiveSteps(opts) {
     start: {
       label: () => (laptop() ? 'Connect Laptop OBS' : s?.production?.cloud?.status === 'starting' ? 'Starting Cloud OBS…' : 'Start show'),
       hint: () => (laptop()
-        ? 'Open OBS and start the Go Live agent on your laptop (Event > Streaming > Laptop OBS setup).'
+        ? 'Open the Go Live app on your laptop and link it to this event (Event > Laptop OBS).'
         : s?.production?.cloud?.status === 'starting' ? 'Cloud OBS is getting ready: about a minute. The next step lights up by itself.' : 'Turns on Cloud OBS and prepares your main stream. Takes about a minute.'),
       busy: () => !laptop() && s?.production?.cloud?.status === 'starting',
       run: guard(async () => {
-        if (laptop()) return openGuide('obs');
+        if (laptop()) { location.href = `/web/e/${opts.id}/laptop`; return; }
         const r = await post(`/api/tournaments/${opts.id}/start-show`, { privacy: 'unlisted' });
         toast(r.problems?.length ? r.problems.join(' ') : 'Cloud OBS is starting: about a minute', Boolean(r.problems?.length));
       }),

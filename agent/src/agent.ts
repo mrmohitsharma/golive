@@ -28,6 +28,10 @@ export class Agent {
   private sendQueued = false;
   private lastConfig: EngineConfig | null = null;
   private syncing: Promise<unknown> = Promise.resolve();
+  private serverEnabled = true;
+  private serverTimer: NodeJS.Timeout | null = null;
+  /** Called when the server says this laptop now runs another event (or none). */
+  onReassigned: (() => void) | null = null;
 
   constructor(
     private readonly config: AgentConfig,
@@ -37,7 +41,7 @@ export class Agent {
   ) {
     this.obsCtl = new ObsController(
       obs.client,
-      { fallbackText: config.fallbackText, youtubeStreamKey: config.youtubeStreamKey, youtubeServer: config.youtubeServer },
+      { fallbackText: config.fallbackText, youtubeStreamKey: config.youtubeStreamKey, youtubeServer: config.youtubeServer, laptopDefaults: config.laptopDefaults },
       () => this.queueState(),
       log,
       (levels) => this.reply({ type: 'engine.meters', levels }),
@@ -55,10 +59,11 @@ export class Agent {
     return this.obsCtl;
   }
 
-  async start(): Promise<void> {
+  async start(opts: { server?: boolean } = {}): Promise<void> {
     this.stopped = false;
+    this.serverEnabled = opts.server !== false;
     void this.connectObs();
-    void this.connectServer();
+    if (this.serverEnabled) void this.connectServer();
     this.stateTimer = setInterval(async () => {
       if (this.obsCtl.state.obsConnected) {
         try {
@@ -74,8 +79,39 @@ export class Agent {
   async stop(): Promise<void> {
     this.stopped = true;
     if (this.stateTimer) clearInterval(this.stateTimer);
+    if (this.serverTimer) clearTimeout(this.serverTimer);
     this.ws?.close();
     await this.obs.disconnect().catch(() => {});
+  }
+
+  /** App mode: (re)connect to the server for the laptop's current event (a fresh token each time). */
+  linkServer(): void {
+    this.serverEnabled = true;
+    this.token = null;
+    this.serverBackoff = 1000;
+    if (this.serverTimer) clearTimeout(this.serverTimer);
+    this.serverTimer = null;
+    if (this.ws) this.ws.close(1000, 'event changed');
+    else void this.connectServer();
+  }
+
+  /** App mode: the laptop has no event: stay connected to OBS only. */
+  unlinkServer(): void {
+    this.serverEnabled = false;
+    this.token = null;
+    if (this.serverTimer) clearTimeout(this.serverTimer);
+    this.serverTimer = null;
+    this.ws?.close(1000, 'no event');
+  }
+
+  /** App mode: OBS address or password changed (read again from OBS's own settings). */
+  setObs(url: string, password: string | undefined): void {
+    (this.config as { obsUrl: string }).obsUrl = url;
+    (this.config as { obsPassword?: string }).obsPassword = password;
+  }
+
+  get serverConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
   }
 
   /** Serialises OBS reconfiguration so overlapping config messages do not race. */
@@ -114,6 +150,7 @@ export class Agent {
 
   // ---------------------------------------------------------------- server link
   private async login(): Promise<string> {
+    if (this.config.tokenSource) return this.config.tokenSource();
     const res = await this.fetchImpl(`${this.config.serverUrl}/api/engine/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -125,7 +162,7 @@ export class Agent {
   }
 
   private async connectServer(): Promise<void> {
-    if (this.stopped) return;
+    if (this.stopped || !this.serverEnabled) return;
     try {
       if (!this.token) this.token = await this.login();
     } catch (err) {
@@ -152,7 +189,19 @@ export class Agent {
     ws.on('close', (code, reason) => {
       if (this.ws === ws) this.ws = null;
       if (code === 4001) this.token = null; // token expired → log in again
-      if (!this.stopped) {
+      if (code === 4002) {
+        // The laptop was moved to another event: ask which one, then connect again.
+        this.token = null;
+        this.log('this laptop was moved to another event');
+        this.onReassigned?.();
+        return;
+      }
+      if (code === 1000 && reason.toString() === 'event changed') {
+        this.token = null;
+        void this.connectServer();
+        return;
+      }
+      if (!this.stopped && this.serverEnabled) {
         this.log(`server connection closed (${code} ${reason.toString()}), reconnecting`);
         this.scheduleServerReconnect();
       }
@@ -161,10 +210,11 @@ export class Agent {
   }
 
   private scheduleServerReconnect(): void {
-    if (this.stopped) return;
+    if (this.stopped || !this.serverEnabled) return;
     const delay = this.serverBackoff;
     this.serverBackoff = Math.min(this.serverBackoff * 2, 15000);
-    setTimeout(() => void this.connectServer(), delay);
+    if (this.serverTimer) clearTimeout(this.serverTimer);
+    this.serverTimer = setTimeout(() => void this.connectServer(), delay);
   }
 
   private async onServerMessage(msg: any): Promise<void> {

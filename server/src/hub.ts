@@ -415,6 +415,14 @@ export class Hub {
     }
   }
 
+  /** A laptop was moved to another event or removed: disconnect the agent so it picks up its new event. */
+  dropEngine(tournamentId: string, message: string): void {
+    const e = this.liveFor(tournamentId).engineClient;
+    if (!e) return;
+    this.send(e, { type: 'engine.reassigned', message });
+    e.ws.close(4002, 'laptop reassigned');
+  }
+
   private toEngine(tournamentId: string, msg: object): boolean {
     const e = this.liveFor(tournamentId).engineClient;
     if (!e) return false;

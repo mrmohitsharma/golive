@@ -166,7 +166,7 @@ export class ObsController {
 
   constructor(
     private readonly obs: ObsClient,
-    private readonly opts: { fallbackText: string; youtubeStreamKey?: string; youtubeServer?: string },
+    private readonly opts: { fallbackText: string; youtubeStreamKey?: string; youtubeServer?: string; laptopDefaults?: boolean },
     private readonly onChange: () => void,
     private readonly log: (msg: string) => void = () => {},
     private readonly onMeters: (levels: Record<string, number>) => void = () => {},
@@ -227,7 +227,8 @@ export class ObsController {
     const v = await this.obs.call('GetVersion');
     this.state.obsVersion = `${v.obsVersion} (ws ${v.obsWebSocketVersion})`;
     this.inputKinds = (await this.obs.call('GetInputKindList', { unversioned: false })).inputKinds ?? [];
-    const vs = await this.obs.call('GetVideoSettings');
+    let vs = await this.obs.call('GetVideoSettings');
+    if (this.opts.laptopDefaults) vs = await this.applyLaptopDefaults(vs);
     this.canvas = { width: vs.baseWidth, height: vs.baseHeight };
     const studio = await this.obs.call('GetStudioModeEnabled');
     if (!studio.studioModeEnabled) await this.obs.call('SetStudioModeEnabled', { studioModeEnabled: true });
@@ -278,6 +279,30 @@ export class ObsController {
     if (!out || this.state.streaming.active) return;
     // An srt:// server makes OBS send MPEG-TS over SRT (OBS 28+); rtmp(s):// sends FLV.
     await this.obs.call('SetStreamServiceSettings', { streamServiceType: 'rtmp_custom', streamServiceSettings: { server: out.server, key: out.key } });
+  }
+
+  /**
+   * Go Live agent app (the organiser agreed once): a 1920x1080, 30 fps canvas and Simple output,
+   * so camera scenes, graphics and the server's 720p pass-through all fit. Never while streaming.
+   */
+  private async applyLaptopDefaults(vs: { baseWidth: number; baseHeight: number; outputWidth: number; outputHeight: number; fpsNumerator: number; fpsDenominator: number }) {
+    const status = await this.obs.call('GetStreamStatus').catch(() => ({ outputActive: false }));
+    if ((status as { outputActive?: boolean }).outputActive) return vs;
+    const fps = Math.round((vs.fpsNumerator || 30) / (vs.fpsDenominator || 1));
+    if (vs.baseWidth !== 1920 || vs.baseHeight !== 1080 || fps !== 30) {
+      await this.obs.call('SetVideoSettings', { baseWidth: 1920, baseHeight: 1080, outputWidth: 1280, outputHeight: 720, fpsNumerator: 30, fpsDenominator: 1 });
+      this.log(`OBS set to 1920x1080 at 30 fps (was ${vs.baseWidth}x${vs.baseHeight} at ${fps} fps)`);
+    }
+    try {
+      const mode = (await this.obs.call('GetProfileParameter', { parameterCategory: 'Output', parameterName: 'Mode' })).parameterValue;
+      if (mode && mode !== 'Simple') {
+        await this.obs.call('SetProfileParameter', { parameterCategory: 'Output', parameterName: 'Mode', parameterValue: 'Simple' });
+        this.log('OBS output set to Simple');
+      }
+    } catch {
+      /* older OBS: keep the warning path */
+    }
+    return this.obs.call('GetVideoSettings');
   }
 
   /** Cloud mode: the server sets the canvas and encoder (a laptop operator keeps their own). */

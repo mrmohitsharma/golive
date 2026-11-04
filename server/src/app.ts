@@ -52,6 +52,7 @@ import { registerInfluencerRoutes } from './routes/influencers.js';
 import { MomentsService } from './moments.js';
 import { registerMomentRoutes } from './routes/moments.js';
 import { registerBrandingRoutes } from './routes/branding.js';
+import { registerLaptopRoutes } from './routes/laptops.js';
 import { PrizesService } from './prizes.js';
 import { registerPrizeRoutes } from './routes/prizes.js';
 import { registerReportRoutes } from './routes/reports.js';
@@ -229,6 +230,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerInfluencerRoutes(fastify, ctx);
   registerMomentRoutes(fastify, ctx);
   registerBrandingRoutes(fastify, ctx);
+  registerLaptopRoutes(fastify, ctx);
   registerPrizeRoutes(fastify, ctx);
   registerReportRoutes(fastify, ctx);
   registerWebRoutes(fastify, ctx);
