@@ -43,7 +43,7 @@ jobs:
             chmod +x "$n"
             codesign --force --sign - "$n"
             mkdir -p "pack-$n" && cp "$n" "pack-$n/Go Live Agent"
-            (cd "pack-$n" && ditto -c -k --keepParent "Go Live Agent" "../$n.zip")
+            ditto -c -k "pack-$n" "$n.zip"
             unzip -l "$n.zip"
           done
           ls -la
