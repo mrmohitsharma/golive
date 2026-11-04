@@ -43,7 +43,8 @@ jobs:
             chmod +x "$n"
             codesign --force --sign - "$n"
             mkdir -p "pack-$n" && cp "$n" "pack-$n/Go Live Agent"
-            ditto -c -k --keepParent "pack-$n/Go Live Agent" "$n.zip"
+            (cd "pack-$n" && ditto -c -k --keepParent "Go Live Agent" "../$n.zip")
+            unzip -l "$n.zip"
           done
           ls -la
       - name: Publish on the agent-latest release
