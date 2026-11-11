@@ -30,6 +30,8 @@ import type { InvoiceService } from './invoices.js';
 import type { PlatformSettings } from './platform.js';
 import type { Mailer } from './email.js';
 import type { Notifier } from './notify.js';
+import type { GiftService } from './gift-service.js';
+import type { ChannelService } from './channels.js';
 
 /** Everything route modules need. */
 export interface Ctx {
@@ -65,4 +67,6 @@ export interface Ctx {
   platform: PlatformSettings;
   mailer: Mailer;
   notifier: Notifier;
+  gifts: GiftService;
+  channels: ChannelService;
 }

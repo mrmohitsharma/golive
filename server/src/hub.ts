@@ -97,6 +97,8 @@ export interface HubServices {
   chatReaders: ChatReaders;
   viewership?: ViewershipService;
   influencers?: InfluencersService;
+  /** V9: emails a brand channel's followers when one of its events goes live. */
+  channels?: { wentLive(tournamentId: string): Promise<unknown> };
 }
 
 const COMMAND_TIMEOUT_MS = 8000;
@@ -585,6 +587,7 @@ export class Hub {
       // "Remind me" sign-ups get their message when the stream starts (once).
       const tr = await this.repo.tournamentById(tournamentId).catch(() => null);
       if (tr) await this.services.influencers?.sendReminders(tr).catch((err) => this.log.warn({ err: (err as Error).message }, 'reminders failed'));
+      await this.services.channels?.wentLive(tournamentId).catch((err) => this.log.warn({ err: (err as Error).message }, 'channel alert failed'));
     }
     if (l.engine.programmeCameraId !== prevProgramme && l.engine.programmeCameraId) {
       const cam = await this.repo.cameraById(l.engine.programmeCameraId);

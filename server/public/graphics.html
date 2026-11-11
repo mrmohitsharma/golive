@@ -112,6 +112,16 @@
   #tk .it::after { content: "◆"; color: var(--gold); font-size: 18px; margin-left: 34px; }
   #tk .it .sp { color: #111; background: var(--gold); padding: 4px 12px; border-radius: 4px; font-size: 20px; letter-spacing: 2px; margin-right: 14px; }
   #tk .it.sponsor { color: var(--gold); }
+  /* V9 gift credits: one card at a time, top right */
+  #gift { position: absolute; right: 56px; top: 56px; display: flex; align-items: center; gap: 22px; padding: 18px 30px 18px 22px; min-width: 520px; max-width: 760px;
+    background: linear-gradient(100deg, rgba(14,16,20,.94), rgba(30,24,8,.94)); border: 3px solid var(--gold); border-radius: 18px; box-shadow: 0 16px 50px rgba(0,0,0,.5);
+    transform: translateX(120%); opacity: 0; transition: transform .55s var(--ease), opacity .4s; }
+  #gift.show { transform: none; opacity: 1; }
+  #gift .em { font-size: 84px; line-height: 1; animation: pop .7s var(--ease) both; }
+  @keyframes pop { 0% { transform: scale(.2) rotate(-20deg); } 70% { transform: scale(1.15) rotate(6deg); } 100% { transform: none; } }
+  #gift .who { font-size: 36px; font-weight: 800; color: #fff; }
+  #gift .amt { display: inline-block; background: var(--gold); color: #111; font-weight: 800; font-size: 30px; padding: 2px 14px; border-radius: 8px; margin-left: 10px; }
+  #gift .msg { font-size: 28px; color: #f1e7c8; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 600px; }
 </style>
 </head>
 <body>
@@ -150,6 +160,8 @@
   <div id="wm" class="block hide"></div>
 
   <div id="tk" class="block hide"><div class="lbl"><span class="dot"></span><span id="tkLabel">LIVE</span></div><div class="run"><div class="track" id="tkTrack"></div></div></div>
+
+  <div id="gift" aria-live="polite"><div class="em" id="gEm"></div><div><div><span class="who" id="gWho"></span><span class="amt" id="gAmt"></span></div><div class="msg" id="gMsg"></div></div></div>
 
   <div id="offline"></div>
 
@@ -271,11 +283,42 @@
     }
   }
 
+  // V9 gift credits: queue of cards, 7 s each (10 s for big gifts); a hidden gift is dropped.
+  var gq = [], gNow = null, gTimer = null;
+  function giftEvent(g) {
+    if (!g || !g.id) return;
+    if (g.hide) {
+      gq = gq.filter(function (x) { return x.id !== g.id; });
+      if (gNow && gNow.id === g.id) { clearTimeout(gTimer); nextGift(); }
+      return;
+    }
+    gq.push(g);
+    if (!gNow) nextGift();
+  }
+  function nextGift() {
+    var box = $('gift');
+    gNow = gq.shift() || null;
+    if (!gNow) { box.classList.remove('show'); return; }
+    box.classList.remove('show');
+    setTimeout(function () {
+      $('gEm').textContent = gNow.emoji || '🎁';
+      $('gWho').textContent = gNow.name || '';
+      $('gAmt').textContent = '₹' + Number(gNow.amount || 0).toLocaleString('en-IN');
+      $('gMsg').textContent = gNow.message || ('sent ' + (gNow.sticker || 'a gift'));
+      var em = $('gEm'); em.style.animation = 'none'; void em.offsetWidth; em.style.animation = '';
+      box.classList.add('show');
+      gTimer = setTimeout(nextGift, (gNow.amount >= 500 ? 10 : 7) * 1000);
+    }, 450);
+  }
+
   function connect() {
     var es = new EventSource('/api/graphics/' + encodeURIComponent(tid) + '/events?k=' + encodeURIComponent(key));
     es.onmessage = function (e) {
       $('offline').textContent = '';
-      try { render(JSON.parse(e.data)); } catch (err) { /* ignore malformed */ }
+      try {
+        var d = JSON.parse(e.data);
+        if (d && d.type === 'gift') giftEvent(d.gift); else render(d);
+      } catch (err) { /* ignore malformed */ }
     };
     es.onerror = function () { $('offline').textContent = 'reconnecting…'; };
   }

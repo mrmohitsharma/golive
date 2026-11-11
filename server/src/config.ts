@@ -40,6 +40,9 @@ const schema = z.object({
   // Where the Go Live agent apps (Windows, Mac) are downloaded from: GitHub release assets built by
   // .github/workflows/agent-apps.yml. Point it elsewhere to host the files yourself.
   AGENT_DOWNLOAD_BASE: z.string().default('https://github.com/mrmohitsharma/golive/releases/download/agent-latest'),
+  // V9 brand channels live at <slug>.CHANNEL_DOMAIN (wildcard DNS + HTTPS) and also at
+  // PUBLIC_BASE_URL/c/<slug>, which works without any DNS change.
+  CHANNEL_DOMAIN: z.string().default('gogetslive.com'),
   LEGAL_ENTITY: z.string().default('S.R Fairway Ventures'), // registered business name
   LEGAL_ADDRESS: z.string().default('A402, Sector 6, Gurgaon, Haryana 122103, India'), // registered office address
   LEGAL_JURISDICTION: z.string().default('Gurugram, Haryana'),

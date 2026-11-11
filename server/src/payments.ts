@@ -245,6 +245,42 @@ export class PaymentsService {
     return json as T;
   }
 
+  /**
+   * V9 gift credits: a UPI-only order paid by a viewer (no account). Cashfree needs a phone on
+   * every order; the viewer is not asked, so the platform number from the gift settings is sent.
+   */
+  async createGiftOrder(v: { orderId: string; amount: number; customerId: string; phone: string; returnUrl: string; note: string; tags: Record<string, string> }): Promise<{ sessionId: string; cfOrderId: string }> {
+    if (!this.enabled) throw new HttpError(501, 'payments_off', 'Gifts need the payment gateway, which is not set up yet.');
+    const base = this.config.PUBLIC_BASE_URL.replace(/\/$/, '');
+    const order = await this.call<{ payment_session_id?: string; cf_order_id?: string | number }>(
+      'POST',
+      '/orders',
+      {
+        order_id: v.orderId,
+        order_amount: Number(v.amount.toFixed(2)),
+        order_currency: 'INR',
+        customer_details: { customer_id: v.customerId, customer_phone: v.phone },
+        order_meta: {
+          return_url: v.returnUrl,
+          payment_methods: 'upi',
+          ...(base.startsWith('https://') ? { notify_url: `${base}/api/payments/cashfree/webhook` } : {}),
+        },
+        order_note: v.note.slice(0, 200),
+        order_tags: v.tags,
+      },
+      v.orderId,
+    );
+    if (!order.payment_session_id) throw new HttpError(502, 'payment_gateway', 'Cashfree did not return a payment session.');
+    return { sessionId: order.payment_session_id, cfOrderId: String(order.cf_order_id ?? '') };
+  }
+
+  async getOrder(orderId: string): Promise<{ order_status?: string; order_amount?: number; order_currency?: string }> {
+    return this.call('GET', `/orders/${encodeURIComponent(orderId)}`);
+  }
+
+  /** Set by the gift service: confirms gift orders (ids start with gf_) from webhooks. */
+  giftConfirm: ((orderId: string) => Promise<string | null>) | null = null;
+
   async byId(id: string): Promise<PaymentRow | null> {
     return (await this.repo.db.query<PaymentRow>('SELECT * FROM payments WHERE id = $1', [id])).rows[0] ?? null;
   }

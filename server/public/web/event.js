@@ -3,7 +3,7 @@ import { info } from './guide.js';
 import { mainStreamCard } from './streams.js';
 
 export const title = 'Event';
-const TABS = [['overview', 'Overview'], ['people', 'Cameras & people'], ['streaming', 'Streaming'], ['scores', 'Scores'], ['chat', 'Chat'], ['clips', 'Clips'], ['engagement', 'Influencers & games'], ['branding', 'Branding & theme'], ['settings', 'Settings']];
+const TABS = [['overview', 'Overview'], ['people', 'Cameras & people'], ['streaming', 'Streaming'], ['scores', 'Scores'], ['chat', 'Chat'], ['clips', 'Clips'], ['engagement', 'Influencers & games'], ['gifts', 'Gifts'], ['branding', 'Branding & theme'], ['settings', 'Settings']];
 const pill = (cls, text) => el('span', { class: 'pill ' + cls, text });
 
 export async function render(view, { id, tab = 'overview' }) {
@@ -24,7 +24,7 @@ export async function render(view, { id, tab = 'overview' }) {
     el('nav', { class: 'tabs', 'data-tour': 'event-tabs' }, tabs.map(([k, l]) => el('a', { href: `/web/e/${id}/${k}`, class: k === tab ? 'on' : null, onclick: (e) => { e.preventDefault(); go(`/web/e/${id}/${k}`); }, text: l }))));
   const body = el('div');
   view.append(body);
-  const views = { overview, people, streaming, scores, chat, clips, engagement, settings, branding: (b, i) => import('./branding.js').then((m) => m.render(b, i)), laptop: (b, i, st) => import('./laptop.js').then((m) => m.render(b, i, st)) };
+  const views = { overview, people, streaming, scores, chat, clips, engagement, settings, branding: (b, i) => import('./branding.js').then((m) => m.render(b, i)), laptop: (b, i, st) => import('./laptop.js').then((m) => m.render(b, i, st)), gifts: (b, i) => import('./gifts.js').then((m) => m.render(b, i)) };
   return (views[tab] ?? overview)(body, id, s);
 }
 const reloadTab = (id, tab) => go(`/web/e/${id}/${tab}`);

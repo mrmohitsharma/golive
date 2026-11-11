@@ -83,6 +83,13 @@ export interface TournamentRow {
   viewer_cc_billed?: string;
   chat_enabled: boolean;
   chat_slow_sec: number;
+  /** V9: gift credits set-up (gifts.ts) and the brand channel fields. */
+  gifts?: Record<string, unknown>;
+  channel_hidden?: boolean;
+  series?: string | null;
+  starts_at?: Date | null;
+  reminded_at?: Date | null;
+  live_alerted_at?: Date | null;
   created_at: Date;
 }
 
@@ -380,7 +387,7 @@ export class Repo {
     );
   }
 
-  async setTournamentJson(id: string, column: 'graphics' | 'audio' | 'cloud_engine' | 'branding', value: object): Promise<void> {
+  async setTournamentJson(id: string, column: 'graphics' | 'audio' | 'cloud_engine' | 'branding' | 'gifts', value: object): Promise<void> {
     await this.db.query(`UPDATE tournaments SET ${column} = $2 WHERE id = $1`, [id, JSON.stringify(value)]);
   }
 

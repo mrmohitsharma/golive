@@ -119,6 +119,35 @@
   .composer input { flex:1; min-width:0; background:#0f1315; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:10px 11px; font:inherit; font-size:16px; }
   .composer button { background:var(--green); border:0; color:#fff; border-radius:8px; padding:0 14px; font-weight:700; cursor:pointer; }
   .composer button:disabled { opacity:.5; cursor:default; }
+  /* V9 gift credits */
+  .composer .giftbtn { background:var(--gold); color:#141414; padding:0 12px; white-space:nowrap; }
+  .msg.gift { margin:4px 8px; border-radius:10px; background:linear-gradient(90deg, rgba(224,181,50,.22), rgba(224,181,50,.04)); border:1px solid rgba(224,181,50,.45); padding:8px 10px; }
+  .msg.gift .em { font-size:22px; line-height:1; flex:none; }
+  .msg.gift .amt { display:inline-block; font-weight:800; color:#141414; background:var(--gold); border-radius:6px; padding:0 6px; font-size:12px; margin-right:6px; }
+  .msg.gift.big { border-width:2px; box-shadow:0 0 0 3px rgba(224,181,50,.12); }
+  .giftbar { margin:10px 12px 2px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); font-size:13px; }
+  .giftbar .goal b { color:var(--gold); }
+  .giftbar .meter { height:8px; border-radius:6px; background:rgba(255,255,255,.08); overflow:hidden; margin:6px 0 2px; }
+  .giftbar .meter i { display:block; height:100%; background:linear-gradient(90deg, var(--gold), #ffe08a); border-radius:6px; transition:width .6s; }
+  .giftbar .tops { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .giftbar .tops span { background:rgba(255,255,255,.06); border-radius:999px; padding:2px 9px; font-size:12px; }
+  dialog.gsheet { border:1px solid rgba(224,181,50,.55); border-radius:14px; background:var(--panel); color:var(--ink); padding:16px; width:min(440px, 94vw); max-height:90dvh; overflow:auto; }
+  dialog.gsheet::backdrop { background:rgba(0,0,0,.6); }
+  dialog.gsheet h3 { margin:0 30px 2px 0; font-size:20px; }
+  dialog.gsheet .x { position:absolute; top:8px; right:8px; background:none; border:0; color:var(--muted); font-size:24px; cursor:pointer; width:40px; height:40px; }
+  .stickers { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:8px; margin:12px 0; }
+  .stickers button { background:var(--panel2); border:2px solid var(--line); border-radius:12px; color:var(--ink); padding:10px 4px; cursor:pointer; font:inherit; display:grid; gap:2px; justify-items:center; }
+  .stickers button .e { font-size:28px; line-height:1.1; }
+  .stickers button .n { font-size:12px; color:var(--muted); }
+  .stickers button b { font-size:15px; }
+  .stickers button.on { border-color:var(--gold); background:rgba(224,181,50,.14); }
+  .gsheet label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  .gsheet input { width:100%; box-sizing:border-box; background:#0f1315; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:10px 11px; font:inherit; font-size:16px; }
+  .gsheet .pay { width:100%; margin-top:14px; background:var(--gold); color:#141414; border:0; border-radius:10px; padding:13px; font:inherit; font-weight:800; font-size:16px; cursor:pointer; }
+  .gsheet .pay:disabled { opacity:.6; }
+  .gsheet .fine { font-size:12px; color:var(--muted); margin-top:8px; }
+  .gsheet .err { color:#ff8a80; font-size:13px; margin-top:8px; }
+  .thanks { position:fixed; left:50%; top:16px; transform:translateX(-50%); z-index:50; background:var(--gold); color:#141414; font-weight:800; border-radius:999px; padding:10px 18px; box-shadow:0 8px 30px rgba(0,0,0,.4); }
   .chat .note { padding:0 12px 10px; font-size:12px; color:var(--muted); min-height:16px; flex:none; }
   .chat .note.err { color:var(--under); }
   .chat .new { align-self:center; margin:-40px 0 8px; position:relative; background:var(--gold); color:#111; border:0; border-radius:999px; padding:4px 12px; font-size:12px; font-weight:700; cursor:pointer; }
@@ -252,7 +281,7 @@
 <script>
 (() => {
   const app = document.getElementById('app');
-  const id = (location.pathname.match(/\/watch\/([0-9a-f-]{36})/) || [])[1];
+  const id = window.GL_TID || (location.pathname.match(/\/watch\/([0-9a-f-]{36})/) || [])[1];
   const api = (p) => fetch(p, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
   const el = (tag, attrs = {}, ...kids) => {
     const n = document.createElement(tag);
@@ -996,11 +1025,19 @@
   const note = el('div', { class: 'note' });
   const composer = el('form', { class: 'composer' });
   const newBtn = el('button', { class: 'new', hidden: true, text: 'New messages ↓', onclick: () => { chatList.scrollTop = chatList.scrollHeight; newBtn.hidden = true; } });
-  chatPanel.append(pinBox, chatList, newBtn, composer, note);
+  const giftBox = el('div');
+  const giftBtn = el('button', { type: 'button', class: 'giftbtn', hidden: true, onclick: () => openGift() });
+  chatPanel.append(giftBox, pinBox, chatList, newBtn, composer, note);
   chatList.addEventListener('scroll', () => { if (nearBottom()) newBtn.hidden = true; });
   const nearBottom = () => chatList.scrollHeight - chatList.scrollTop - chatList.clientHeight < 60;
 
   function msgEl(m) {
+    if (m.gift) {
+      const g = m.gift;
+      return el('div', { class: 'msg gift' + (g.amount >= 500 ? ' big' : ''), 'data-id': m.id },
+        el('span', { class: 'em', text: g.emoji || '🎁' }),
+        el('div', {}, el('span', { class: 'amt', text: '₹' + Number(g.amount).toLocaleString('en-IN') }), el('span', { class: 'who', text: m.author }), el('span', { class: 'txt', text: m.text })));
+    }
     const src = el('span', { class: 'src ' + m.source, title: SRC_NAME[m.source] || '' });
     src.innerHTML = ICONS[m.source] || '';
     return el('div', { class: 'msg' + (m.question ? ' q' : '') + (chatAuth && m.source === 'watch' && m.author === chatAuth.name ? ' mine' : ''), 'data-id': m.id },
@@ -1023,7 +1060,7 @@
           composer.querySelector('input').focus();
         } catch (err) { note.className = 'note err'; note.textContent = err.message || 'Could not join the chat.'; }
       };
-      composer.replaceChildren(name, el('button', { type: 'submit', text: 'Join' }));
+      composer.replaceChildren(name, el('button', { type: 'submit', text: 'Join' }), giftBtn);
       return;
     }
     const text = el('input', { placeholder: `Say something, ${chatAuth.name}`, maxlength: '200', autocomplete: 'off', enterkeyhint: 'send' });
@@ -1042,7 +1079,7 @@
       } catch (err) { note.className = 'note err'; note.textContent = err.message || 'Message not sent.'; }
       setTimeout(() => { send.disabled = false; }, chatState.slowSec * 1000);
     };
-    composer.replaceChildren(text, send);
+    composer.replaceChildren(text, send, giftBtn);
     note.className = 'note';
     note.textContent = 'Comments from YouTube and Facebook appear here too. Be kind: messages are moderated.';
   }
@@ -1081,6 +1118,77 @@
     } catch {}
     setTimeout(pollChat, document.hidden ? 10000 : 3000);
   }
+
+  // ------------------------------------------------------------ V9 gift credits
+  const gift = { data: null, pick: null };
+  const deviceId = (() => { let d = store.get('gl_device'); if (!d) { d = 'd' + Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('gl_device', d); } return d; })();
+  const rupees = (n) => '₹' + Number(n).toLocaleString('en-IN');
+  function drawGiftBar() {
+    const d = gift.data;
+    giftBtn.hidden = !(d && d.enabled && d.open);
+    if (d && d.enabled) giftBtn.textContent = '🎁 ' + (d.button || 'Gift');
+    if (!d || !d.enabled || (!d.goal && !(d.top && d.top.length))) { giftBox.replaceChildren(); return; }
+    const parts = [];
+    if (d.goal) {
+      const pct = Math.min(100, Math.round((d.goal.raised / d.goal.amount) * 100));
+      parts.push(el('div', { class: 'goal' }, el('b', { text: rupees(d.goal.raised) }), ` of ${rupees(d.goal.amount)}${d.goal.text ? ' · ' + d.goal.text : ''}`),
+        el('div', { class: 'meter', role: 'progressbar', 'aria-valuenow': String(pct), 'aria-valuemin': '0', 'aria-valuemax': '100' }, el('i', { style: `width:${pct}%` })));
+    }
+    if (d.top && d.top.length) parts.push(el('div', { class: 'tops' }, el('span', { style: 'background:none;padding-left:0;color:var(--muted)', text: 'Top supporters' }), ...d.top.slice(0, 5).map((x, i) => el('span', { text: `${['🥇', '🥈', '🥉'][i] || '⭐'} ${x.name}` }))));
+    giftBox.replaceChildren(el('div', { class: 'giftbar' }, ...parts));
+  }
+  async function pollGifts() {
+    try { gift.data = await api(`/api/public/tournaments/${id}/gifts`); drawGiftBar(); } catch {}
+    setTimeout(pollGifts, document.hidden ? 30000 : 15000);
+  }
+  function openGift() {
+    const d = gift.data;
+    if (!d || !d.open) return;
+    gift.pick = d.stickers[Math.min(2, d.stickers.length - 1)] || null;
+    const custom = d.allowCustom ? el('input', { type: 'number', inputmode: 'numeric', min: String(d.min), max: String(d.max), step: '1', placeholder: `Or type an amount (₹${d.min} to ₹${Number(d.max).toLocaleString('en-IN')})` }) : null;
+    const name = el('input', { maxlength: '40', autocomplete: 'nickname', placeholder: 'Shown with your gift', value: (chatAuth && chatAuth.name) || store.get('gl_gift_name') || '' });
+    const msg = el('input', { maxlength: '120', placeholder: 'A short message (optional)' });
+    const err = el('div', { class: 'err' });
+    const pay = el('button', { class: 'pay', type: 'submit' });
+    const grid = el('div', { class: 'stickers' });
+    const amount = () => (custom && custom.value ? Number(custom.value) : gift.pick ? gift.pick.amount : 0);
+    const drawPay = () => { pay.textContent = amount() ? `Pay ${rupees(amount())} by UPI` : 'Pick a gift'; pay.disabled = !amount(); };
+    const drawGrid = () => grid.replaceChildren(...d.stickers.map((s) => el('button', { type: 'button', class: gift.pick && gift.pick.id === s.id && !(custom && custom.value) ? 'on' : '', onclick: () => { gift.pick = s; if (custom) custom.value = ''; drawGrid(); drawPay(); } },
+      el('span', { class: 'e', text: s.emoji }), el('span', { class: 'n', text: s.name }), el('b', { text: rupees(s.amount) }))));
+    if (custom) custom.addEventListener('input', () => { drawGrid(); drawPay(); });
+    drawGrid(); drawPay();
+    const box = el('dialog', { class: 'gsheet', 'aria-label': d.label },
+      el('button', { class: 'x', type: 'button', 'aria-label': 'Close', text: '×', onclick: () => box.close() }),
+      el('h3', { text: '🎁 ' + d.label }),
+      el('div', { class: 'sub', text: 'Support the organisers. Your gift and message show in chat' + (d.goal ? ' and count towards the goal.' : '.') }));
+    const form = el('form', { onsubmit: async (e) => {
+      e.preventDefault();
+      err.textContent = ''; pay.disabled = true; pay.textContent = 'Opening UPI…';
+      try {
+        const body = { name: name.value, message: msg.value || null, device: deviceId };
+        if (custom && custom.value) body.amount = Number(custom.value); else body.stickerId = gift.pick && gift.pick.id;
+        const r = await fetch(`/api/public/tournaments/${id}/gifts`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error && j.error.message);
+        store.set('gl_gift_name', name.value);
+        location.href = j.checkoutUrl;
+      } catch (ex) { err.textContent = ex.message || 'Could not start the payment. Try again.'; drawPay(); }
+    } }, grid, custom, el('label', { text: 'Your name' }), name, el('label', { text: 'Message' }), msg, pay, err,
+      el('div', { class: 'fine', text: 'Paid by UPI. No phone number or account needed. Gifts are voluntary and not refunded once sent.' }));
+    box.append(form);
+    box.addEventListener('close', () => box.remove());
+    document.body.append(box);
+    box.showModal();
+  }
+  (() => {
+    const q = new URLSearchParams(location.search);
+    if (!q.get('gift')) return;
+    q.delete('gift');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+    const t = el('div', { class: 'thanks', role: 'status', text: '🎁 Thank you! Your gift is in the chat.' });
+    document.body.append(t);
+    setTimeout(() => t.remove(), 6000);
+  })();
 
   // ------------------------------------------------------------ tabs: Chat · Leaderboard · Clips · Games
   function drawTabs() {
@@ -1129,7 +1237,7 @@
       tInfo = t;
       document.title = t.name + ' · Go Live';
       applyTheme(d.branding);
-      const sig = JSON.stringify([t.name, t.venue, t.live, d.onAir && d.onAir.hole, Boolean(t.youtube), t.facebookUrl, d.branding && d.branding.logoUrl]);
+      const sig = JSON.stringify([t.name, t.venue, t.live, d.onAir && d.onAir.hole, Boolean(t.youtube), t.facebookUrl, d.branding && d.branding.logoUrl, d.channel && d.channel.url]);
       if (sig !== last) {
         last = sig;
         const logo = el('div', { class: 'logo' });
@@ -1137,7 +1245,7 @@
         else logo.innerHTML = '<div class="gl">' + GL_MARK + '<span>GO LIVE</span></div>';
         head.className = 'top tv';
         head.replaceChildren(logo, el('div', { style: 'flex:1;min-width:0' },
-          el('div', { class: 'brand', text: t.orgName || 'Go Live' }),
+          d.channel ? el('a', { class: 'brand', href: d.channel.url, style: 'text-decoration:none;color:inherit', title: 'More from ' + d.channel.name, text: d.channel.name + ' · all events ›' }) : el('div', { class: 'brand', text: t.orgName || 'Go Live' }),
           el('h1', { text: t.name }),
           el('div', { class: 'sub', text: [t.venue, d.onAir && d.onAir.hole ? 'On camera: hole ' + d.onAir.hole : null].filter(Boolean).join(' · ') })),
           clock, livePill(t.live));
@@ -1170,6 +1278,7 @@
   tournament();
   pollChat();
   pollGames();
+  pollGifts();
 })();
 </script>
 </body>

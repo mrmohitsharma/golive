@@ -17,11 +17,11 @@ const phone = z
   .transform((v) => v.replace(/[\s-]/g, ''))
   .refine((v) => /^(\+91)?[6-9]\d{9}$/.test(v) || /^\+\d{8,15}$/.test(v), 'Enter a 10-digit mobile number');
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 let brand = 'Go Live';
 
-function page(reply: FastifyReply, title: string, body: string, head = '') {
+export function page(reply: FastifyReply, title: string, body: string, head = '') {
   reply.type('text/html; charset=utf-8').header('Cache-Control', 'no-store');
   return reply.send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>${head}<style>
@@ -241,9 +241,13 @@ document.getElementById('pay').onclick = function () {
           const r = await payments.refundByRefundId(refundId);
           if (r) result = `refund ${(await payments.refreshRefund(r)).status}`;
         } else {
-          const p = orderId ? await payments.byOrder(orderId) : null;
-          if (p) result = `payment ${(await payments.confirm(p)).status}`;
-          else result = 'unknown order';
+          if (orderId?.startsWith('gf_') && payments.giftConfirm) {
+            result = (await payments.giftConfirm(orderId)) ?? 'gift not found';
+          } else {
+            const p = orderId ? await payments.byOrder(orderId) : null;
+            if (p) result = `payment ${(await payments.confirm(p)).status}`;
+            else result = 'unknown order';
+          }
         }
       } catch (err) {
         result = `error: ${(err as Error).message}`;

@@ -53,6 +53,10 @@ import { MomentsService } from './moments.js';
 import { registerMomentRoutes } from './routes/moments.js';
 import { registerBrandingRoutes } from './routes/branding.js';
 import { registerLaptopRoutes } from './routes/laptops.js';
+import { registerGiftRoutes } from './routes/gifts.js';
+import { GiftService } from './gift-service.js';
+import { ChannelService } from './channels.js';
+import { registerChannelRoutes } from './routes/channels.js';
 import { PrizesService } from './prizes.js';
 import { registerPrizeRoutes } from './routes/prizes.js';
 import { registerReportRoutes } from './routes/reports.js';
@@ -150,6 +154,12 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const mailer = new Mailer(config, repo, secrets, log);
   await mailer.reload();
   const notifier = new Notifier(config, repo, mailer);
+  // V9 gift credits: viewers gift organisers during a live show.
+  const gifts = new GiftService(config, repo, payments, chat, graphics, mailer, sealer);
+  gifts.isLive = (tid) => hub.engineState(tid).streaming.active;
+  // V9 brand channels: <brand>.gogetslive.com, followers, live and reminder emails.
+  const channels = new ChannelService(config, repo, mailer, media);
+  channels.isLive = (tid) => hub.engineState(tid).streaming.active;
   payments.notify = notifier;
   billing.onWalletChanged = (orgId) => notifier.walletChanged(orgId);
   const messenger = new Messenger(config, repo, msg91Fetch, log);
@@ -162,7 +172,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   moments.prizes = prizes;
   const sessions = new Sessions(repo);
   setSessionCheck((p) => sessions.check(p));
-  hub.services = { graphics, media, youtube, cloud, outputs, billing, chatReaders, viewership, influencers };
+  hub.services = { graphics, media, youtube, cloud, outputs, billing, chatReaders, viewership, influencers, channels };
   const poller = new HealthPoller(
     config,
     (snap) => {
@@ -190,7 +200,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   fastify.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody('not_found', `No route ${req.method} ${req.url.split('?')[0]}`)));
 
   const googleSignIn = new GoogleSignIn(config, googleFetch);
-  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, hls, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions, secrets, invoices, platform, mailer, notifier };
+  const ctx: Ctx = { config, repo, scoring, hub, youtube, facebook, outputs, hls, relay, media, graphics, cloud, sealer, poller, thumbs, billing, payments, chat, chatReaders, destinations, googleSignIn, viewership, messenger, influencers, moments, prizes, sessions, secrets, invoices, platform, mailer, notifier, gifts, channels };
 
   fastify.get('/healthz', async () => ({
     ok: true,
@@ -231,6 +241,8 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerMomentRoutes(fastify, ctx);
   registerBrandingRoutes(fastify, ctx);
   registerLaptopRoutes(fastify, ctx);
+  registerGiftRoutes(fastify, ctx);
+  registerChannelRoutes(fastify, ctx);
   registerPrizeRoutes(fastify, ctx);
   registerReportRoutes(fastify, ctx);
   registerWebRoutes(fastify, ctx);
@@ -285,6 +297,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     hub.startYoutubePolling();
     billing.start();
     hls.start();
+    channels.start();
     void hls.recover((tid) => hub.engineState(tid).streaming.active).catch((err) => log.warn({ err }, 'hls recover failed'));
     const purge = () => {
       void chat.purgePlatformComments().catch((err) => log.warn({ err }, 'chat purge failed'));
@@ -336,6 +349,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     hub.close();
   });
   fastify.addHook('onClose', async () => {
+    channels.stop();
     poller.stop();
     thumbs.stop();
     media.close();

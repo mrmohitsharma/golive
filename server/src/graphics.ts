@@ -154,6 +154,17 @@ export class GraphicsService {
     for (const r of set) r.raw.write(data);
   }
 
+  /**
+   * V9: a gift card in the video (one at a time, queued by the overlay), or `hide` to take one
+   * off. Sent as its own message type so it never changes the stored graphics state.
+   */
+  gift(tournamentId: string, g: { id: string; name?: string; amount?: number; emoji?: string; sticker?: string; message?: string | null; hide?: boolean }) {
+    const set = this.streams.get(tournamentId);
+    if (!set || set.size === 0) return;
+    const data = `data: ${JSON.stringify({ type: 'gift', gift: g })}\n\n`;
+    for (const r of set) r.raw.write(data);
+  }
+
   /** Called on every confirmed programme change. Shows the hole card for the new camera's hole. */
   async onProgramme(tournamentId: string, info: OnAirInfo): Promise<void> {
     const prev = this.lastOnAir.get(tournamentId);

@@ -18,12 +18,14 @@ export interface ChatRow {
   hidden: boolean;
   pinned: boolean;
   answered: boolean;
+  /** V9: a paid gift shown in chat (amount, sticker). */
+  gift?: { amount: number; emoji: string; name: string } | null;
   created_at: Date;
 }
 
 /** What viewers see. */
 export function chatPublicDto(r: ChatRow) {
-  return { id: Number(r.id), source: r.source, author: r.author, text: r.text, question: r.is_question, pinned: r.pinned, at: r.created_at.toISOString() };
+  return { id: Number(r.id), source: r.source, author: r.author, text: r.text, question: r.is_question, pinned: r.pinned, at: r.created_at.toISOString(), ...(r.gift ? { gift: r.gift } : {}) };
 }
 
 /** What commentators and directors see (includes hidden messages and moderation flags). */
@@ -138,7 +140,7 @@ export class ChatService {
    */
   async add(
     tid: string,
-    m: { source: ChatSource; externalId?: string | null; author: string; authorKey: string; text: string; ipHash?: string | null; at?: Date },
+    m: { source: ChatSource; externalId?: string | null; author: string; authorKey: string; text: string; ipHash?: string | null; at?: Date; gift?: { amount: number; emoji: string; name: string } },
   ): Promise<ChatRow | null> {
     const feed = await this.feed(tid);
     if (feed.bans.has(`${m.source}:${m.authorKey}`)) return null;
@@ -146,10 +148,10 @@ export class ChatService {
     if (!text) return null;
     const author = m.author.replace(/\s+/g, ' ').trim().slice(0, 40) || 'Viewer';
     const r = await this.repo.db.query<ChatRow>(
-      `INSERT INTO chat_messages (tournament_id, source, external_id, author, author_key, text, is_question, ip_hash, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, now()))
+      `INSERT INTO chat_messages (tournament_id, source, external_id, author, author_key, text, is_question, ip_hash, created_at, gift)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, now()), $10)
        ON CONFLICT (tournament_id, source, external_id) WHERE external_id IS NOT NULL DO NOTHING RETURNING *`,
-      [tid, m.source, m.externalId ?? null, author, m.authorKey, text, isQuestion(text), m.ipHash ?? null, m.at ?? null],
+      [tid, m.source, m.externalId ?? null, author, m.authorKey, text, m.gift ? false : isQuestion(text), m.ipHash ?? null, m.at ?? null, m.gift ? JSON.stringify(m.gift) : null],
     );
     const row = r.rows[0];
     if (!row) return null;

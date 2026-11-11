@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<!--HEAD-->
+<link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/site/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face { font-family: 'Barlow Condensed'; font-weight: 800; font-display: swap; src: url(/site/barlow-condensed-800.woff2) format('woff2'); }
+  @font-face { font-family: 'Barlow'; font-weight: 400; font-display: swap; src: url(/site/barlow-400.woff2) format('woff2'); }
+  @font-face { font-family: 'Barlow'; font-weight: 600; font-display: swap; src: url(/site/barlow-600.woff2) format('woff2'); }
+  :root { --bg:#0b1220; --panel:#14213a; --panel2:#1a2a48; --line:rgba(255,255,255,.1); --ink:#f4f6f5; --muted:#a7b0ac; --accent:#4fb3ff; --live:#e53935; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 Barlow, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: inherit; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+  h1, h2, .cond { font-family: 'Barlow Condensed', Barlow, system-ui, sans-serif; font-weight: 800; letter-spacing: .01em; }
+  /* header */
+  .top { border-bottom: 1px solid var(--line); background: linear-gradient(180deg, var(--panel2), var(--bg)); }
+  .top .wrap { display: flex; align-items: center; gap: 16px; padding-top: 22px; padding-bottom: 22px; flex-wrap: wrap; }
+  .logo { width: 72px; height: 72px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; flex: none; }
+  .logo img { width: 100%; height: 100%; object-fit: contain; }
+  .logo .mono { font: 800 32px 'Barlow Condensed', sans-serif; color: var(--accent); }
+  .who { flex: 1; min-width: 200px; }
+  .who h1 { margin: 0; font-size: clamp(30px, 5vw, 44px); line-height: 1; }
+  .who .sub { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .follow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; padding: 11px 20px; font: 600 15px Barlow, sans-serif; cursor: pointer; text-decoration: none; background: var(--accent); color: #0b0e10; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  input.email { border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 10px 16px; font: inherit; min-width: 0; width: 230px; max-width: 100%; }
+  .note { font-size: 13px; color: var(--muted); width: 100%; }
+  /* hero */
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; padding: 24px 0 8px; }
+  .player { position: relative; aspect-ratio: 16/9; background: #000; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+  .player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .side { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font: 800 13px 'Barlow Condensed', sans-serif; letter-spacing: .08em; text-transform: uppercase; padding: 4px 10px; border-radius: 6px; background: var(--live); color: #fff; align-self: flex-start; }
+  .badge.soon { background: var(--panel2); color: var(--accent); }
+  .badge.rep { background: var(--panel2); color: var(--muted); }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .side h2 { margin: 0; font-size: 28px; line-height: 1.05; }
+  .countdown { display: flex; gap: 10px; }
+  .countdown div { background: var(--panel2); border-radius: 10px; padding: 8px 10px; text-align: center; min-width: 58px; }
+  .countdown b { display: block; font: 800 28px 'Barlow Condensed', sans-serif; color: var(--accent); }
+  .countdown span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .soonbox { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; background: radial-gradient(circle at 50% 40%, var(--panel2), #000); }
+  .soonbox h2 { font-size: clamp(26px, 4vw, 40px); margin: 0 0 6px; }
+  /* sections */
+  section { padding: 22px 0; }
+  section > h2 { font-size: 26px; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .card { display: block; text-decoration: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: transform .15s, border-color .15s; }
+  .card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .card .art { aspect-ratio: 16/9; background: linear-gradient(135deg, var(--panel2), var(--bg)); display: grid; place-items: center; position: relative; }
+  .card .art .ic { font: 800 34px 'Barlow Condensed', sans-serif; color: var(--accent); opacity: .85; }
+  .card .art .badge { position: absolute; left: 10px; top: 10px; }
+  .card .t { padding: 10px 12px 12px; }
+  .card .t b { display: block; font-weight: 600; line-height: 1.3; }
+  .card .t span { color: var(--muted); font-size: 13px; }
+  .series { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .1em; margin: 16px 0 8px; }
+  .clip video { width: 100%; aspect-ratio: 16/9; display: block; background: #000; object-fit: cover; }
+  .about { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+  .about p { color: var(--muted); margin: 0 0 10px; white-space: pre-line; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sponsors { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sponsors span { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
+  .empty { color: var(--muted); }
+  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; padding: 20px 0 32px; margin-top: 16px; }
+  footer a { color: var(--accent); text-decoration: none; }
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; }
+    .about { grid-template-columns: 1fr; }
+    .logo { width: 56px; height: 56px; }
+  }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap" id="top"></div></header>
+<main class="wrap">
+  <div class="hero" id="hero"></div>
+  <section id="live-sec" hidden><h2><span class="badge"><span class="dot"></span>Live</span> Live now</h2><div class="grid" id="live"></div></section>
+  <section id="up-sec" hidden><h2>Coming up</h2><div class="grid" id="up"></div></section>
+  <section id="hl-sec" hidden><h2>Highlights</h2><div class="grid" id="hl"></div></section>
+  <section id="past-sec" hidden><h2>Past events</h2><div id="past"></div></section>
+  <section id="about-sec" hidden><h2>About</h2><div class="about" id="about"></div></section>
+</main>
+<footer><div class="wrap">Broadcast with <a href="https://gogetslive.com" rel="noopener">GoGetsLive</a> · multi-camera live streaming from phones</div></footer>
+<script>
+(() => {
+  const slug = window.GL_CHANNEL || (location.pathname.match(/^\/c\/([a-z0-9-]+)/) || [])[1];
+  const base = window.GL_CHANNEL_BASE != null ? window.GL_CHANNEL_BASE : '';
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === 'text') n.textContent = v; else if (k.startsWith('on')) n[k] = v; else n.setAttribute(k, v === true ? '' : v);
+    }
+    for (const k of kids.flat()) if (k != null) n.append(k);
+    return n;
+  };
+  const fmt = (iso) => new Date(iso).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  const fmtDay = (d) => new Date(d + 'T12:00:00+05:30').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const when = (e) => (e.startsAt ? fmt(e.startsAt) : e.startsOn ? fmtDay(e.startsOn) : e.wentLiveAt ? new Date(e.wentLiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+  const href = (e) => base + e.path;
+  const initials = (s) => s.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  let data = null;
+  let tick = null;
+
+  function theme(c) {
+    const r = document.documentElement.style;
+    for (const [k, v] of Object.entries({ bg: 'bg', panel: 'panel', panel2: 'panel2', line: 'line', ink: 'ink', muted: 'muted', accent: 'accent', live: 'live' })) r.setProperty('--' + k, c.colors[v]);
+    const m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', c.colors.bg);
+  }
+
+  function followBox(c) {
+    const input = el('input', { class: 'email', type: 'email', placeholder: 'Your email', autocomplete: 'email', 'aria-label': 'Your email' });
+    const note = el('div', { class: 'note' });
+    const form = el('form', { class: 'follow', onsubmit: async (e) => {
+      e.preventDefault();
+      note.textContent = 'Sending…';
+      try {
+        const r = await fetch(`/api/public/channels/${slug}/follow`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: input.value }) });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error && j.error.message);
+        note.textContent = 'Check your email and tap the link to confirm.';
+        input.value = '';
+      } catch (err) { note.textContent = err.message || 'Could not follow. Try again.'; }
+    } }, input, el('button', { class: 'btn', type: 'submit', text: '+ Follow' }), note);
+    return form;
+  }
+
+  function header(c) {
+    const logo = el('div', { class: 'logo' });
+    if (c.logoUrl) logo.append(el('img', { src: c.logoUrl, alt: c.name + ' logo' }));
+    else logo.append(el('span', { class: 'mono', text: initials(c.name) }));
+    $('top').replaceChildren(logo,
+      el('div', { class: 'who' }, el('h1', { text: c.name }), el('div', { class: 'sub', text: `${c.followers.toLocaleString('en-IN')} follower${c.followers === 1 ? '' : 's'} · live events and replays` })),
+      followBox(c));
+  }
+
+  function countdown(iso) {
+    const box = el('div', { class: 'countdown' });
+    const draw = () => {
+      let s = Math.max(0, Math.floor((new Date(iso) - Date.now()) / 1000));
+      const d = Math.floor(s / 86400); s -= d * 86400;
+      const h = Math.floor(s / 3600); s -= h * 3600;
+      const m = Math.floor(s / 60);
+      box.replaceChildren(...[[d, 'days'], [h, 'hours'], [m, 'min']].map(([v, l]) => el('div', {}, el('b', { text: String(v) }), el('span', { text: l }))));
+    };
+    draw();
+    clearInterval(tick);
+    tick = setInterval(draw, 20000);
+    return box;
+  }
+
+  function hero(d) {
+    const h = d.hero;
+    if (!h) { $('hero').replaceChildren(el('div', { class: 'side', style: 'grid-column:1/-1' }, el('h2', { text: 'No broadcasts yet' }), el('p', { class: 'empty', text: 'Follow to get an email when the first one goes live.' }))); return; }
+    const e = h.event;
+    const player = el('div', { class: 'player' });
+    if (h.kind === 'upcoming') {
+      player.append(el('div', { class: 'soonbox' }, el('div', {}, el('span', { class: 'badge soon', text: 'Coming up' }), el('h2', { text: e.name }), el('div', { class: 'note', text: when(e) }))));
+    } else {
+      player.append(el('iframe', { src: `/embed/${e.id}`, title: e.name, allow: 'autoplay; fullscreen; picture-in-picture', allowfullscreen: true, loading: 'eager' }));
+    }
+    const side = el('div', { class: 'side' },
+      h.kind === 'live' ? el('span', { class: 'badge' }, el('span', { class: 'dot' }), 'Live now') : h.kind === 'upcoming' ? el('span', { class: 'badge soon', text: 'Next' }) : el('span', { class: 'badge rep', text: 'Latest replay' }),
+      el('h2', { text: e.name }),
+      e.venue ? el('div', { class: 'note', text: e.venue }) : null,
+      el('div', { class: 'note', text: when(e) }),
+      h.kind === 'upcoming' && e.startsAt ? countdown(e.startsAt) : null,
+      el('a', { class: 'btn', href: href(e), text: h.kind === 'live' ? 'Watch with chat and gifts' : h.kind === 'upcoming' ? 'Open the event' : 'Watch the replay' }),
+      h.kind === 'upcoming' ? el('div', { class: 'note', text: 'Follow above to get an email an hour before it starts.' }) : null);
+    $('hero').replaceChildren(player, side);
+  }
+
+  const card = (e, kind) => el('a', { class: 'card', href: href(e) },
+    el('div', { class: 'art' }, el('span', { class: 'ic', text: initials(e.name) }), kind === 'live' ? el('span', { class: 'badge' }, el('span', { class: 'dot' }), 'Live') : kind === 'up' ? el('span', { class: 'badge soon', text: 'Soon' }) : null),
+    el('div', { class: 't' }, el('b', { text: e.name }), el('span', { text: [when(e), e.venue].filter(Boolean).join(' · ') })));
+
+  function lists(d) {
+    const heroId = d.hero && d.hero.event.id;
+    const live = d.live.filter((e) => e.id !== heroId);
+    $('live-sec').hidden = !live.length; $('live').replaceChildren(...live.map((e) => card(e, 'live')));
+    const up = d.upcoming.filter((e) => e.id !== heroId);
+    $('up-sec').hidden = !up.length; $('up').replaceChildren(...up.map((e) => card(e, 'up')));
+    $('hl-sec').hidden = !d.clips.length;
+    $('hl').replaceChildren(...d.clips.map((c) => el('div', { class: 'card clip' },
+      el('video', { src: c.videoUrl, poster: c.thumbUrl, controls: true, preload: 'none', playsinline: true }),
+      el('div', { class: 't' }, el('b', { text: c.title }), el('span', { text: c.event })))));
+    const groups = new Map();
+    for (const e of d.past) { const k = e.series || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); }
+    $('past-sec').hidden = !d.past.length;
+    $('past').replaceChildren(...[...groups].map(([k, es]) => el('div', {}, k ? el('div', { class: 'series', text: k }) : null, el('div', { class: 'grid' }, es.map((e) => card(e, 'past'))))));
+    const c = d.channel;
+    const about = [];
+    if (c.description || c.links.length) about.push(el('div', {}, c.description ? el('p', { text: c.description }) : null, c.links.length ? el('div', { class: 'links' }, c.links.map((l) => el('a', { class: 'btn ghost', href: l.url, target: '_blank', rel: 'noopener nofollow', text: l.label }))) : null));
+    if (c.sponsors.length) about.push(el('div', {}, el('div', { class: 'series', style: 'margin-top:0', text: 'Sponsors' }), el('div', { class: 'sponsors' }, c.sponsors.map((s) => el('span', { text: s })))));
+    $('about-sec').hidden = !about.length; $('about').replaceChildren(...about);
+  }
+
+  async function load(first) {
+    try {
+      const r = await fetch(`/api/public/channels/${slug}`);
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      const heroChanged = !data || JSON.stringify(d.hero) !== JSON.stringify(data.hero);
+      data = d;
+      if (first) { theme(d.channel); header(d.channel); }
+      if (heroChanged) hero(d);
+      lists(d);
+    } catch { if (first) $('hero').replaceChildren(el('div', { class: 'side', style: 'grid-column:1/-1' }, el('h2', { text: 'Channel not found' }))); }
+  }
+  load(true);
+  setInterval(() => { if (!document.hidden) load(false); }, 30000);
+})();
+</script>
+</body>
+</html>

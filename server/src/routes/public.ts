@@ -128,6 +128,8 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
           .slice(0, 50)
           .map((r) => ({ position: r.position, name: r.name, club: r.club, category: r.category, toPar: r.toParText, thru: r.thru })),
         clips: (await media.publicClips(t.id)).map(clipPublic),
+        // V9: the event's brand channel ("all events" link).
+        channel: await ctx.channels.link(t.org_id),
         serverTime: new Date().toISOString(),
       };
     });
