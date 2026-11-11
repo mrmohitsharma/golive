@@ -7,7 +7,7 @@ import { z } from 'zod';
 import type { Ctx } from '../context.js';
 import { HttpError } from '../errors.js';
 import { requireAuth, userOf } from '../auth.js';
-import { fromCc, packSchema, pricingSchema, txDto } from '../billing.js';
+import { fromCc, packSchema, pricingSchema, SIMPLE_PLAN, txDto } from '../billing.js';
 import { paymentDto } from '../payments.js';
 
 const uuid = z.string().uuid();
@@ -100,7 +100,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
   };
 
   // ---------------------------------------------------------------- pricing and packs
-  app.get('/api/admin/settings', { preHandler: admin }, async () => billing.settings());
+  app.get('/api/admin/settings', { preHandler: admin }, async () => ({ ...(await billing.settings()), simplePlan: SIMPLE_PLAN }));
 
   app.put('/api/admin/settings', { preHandler: admin }, async (req) => {
     const body = z.object({ pricing: pricingSchema.optional(), packs: z.array(packSchema).min(1).max(12).optional() }).parse(req.body);

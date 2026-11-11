@@ -1339,6 +1339,9 @@ class BillingPricing {
     this.freeDestinations = 1,
     this.destinationPrice = 0,
     this.viewerMinutePrice = 0,
+    this.cameraMinutePrice = 0,
+    this.destinationMinutePrice = 0,
+    this.chargeSocialViewers = true,
   });
   final int freeCameras;
   final int freeMinutes;
@@ -1351,6 +1354,14 @@ class BillingPricing {
   /// Credits per viewer-minute (watch page, YouTube, Facebook), on top of live minutes.
   final double viewerMinutePrice;
 
+  /// V9 simple pricing: credits per minute while live for each extra camera / destination
+  /// (0 = one-off slots instead).
+  final double cameraMinutePrice;
+  final double destinationMinutePrice;
+
+  /// false = only watch-page viewers are charged (YouTube and Facebook are free).
+  final bool chargeSocialViewers;
+
   factory BillingPricing.fromJson(Map<String, dynamic>? j) => j == null
       ? const BillingPricing()
       : BillingPricing(
@@ -1362,6 +1373,9 @@ class BillingPricing {
           freeDestinations: (j['freeDestinations'] as num?)?.toInt() ?? 1,
           destinationPrice: _d(j['destinationPrice']),
           viewerMinutePrice: _d(j['viewerMinutePrice']),
+          cameraMinutePrice: _d(j['cameraMinutePrice']),
+          destinationMinutePrice: _d(j['destinationMinutePrice']),
+          chargeSocialViewers: (j['chargeSocialViewers'] as bool?) ?? true,
         );
 }
 
@@ -1535,10 +1549,14 @@ class TournamentBilling {
 
   int? get remainingMinutes => remainingSeconds == null ? null : remainingSeconds! ~/ 60;
   bool get low => remainingSeconds != null && remainingSeconds! <= 600;
-  int get freeCameraSlotsLeft => (cameraLimit - camerasUsed).clamp(0, 1000);
+  int get freeCameraSlotsLeft => pricing.cameraMinutePrice > 0 ? 1000 : (cameraLimit - camerasUsed).clamp(0, 1000);
 
-  /// Room for one more destination without buying (always true when billing is off).
-  bool get destinationRoom => !enabled || destinationsUsed < destinationLimit;
+  /// Room for one more destination without buying (always true when billing is off or extras are per minute).
+  bool get destinationRoom => !enabled || pricing.destinationMinutePrice > 0 || destinationsUsed < destinationLimit;
+
+  /// V9: extras are charged per minute while live, so there is nothing to buy up front.
+  bool get camerasPerMinute => pricing.cameraMinutePrice > 0;
+  bool get destinationsPerMinute => pricing.destinationMinutePrice > 0;
 
   factory TournamentBilling.fromJson(Map<String, dynamic>? j) {
     if (j == null) return const TournamentBilling();

@@ -267,11 +267,13 @@
     });
 
     // Custom pricing
-    const keys = [['freeCameras', 'Free cameras / tournament', '1'], ['freeMinutes', 'Free live minutes / tournament', '1'], ['cameraPrice', 'Credits per extra camera', '0.01'], ['minutePrice', 'Credits per live minute', '0.01'], ['graceMinutes', 'Grace minutes', '1'], ['freeDestinations', 'Free destinations / event', '1'], ['destinationPrice', 'Credits per extra destination', '0.01'], ['viewershipPrice', 'Credits for Influencers & games / event', '0.01'], ['viewershipMessages', 'SMS included with it', '1'], ['messagePrice', 'Credits per SMS after that', '0.01'], ['viewerMinutePrice', 'Credits per viewer-minute (X)', '0.01'], ['viewerTier2From', 'Tier 2 from viewer-min / event', '1'], ['viewerTier2Pct', 'Tier 2 price, % of X', '1'], ['viewerTier3From', 'Tier 3 from viewer-min / event', '1'], ['viewerTier3Pct', 'Tier 3 price, % of X', '1'], ['brandingPrice', 'Credits for own logo + watermark / event', '0.01'], ['tickerPrice', 'Credits for the ticker / event', '0.01']];
-    const inputs = Object.fromEntries(keys.map(([k, , step]) => [k, el('input', { type: 'number', min: '0', step, value: d.overrides[k] ?? '', placeholder: `Default ${d.platformPricing[k]}` })]));
+    const keys = [['freeCameras', 'Free cameras / tournament', '1'], ['freeMinutes', 'Free live minutes / tournament', '1'], ['cameraPrice', 'Credits per extra camera', '0.01'], ['minutePrice', 'Credits per live minute', '0.01'], ['graceMinutes', 'Grace minutes', '1'], ['freeDestinations', 'Free destinations / event', '1'], ['destinationPrice', 'Credits per extra destination', '0.01'], ['viewershipPrice', 'Credits for Influencers & games / event', '0.01'], ['viewershipMessages', 'SMS included with it', '1'], ['messagePrice', 'Credits per SMS after that', '0.01'], ['viewerMinutePrice', 'Credits per viewer-minute (X)', '0.01'], ['viewerTier2From', 'Tier 2 from viewer-min / event', '1'], ['viewerTier2Pct', 'Tier 2 price, % of X', '1'], ['viewerTier3From', 'Tier 3 from viewer-min / event', '1'], ['viewerTier3Pct', 'Tier 3 price, % of X', '1'], ['brandingPrice', 'Credits for branding (logo, watermark, ticker) / event', '0.01'], ['tickerPrice', 'Credits for the ticker / event', '0.01'], ['cameraMinutePrice', 'Credits / min, each extra camera while live', '0.01'], ['destinationMinutePrice', 'Credits / min, each extra destination while live', '0.01'], ['chargeSocialViewers', 'Charge YouTube / Facebook viewers', 'bool']];
+    const inputs = Object.fromEntries(keys.map(([k, , step]) => [k, step === 'bool'
+      ? el('select', {}, el('option', { value: '', text: `Default (${d.platformPricing[k] === false ? 'no' : 'yes'})` }), el('option', { value: 'true', selected: d.overrides[k] === true || undefined, text: 'Yes' }), el('option', { value: 'false', selected: d.overrides[k] === false || undefined, text: 'No' }))
+      : el('input', { type: 'number', min: '0', step, value: d.overrides[k] ?? '', placeholder: `Default ${d.platformPricing[k]}` })]));
     const savePricing = guard(async () => {
       const overrides = {};
-      for (const [k] of keys) if (inputs[k].value !== '') overrides[k] = Number(inputs[k].value);
+      for (const [k, , step] of keys) if (inputs[k].value !== '') overrides[k] = step === 'bool' ? inputs[k].value === 'true' : Number(inputs[k].value);
       await call('PATCH', `/api/admin/orgs/${id}/billing`, { overrides });
       toast('Pricing saved'); reload();
     });
@@ -320,8 +322,46 @@
   // ------------------------------------------------------------------ pricing
   async function pricing() {
     const s = await call('GET', '/api/admin/settings');
-    const fields = [['freeCameras', 'Free cameras per tournament', '1', 'Each tournament can connect this many camera phones at no cost.'], ['cameraPrice', 'Credits per extra camera', '0.01', 'Bought per tournament by the club.'], ['freeMinutes', 'Free live minutes per tournament', '1', 'Counted from Go live to End stream.'], ['minutePrice', 'Credits per live minute', '0.01', 'Charged for each started minute after the free minutes. 0 = unlimited.'], ['graceMinutes', 'Grace minutes when credits run out', '1', 'The director is warned at 10 and 2 minutes left; after the grace period the stream ends.'], ['freeDestinations', 'Free destinations per event', '1', 'Places one event streams to at no cost: each YouTube channel, Facebook Page, Instagram account or other stream key counts as one.'], ['destinationPrice', 'Credits per extra destination', '0.01', 'Bought per event by the club, for each destination beyond the free ones.'], ['viewershipPrice', 'Credits for Influencers & games, per event', '0.01', 'Influencer links, games and prizes, Remind me, reports. Bought per event in the Studio.'], ['viewershipMessages', 'SMS included with it', '1', 'Reminders, draw entries, prize codes and winner messages included per event.'], ['messagePrice', 'Credits per SMS after the included ones', '0.01', 'Charged from the wallet. Prize codes always go out.'], ['viewerMinutePrice', 'Credits per viewer-minute (X)', '0.01', 'X: 0.01 to 1.0 credit for each minute one viewer watches while live, on top of live minutes. Counted on the watch page and embeds (exact), YouTube and Facebook (their "watching now" count each minute). 0 = off.'], ['viewerTier2From', 'Tier 2 starts at (viewer-minutes per event)', '1', 'From this many viewer-minutes in one event, the price drops to the tier 2 percentage. 0 = no tier 2.'], ['viewerTier2Pct', 'Tier 2 price (% of X)', '1', 'e.g. 80 = 20% off.'], ['viewerTier3From', 'Tier 3 starts at (viewer-minutes per event)', '1', 'Must be above tier 2. 0 = no tier 3.'], ['viewerTier3Pct', 'Tier 3 price (% of X)', '1', 'e.g. 60 = 40% off.'], ['welcomeViewerMinutes', 'Free viewer-minutes for a new club', '1', 'Given once when a club is created, usable on any of its events.'], ['brandingPrice', 'Credits for own logo + watermark, per event', '0.01', 'The event logo on the watch page and as the watermark in the video. Without it the Go Live logo is used. 0 = free.'], ['tickerPrice', 'Credits for the scrolling ticker, per event', '0.01', 'The news-style line along the bottom of the video, with sponsor messages. 0 = free.']];
-    const inputs = Object.fromEntries(fields.map(([k, , step]) => [k, el('input', { type: 'number', min: '0', step, max: k === 'viewerMinutePrice' ? '1' : null, value: s.pricing[k] })]));
+    // V9: grouped in the order a club meets them; "simple plan" fills the form (Save applies it).
+    const groups = [
+      ['1 · Go live', 'One rate while the show is live.', [
+        ['minutePrice', 'Credits per live minute', '0.01', 'Charged for each started minute from Go live to End stream (after any free minutes). Includes the free cameras and destinations below. 0 = unlimited.'],
+        ['freeMinutes', 'Free live minutes per event', '1', 'Simple plan: 0 (new clubs get welcome credits instead).'],
+        ['freeCameras', 'Cameras included', '1', 'Cameras an event can use at no extra cost.'],
+        ['freeDestinations', 'Destinations included', '1', 'Each YouTube channel, Facebook Page, Instagram account or other stream key counts as one.'],
+        ['graceMinutes', 'Grace minutes when credits run out', '1', 'The director is warned at 10 and 2 minutes left; after the grace period the stream ends.']]],
+      ['2 · Extras, per minute while switched on', 'No slots to buy: a camera is charged while it sends video, a destination while the show streams to it. 0 = use the one-off slots in step 6 instead.', [
+        ['cameraMinutePrice', 'Credits per minute, each extra camera', '0.01', 'For each camera sending video beyond the included ones, while live.'],
+        ['destinationMinutePrice', 'Credits per minute, each extra destination', '0.01', 'For each destination beyond the included ones, while live.']]],
+      ['3 · Viewers', 'Charged while live, for each minute one viewer watches.', [
+        ['viewerMinutePrice', 'Credits per viewer-minute', '0.0001', '0 = off. Watch page and embeds are counted exactly.'],
+        ['chargeSocialViewers', 'Also charge YouTube and Facebook viewers', 'bool', 'They cost us nothing to serve. Simple plan: off (only our watch page is charged).'],
+        ['viewerTier2From', 'Tier 2 starts at (viewer-minutes per event)', '1', '0 = no tiers.'],
+        ['viewerTier2Pct', 'Tier 2 price (% of the viewer price)', '1', 'e.g. 80 = 20% off.'],
+        ['viewerTier3From', 'Tier 3 starts at (viewer-minutes per event)', '1', 'Must be above tier 2. 0 = no tier 3.'],
+        ['viewerTier3Pct', 'Tier 3 price (% of the viewer price)', '1', 'e.g. 60 = 40% off.']]],
+      ['4 · Add-ons, once per event', 'Charged when switched on for an event.', [
+        ['brandingPrice', 'Branding: own logo, watermark and ticker', '0.01', 'One purchase turns on logo, watermark and ticker. 0 = free.'],
+        ['tickerPrice', 'Ticker on its own (also turns on branding)', '0.01', 'Set the same as branding for one price. 0 = free.'],
+        ['viewershipPrice', 'Influencers & games', '0.01', 'Influencer links, games and prizes, Remind me, reports.'],
+        ['viewershipMessages', 'SMS included with Influencers & games', '1', 'Reminders, draw entries, prize codes and winner messages.'],
+        ['messagePrice', 'Credits per SMS after the included ones', '0.01', 'Prize codes always go out.']]],
+      ['5 · New clubs', 'Given once when a club is created.', [
+        ['welcomeCredits', 'Welcome credits', '1', 'Put in the new club\'s wallet. Simple plan: 300 (about an hour live).'],
+        ['welcomeViewerMinutes', 'Free viewer-minutes', '1', 'Usable on any of its events. Simple plan: 0.']]],
+      ['6 · One-off slots (older pricing)', 'Used only when the per-minute price in step 2 is 0.', [
+        ['cameraPrice', 'Credits per extra camera slot, per event', '0.01', 'Bought per event by the club.'],
+        ['destinationPrice', 'Credits per extra destination slot, per event', '0.01', 'Bought per event by the club.']]],
+    ];
+    const fields = groups.flatMap((g) => g[2]);
+    const inputs = Object.fromEntries(fields.map(([k, , step]) => [k, step === 'bool'
+      ? el('input', { type: 'checkbox', checked: s.pricing[k] !== false || undefined, style: 'width:auto' })
+      : el('input', { type: 'number', min: '0', step, max: k === 'viewerMinutePrice' ? '1' : null, value: s.pricing[k] })]));
+    const perHour = el('div', { class: 'hint' });
+    const showPerHour = () => { const v = Number(inputs.viewerMinutePrice.value) || 0; perHour.textContent = v > 0 ? `= ${Math.round(v * 60 * 100) / 100} credits per viewer per hour` : 'Viewers are free'; };
+    inputs.viewerMinutePrice.oninput = showPerHour; showPerHour();
+    const setValues = (pr) => { for (const [k, , step] of fields) { if (step === 'bool') inputs[k].checked = pr[k] !== false; else inputs[k].value = pr[k]; } showPerHour(); };
+    const useSimple = () => { setValues(s.simplePlan); toast('Simple plan filled in. Check it, then Save pricing and packs.'); };
     let packs = s.packs.map((p) => ({ ...p }));
     const packBox = el('div');
     const drawPacks = () => packBox.replaceChildren(table(['Id', 'Name', 'Price (₹)', 'Credits', 'Bonus', ''], packs.map((p, i) => {
@@ -333,14 +373,18 @@
     const bonusText = (p) => p.priceInr > 0 && p.credits > p.priceInr ? `+${Math.round((p.credits / p.priceInr - 1) * 100)}%` : '';
     drawPacks();
     const save = guard(async () => {
-      const pricing = Object.fromEntries(fields.map(([k]) => [k, Number(inputs[k].value)]));
+      const pricing = Object.fromEntries(fields.map(([k, , step]) => [k, step === 'bool' ? inputs[k].checked : Number(inputs[k].value)]));
       const r = await call('PUT', '/api/admin/settings', { pricing, packs });
       packs = r.packs.map((p) => ({ ...p })); drawPacks(); toast('Saved. New prices apply from now on.');
     });
     return el('div', {},
-      el('div', { class: 'panel' }, el('div', { class: 'head' }, el('h3', { text: 'Platform pricing' })), el('div', { class: 'body' },
-        el('div', { class: 'form' }, fields.map(([k, label, , hint]) => el('label', { class: 'f', title: hint }, label, inputs[k]))),
-        el('div', { class: 'hint', text: 'Applies to every club without custom pricing. Prices are in credits; clubs buy credits with the packs below.' }))),
+      el('div', { class: 'panel' }, el('div', { class: 'head' }, el('h3', { text: 'Platform pricing' }),
+        s.simplePlan ? el('button', { class: 'btn', onclick: useSimple, title: 'Go live 6/min with 2 cameras + 1 destination; extra camera 2/min; extra destination 1/min; watch-page viewers 8 per viewer-hour; branding 199; games 499; 300 welcome credits', text: 'Use the simple plan' }) : null),
+        el('div', { class: 'body' },
+        groups.map(([title, sub, fs]) => el('div', { style: 'margin-bottom:14px' },
+          el('h4', { style: 'margin:0 0 2px', text: title }), el('div', { class: 'hint', style: 'margin:0 0 8px', text: sub }),
+          el('div', { class: 'form' }, fs.map(([k, label, step, hint]) => el('label', { class: 'f', title: hint }, label, inputs[k], k === 'viewerMinutePrice' ? perHour : null, step === 'bool' ? el('div', { class: 'hint', text: hint }) : null))))),
+        el('div', { class: 'hint', text: 'Applies to every club without custom pricing. Prices are in credits (1 credit = ₹1 at the Starter pack); clubs buy credits with the packs below. Hover a field for details.' }))),
       el('div', { class: 'panel', style: 'margin-top:16px' }, el('div', { class: 'head' }, el('h3', { text: 'Credit packs' }),
         el('button', { class: 'btn', onclick: () => { packs.push({ id: 'pack' + (packs.length + 1), label: 'New pack', priceInr: 1000, credits: 1000 }); drawPacks(); }, text: 'Add pack' })), packBox,
         el('div', { class: 'body hint', style: 'margin:0', text: 'What clubs see under Buy credits. The price is charged through Cashfree in rupees. Ids must be unique; changing an id does not affect past payments.' })),

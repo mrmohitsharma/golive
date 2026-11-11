@@ -81,6 +81,11 @@ export interface TournamentRow {
   viewer_sec_free?: string;
   viewer_sec_billable?: string;
   viewer_cc_billed?: string;
+  /** V9: extra cameras / destinations charged per minute while live (hundredths, numeric/bigint as text). */
+  cam_cc_accrued?: string;
+  cam_cc_billed?: string;
+  dest_cc_accrued?: string;
+  dest_cc_billed?: string;
   chat_enabled: boolean;
   chat_slow_sec: number;
   /** V9: gift credits set-up (gifts.ts) and the brand channel fields. */

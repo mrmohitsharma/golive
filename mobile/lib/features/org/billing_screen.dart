@@ -336,13 +336,21 @@ class _BalanceCard extends StatelessWidget {
           if (perMinute > 0)
             Text('About ${(balance / perMinute).floor()} paid live minutes', style: t.bodyMedium?.copyWith(color: Colors.white70)),
           const Divider(height: 24, color: Colors.white24),
-          Text('Free in every tournament: ${pricing.freeCameras} cameras and ${pricing.freeMinutes} live minutes.', style: t.bodyMedium?.copyWith(color: Colors.white)),
+          Text(
+              pricing.freeMinutes > 0
+                  ? 'Free in every event: ${pricing.freeCameras} cameras and ${pricing.freeMinutes} live minutes.'
+                  : 'Every event includes ${pricing.freeCameras} cameras and ${pricing.freeDestinations} destination.',
+              style: t.bodyMedium?.copyWith(color: Colors.white)),
           const SizedBox(height: 4),
           Text(
             [
-              'Extra camera: ${formatAmount(pricing.cameraPrice)} credits per tournament',
-              perMinute > 0 ? 'Live time after that: ${formatAmount(perMinute)} credits per minute' : 'Live time after that: no charge',
-              if (pricing.viewerMinutePrice > 0) 'Viewers: ${formatAmount(pricing.viewerMinutePrice)} credits per viewer-minute (watch page, YouTube, Facebook)',
+              perMinute > 0 ? 'Live: ${formatAmount(perMinute)} credits per minute' : 'Live time: no charge',
+              pricing.cameraMinutePrice > 0
+                  ? 'Extra camera: ${formatAmount(pricing.cameraMinutePrice)} credits a minute while live'
+                  : 'Extra camera: ${formatAmount(pricing.cameraPrice)} credits per event',
+              if (pricing.destinationMinutePrice > 0) 'Extra destination: ${formatAmount(pricing.destinationMinutePrice)} credits a minute while live',
+              if (pricing.viewerMinutePrice > 0)
+                'Viewers: ${formatAmount(pricing.viewerMinutePrice * 60)} credits per viewer-hour (${pricing.chargeSocialViewers ? 'watch page, YouTube, Facebook' : 'watch page; YouTube and Facebook free'})',
             ].join('\n'),
             style: t.bodySmall?.copyWith(color: Colors.white70),
           ),

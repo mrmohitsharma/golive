@@ -64,12 +64,11 @@ describe('V8 branding: theme, own logo, watermark, ticker', () => {
     assert.equal((await fetch(h.baseUrl + '/api/public/branding/..%2F..%2Fetc%2Fpasswd')).status, 404);
   });
 
-  it('watermark and ticker go into the video overlay; the ticker needs buying when it has a price', async () => {
+  it('watermark and ticker go into the video overlay; the branding pack includes the ticker (V9)', async () => {
     await expectOk(api(h, 'PATCH', `/api/tournaments/${tid}/branding`, { theme: 'cricket', accent: '#123456', ticker: { lines: ['Toss at 2 pm', 'Gurgaon XI bat first'], sponsors: ['Sharma Motors'] } }, owner.token));
-    const no = await api(h, 'PATCH', `/api/tournaments/${tid}/branding`, { ticker: { enabled: true } }, owner.token);
-    assert.equal(no.status, 402);
-    assert.equal(no.body.error.code, 'ticker_not_bought');
-    await expectOk(api(h, 'POST', `/api/tournaments/${tid}/branding/buy`, { what: 'ticker' }, owner.token));
+    const before = (await expectOk(api(h, 'GET', `/api/orgs/${(await h.app.repo.tournamentById(tid))!.org_id}/billing`, undefined, owner.token))).balance;
+    await expectOk(api(h, 'POST', `/api/tournaments/${tid}/branding/buy`, { what: 'ticker' }, owner.token)); // already on with branding: free
+    assert.equal((await expectOk(api(h, 'GET', `/api/orgs/${(await h.app.repo.tournamentById(tid))!.org_id}/billing`, undefined, owner.token))).balance, before);
     await expectOk(api(h, 'PATCH', `/api/tournaments/${tid}/branding`, { ticker: { enabled: true, speed: 'fast' }, watermark: { size: 'large', opacity: 0.5 } }, owner.token));
     const t = (await h.app.repo.tournamentById(tid))!;
     const g = await fetch(`${h.baseUrl}/api/graphics/${tid}/state?k=${t.graphics_key}`).then((r) => r.json() as Promise<any>);

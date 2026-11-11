@@ -251,6 +251,15 @@ export async function render(view, { id }) {
     drawSwitchNow();
   };
 
+  // V9 simple pricing: what the show costs a minute, in plain words.
+  const rateText = (b) => {
+    const p = b.pricing, n = (v) => (Math.round(v * 100) / 100).toLocaleString('en-IN');
+    const parts = [`${n(p.minutePrice)} credits a minute live (${p.freeCameras} camera${p.freeCameras === 1 ? '' : 's'} and ${p.freeDestinations} destination${p.freeDestinations === 1 ? '' : 's'} included)`];
+    if (p.cameraMinutePrice > 0) parts.push(`each extra camera ${n(p.cameraMinutePrice)}/min`);
+    if (p.destinationMinutePrice > 0) parts.push(`each extra destination ${n(p.destinationMinutePrice)}/min`);
+    if (p.viewerMinutePrice > 0) parts.push(`${n(p.viewerMinutePrice * 60)} per viewer per hour${p.chargeSocialViewers ? '' : ' on your watch page (YouTube and Facebook viewers are free)'}`);
+    return parts.join(' · ');
+  };
   const drawStatus = () => {
     const e = s.engine ?? {};
     const live = e.streaming?.active;
@@ -261,7 +270,9 @@ export async function render(view, { id }) {
       s.production?.mode === 'cloud' ? el('span', { class: 'small muted', text: `Cloud OBS: ${s.production.cloud.status}` }) : null,
       b && b.minutes.remainingSeconds != null ? el('span', { class: 'small ' + (b.minutes.remainingSeconds < 600 ? 'pill warn' : 'muted'), text: `${Math.floor(b.minutes.remainingSeconds / 60)} min of credit left` }) : null,
       // Viewer-minutes so far (watch page + YouTube + Facebook) and the credits still available.
-      b?.enabled ? el('span', { class: 'small muted', title: 'Viewer-minutes: every minute one viewer watches, on the watch page, YouTube and Facebook.' + (b.viewers?.freeLeft ? ` ${b.viewers.freeLeft.toLocaleString('en-IN')} free viewer-minutes left.` : ''), text: `👁 ${(b.viewers?.minutes ?? 0).toLocaleString('en-IN')} viewer-min · ${Math.floor(b.balance).toLocaleString('en-IN')} credits available` }) : null,
+      b?.enabled ? el('span', { class: 'small muted', title: `Viewer-minutes: every minute one viewer watches${b.pricing?.chargeSocialViewers === false ? ' on your watch page and embeds' : ', on the watch page, YouTube and Facebook'}.` + (b.viewers?.freeLeft ? ` ${b.viewers.freeLeft.toLocaleString('en-IN')} free viewer-minutes left.` : ''), text: `👁 ${(b.viewers?.minutes ?? 0).toLocaleString('en-IN')} viewer-min · ${Math.floor(b.balance).toLocaleString('en-IN')} credits available` }) : null,
+      // What is being charged right now, per minute (live time + extra cameras/destinations + viewers).
+      b?.enabled && live && b.perMinuteNow > 0 ? el('span', { class: 'pill', title: rateText(b), text: `${(Math.round(b.perMinuteNow * 10) / 10).toLocaleString('en-IN')} credits/min now` }) : null,
       (e.warnings ?? []).length ? el('span', { class: 'pill warn', title: e.warnings.join('\n'), text: `${e.warnings.length} warning${e.warnings.length > 1 ? 's' : ''}` }) : null,
       el('div', { class: 'sp' }),
       showGuide,
@@ -270,7 +281,7 @@ export async function render(view, { id }) {
     const where = s.outputs?.main?.label ?? 'your main stream';
     liveBtn.replaceChildren(live
       ? el('button', { class: 'btn danger cr-golive', onclick: guard(async () => { if (await confirmBox('End the broadcast?', 'The stream stops on every platform.', 'End broadcast')) send('stream.stop'); }), text: '■ End broadcast' })
-      : el('button', { class: 'btn primary cr-golive', 'data-tour': 'go-live', disabled: b && !b.canGoLive, title: b?.reason ?? '', onclick: guard(async () => { if (await confirmBox('Go live now?', `The ON AIR picture goes out to ${where} and every place that is switched on.`, 'Go live', false)) send('stream.start'); }), text: '● GO LIVE' }));
+      : el('button', { class: 'btn primary cr-golive', 'data-tour': 'go-live', disabled: b && !b.canGoLive, title: b?.reason ?? '', onclick: guard(async () => { if (await confirmBox('Go live now?', `The ON AIR picture goes out to ${where} and every place that is switched on.${b?.enabled ? ` Credits are taken automatically while live: ${rateText(b)}.` : ''}`, 'Go live', false)) send('stream.start'); }), text: '● GO LIVE' }));
     steps?.update(s);
   };
 

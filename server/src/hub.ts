@@ -225,6 +225,11 @@ export class Hub {
   }
 
   /** A camera that can go on air now: sending video, not on a call, not paused. */
+  /** Billing: a camera counts as switched on while it is sending video. */
+  cameraSending(c: CameraRow): boolean {
+    return this.healthFor(c.stream_path).online;
+  }
+
   private usableForAir(tid: string, c: CameraRow): boolean {
     if (!this.healthFor(c.stream_path).online) return false;
     const tel = this.telemetryFor(tid, c.id);

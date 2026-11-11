@@ -339,14 +339,48 @@
   });
 
   // ---------------------------------------------------------------- prices
-  var P = { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5, viewerMinutePrice: 0.01, welcomeViewerMinutes: 100, brandingPrice: 100, tickerPrice: 0 };
+  // Shown until /api/public/pricing answers (the V9 simple plan).
+  var P = { freeCameras: 2, freeMinutes: 0, cameraPrice: 0, minutePrice: 6, cameraMinutePrice: 2, freeDestinations: 1, destinationPrice: 0, destinationMinutePrice: 1,
+    viewerMinutePrice: 0.1333, chargeSocialViewers: false, welcomeViewerMinutes: 0, welcomeCredits: 300, brandingPrice: 199, tickerPrice: 199, viewershipPrice: 499, viewershipMessages: 500 };
   var inrPerCredit = 1;
   var GST = { rate: 18, included: false };
   var rupees = function (n) { return n > 0 && n < 1 ? '₹' + String(+Number(n).toFixed(2)) : '₹' + (Math.round(n * 100) / 100).toLocaleString('en-IN'); };
   function oursCredits(cams, hours) {
-    return Math.max(0, cams - P.freeCameras) * P.cameraPrice + Math.max(0, hours * 60 - P.freeMinutes) * P.minutePrice;
+    var extra = Math.max(0, cams - P.freeCameras);
+    var camCost = P.cameraMinutePrice > 0 ? extra * P.cameraMinutePrice * hours * 60 : extra * P.cameraPrice;
+    return camCost + Math.max(0, hours * 60 - P.freeMinutes) * P.minutePrice;
+  }
+  var cr0 = function (v) { return v > 0 && v < 1 ? String(+Number(v).toFixed(2)) : num(Math.round(v * 100) / 100); };
+  // "1 credit", "6 credits": the number and its word.
+  var cr = function (v) { return cr0(v) + (Math.round(v * 100) === 100 ? ' credit' : ' credits'); };
+  // The price list, step by step, from the live prices (one line per thing a club can switch on).
+  function drawRates() {
+    var list = document.getElementById('rates');
+    if (!list) return;
+    var pl = function (n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); };
+    var r = [];
+    r.push(['Go live: ' + pl(P.freeCameras, 'camera') + ' and ' + pl(P.freeDestinations || 0, 'destination') + ' included' + (P.freeMinutes > 0 ? ', first ' + P.freeMinutes + ' minutes free' : ''), cr(P.minutePrice) + ' / min']);
+    r.push(P.cameraMinutePrice > 0 ? ['Each extra camera, while it sends video live', cr(P.cameraMinutePrice) + ' / min'] : ['Each extra camera, per event', cr(P.cameraPrice)]);
+    r.push(P.destinationMinutePrice > 0 ? ['Each extra destination (YouTube channel, Facebook, Instagram…)', cr(P.destinationMinutePrice) + ' / min'] : ['Each extra destination, per event', cr(P.destinationPrice)]);
+    if (P.viewerMinutePrice > 0) r.push([P.chargeSocialViewers === false ? 'Viewers on your watch page (YouTube and Facebook viewers are free)' : 'Viewers on your watch page, YouTube and Facebook', cr(P.viewerMinutePrice * 60) + ' / viewer-hour']);
+    else r.push(['Viewers', 'Free']);
+    r.push(['Branding: your logo, video watermark and ticker, per event', P.brandingPrice > 0 ? cr(P.brandingPrice) : 'Free']);
+    if (P.viewershipPrice != null) r.push(['Influencers & games, per event (' + num(P.viewershipMessages || 0) + ' SMS included)', P.viewershipPrice > 0 ? cr(P.viewershipPrice) : 'Free']);
+    r.push(['Cloud mixing, watch page, chat, replays, themes', 'Included']);
+    list.replaceChildren.apply(list, r.map(function (x) {
+      var li = document.createElement('li');
+      var a = document.createElement('span'); a.textContent = x[0];
+      var b = document.createElement('strong'); b.textContent = x[1];
+      li.appendChild(a); li.appendChild(b);
+      return li;
+    }));
+    var sub = document.getElementById('price-sub');
+    if (sub) sub.textContent = 'Includes ' + pl(P.freeCameras, 'camera') + ' and ' + pl(P.freeDestinations || 0, 'destination') + '. Setting up, testing and rehearsing are free.';
+    var w = document.getElementById('welcome-note');
+    if (w) w.textContent = [P.welcomeCredits > 0 ? 'Every new club gets ' + num(P.welcomeCredits) + ' free credits.' : '', P.welcomeViewerMinutes > 0 ? num(P.welcomeViewerMinutes) + ' free viewer-minutes for every new club.' : ''].filter(Boolean).join(' ');
   }
   function fillPrices(packs) {
+    drawRates();
     document.querySelectorAll('[data-p]').forEach(function (n) {
       var v = P[n.getAttribute('data-p')];
       // Small prices (credits per viewer-minute) keep their decimals.
@@ -427,10 +461,11 @@
     rows(document.getElementById('crew'), crew.map(function (r) { return [r[0], inr(r[1])]; }));
     var extraCams = Math.max(0, cams - P.freeCameras);
     var paidMin = Math.max(0, hours * 60 - P.freeMinutes);
+    var camCredits = P.cameraMinutePrice > 0 ? extraCams * P.cameraMinutePrice * hours * 60 : extraCams * P.cameraPrice;
     rows(document.getElementById('ours'), [
       ['Phones at the event', 'Yours'],
-      ['First ' + P.freeCameras + ' cameras and ' + P.freeMinutes + ' minutes', 'Free'],
-      [extraCams + ' extra camera' + (extraCams === 1 ? '' : 's'), inr(extraCams * P.cameraPrice * inrPerCredit)],
+      ['First ' + P.freeCameras + ' cameras' + (P.freeMinutes > 0 ? ' and ' + P.freeMinutes + ' minutes' : ''), 'Included'],
+      [extraCams + ' extra camera' + (extraCams === 1 ? '' : 's'), inr(camCredits * inrPerCredit)],
       [num(paidMin) + ' live minutes', inr(paidMin * P.minutePrice * inrPerCredit)],
       ['Cloud mixing, graphics, restreaming', 'Included']
     ]);

@@ -1,5 +1,5 @@
 import { state, get, post, put, patch, del, el, stat, table, inr, num, when, day, dialog, confirmBox, toast, guard, go, download } from './core.js';
-import { PRICING_LABELS, TX_LABELS } from './labels.js';
+import { BOOL_PRICING, PRICING_LABELS, TX_LABELS } from './labels.js';
 
 export const title = 'Money';
 
@@ -166,10 +166,16 @@ async function pricing(body) {
   const s = await get('/api/admin/settings');
   const pf = el('form', { class: 'card form', onsubmit: guard(async (e) => {
     e.preventDefault();
-    const pricing = Object.fromEntries(Object.keys(PRICING_LABELS).map((k) => [k, Number(e.target.elements[k].value)]));
+    const pricing = Object.fromEntries(Object.keys(PRICING_LABELS).map((k) => [k, BOOL_PRICING.has(k) ? e.target.elements[k].value === 'true' : Number(e.target.elements[k].value)]));
     await put('/api/admin/settings', { pricing }); toast('Prices saved');
-  }) }, Object.entries(PRICING_LABELS).map(([k, label]) => el('div', {}, el('label', { text: label }), el('input', { name: k, type: 'number', step: 'any', min: 0, value: s.pricing[k] ?? '' }))),
-    el('div', {}, el('button', { class: 'btn primary', text: 'Save prices' })));
+  }) }, Object.entries(PRICING_LABELS).map(([k, label]) => el('div', {}, el('label', { text: label }), BOOL_PRICING.has(k)
+      ? el('select', { name: k }, el('option', { value: 'true', selected: s.pricing[k] !== false || undefined, text: 'Yes' }), el('option', { value: 'false', selected: s.pricing[k] === false || undefined, text: 'No' }))
+      : el('input', { name: k, type: 'number', step: 'any', min: 0, value: s.pricing[k] ?? '' }))),
+    el('div', { class: 'row' }, el('button', { class: 'btn primary', text: 'Save prices' }),
+      s.simplePlan ? el('button', { type: 'button', class: 'btn', title: 'Fills the form; Save prices applies it', onclick: () => {
+        for (const [k, v] of Object.entries(s.simplePlan)) { const f = pf.elements[k]; if (f) f.value = String(v); }
+        toast('Simple plan filled in. Check it, then Save prices.');
+      }, text: 'Use the simple plan' }) : null));
   let packs = s.packs.map((p) => ({ ...p }));
   const packBox = el('div');
   const drawPacks = () => packBox.replaceChildren(

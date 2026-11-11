@@ -60,7 +60,7 @@ async function overview(body, id, s) {
       stat(e.connected && e.obsConnected ? 'Ready' : 'Not connected', 'Broadcast engine', !(e.connected && e.obsConnected)),
       stat(e.streaming?.active ? 'Live' : 'Off air', 'Stream'),
       b ? stat(b.minutes.remainingSeconds == null ? 'Unlimited' : `${Math.floor(b.minutes.remainingSeconds / 60)} min`, 'Live time left on credits', b.minutes.remainingSeconds != null && b.minutes.remainingSeconds < 600) : null,
-      b ? stat(`${b.cameras.used} / ${b.cameras.limit}`, 'Camera slots used') : null,
+      b ? (b.cameras.perMinute > 0 ? stat(`${b.cameras.used} (${b.cameras.free} included)`, `Cameras · each extra ${num(b.cameras.perMinute)} credits/min while live`) : stat(`${b.cameras.used} / ${b.cameras.limit}`, 'Camera slots used')) : null,
       b ? stat(num(b.balance), 'Club credits') : null),
     b && !b.canGoLive ? el('div', { class: 'banner bad', text: b.reason ?? 'This event cannot go live right now.' }) : null,
     el('h2', { text: 'Get on air' }),
@@ -80,7 +80,7 @@ async function overview(body, id, s) {
           await post(`/api/tournaments/${id}/cloud-engine/stop`); reloadTab(id, 'overview');
         }), text: `Stop Cloud OBS (${prod.cloud.status})` }) : null,
         el('a', { class: 'btn', href: `/web/e/${id}/control`, text: 'Control room' }),
-        b?.enabled ? el('button', { class: 'btn', onclick: buySlots(id, 'cameras', b, 'overview'), text: 'Add camera slots' }) : null,
+        b?.enabled && !(b.cameras.perMinute > 0) ? el('button', { class: 'btn', onclick: buySlots(id, 'cameras', b, 'overview'), text: 'Add camera slots' }) : null,
         prod.mode === 'cloud' && !['running', 'starting'].includes(prod.cloud.status) ? el('button', { class: 'btn', onclick: guard(async () => {
           const r = await post(`/api/tournaments/${id}/cloud-engine/start`); toast(`Cloud OBS ${r.production?.cloud?.status ?? 'starting'}: ready in about a minute`); reloadTab(id, 'overview');
         }), text: 'Start Cloud OBS only' }) : null)),
@@ -98,8 +98,10 @@ async function people(body, id, s) {
   const ROLE = { camera: 'Cameras', scorer: 'Scorers', commentator: 'Commentators' };
   body.append(
     el('div', { class: 'row', style: 'margin-bottom:-8px' }, el('h2', { text: 'Cameras' }), el('div', { class: 'sp' }),
-      s.billing?.enabled ? el('span', { class: 'small muted', text: `${s.billing.cameras.used} of ${s.billing.cameras.limit} camera slots used` }) : null,
-      s.billing?.enabled ? el('button', { class: 'btn small', onclick: buySlots(id, 'cameras', s.billing, 'people'), text: 'Add camera slots' }) : null),
+      s.billing?.enabled ? el('span', { class: 'small muted', text: s.billing.cameras.perMinute > 0
+        ? `${s.billing.cameras.free} cameras included · each extra camera ${num(s.billing.cameras.perMinute)} credits a minute while it sends video live`
+        : `${s.billing.cameras.used} of ${s.billing.cameras.limit} camera slots used` }) : null,
+      s.billing?.enabled && !(s.billing.cameras.perMinute > 0) ? el('button', { class: 'btn small', onclick: buySlots(id, 'cameras', s.billing, 'people'), text: 'Add camera slots' }) : null),
     table(['Camera', 'Position', 'Phone', 'Status', ''], (s.cameras ?? []).map((c) => [el('strong', { text: c.name }), c.hole ? `${s.tournament.profile?.positionLabel ?? 'Hole'} ${c.hole}` : (c.position ?? '–'), c.deviceModel ?? c.platform ?? '–',
       pill({ live: 'ok', connecting: 'warn', paused: 'warn', offline: '' }[c.status], c.onAir ? 'On air' : c.status),
       el('span', { class: 'row' },
@@ -203,8 +205,10 @@ async function streaming(body, id, s) {
       }
       reloadTab(id, 'streaming');
     }), text: 'Add destination' }),
-      billing ? el('span', { class: 'small muted', text: `${billing.destinations.used} of ${billing.destinations.limit} destinations used${billing.destinations.price ? ` · extra ones ${billing.destinations.price} credits` : ''}` }) : null,
-      billing?.enabled ? el('button', { class: 'btn small', onclick: buySlots(id, 'destinations', billing, 'streaming'), text: 'Add destination slots' }) : null),
+      billing ? el('span', { class: 'small muted', text: billing.destinations.perMinute > 0
+        ? `${billing.destinations.free} destination${billing.destinations.free === 1 ? '' : 's'} included · each extra one ${num(billing.destinations.perMinute)} credits a minute while live`
+        : `${billing.destinations.used} of ${billing.destinations.limit} destinations used${billing.destinations.price ? ` · extra ones ${billing.destinations.price} credits` : ''}` }) : null,
+      billing?.enabled && !(billing.destinations.perMinute > 0) ? el('button', { class: 'btn small', onclick: buySlots(id, 'destinations', billing, 'streaming'), text: 'Add destination slots' }) : null),
     setup ? el('div', {}, el('h2', {}, 'Laptop OBS ', info('obs', 'How to set up Laptop OBS')),
       el('div', { class: 'card row' }, el('span', { style: 'flex:1', class: 'small', text: 'Get the Go Live app on your laptop and link it with a 6-digit code. It sets OBS up for you.' }),
         el('a', { class: 'btn primary small', href: `/web/e/${id}/laptop`, onclick: (e) => { e.preventDefault(); go(`/web/e/${id}/laptop`); }, text: 'Set up the laptop' })),

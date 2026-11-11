@@ -137,7 +137,11 @@
         return;
       }
       kids.push(el('div', { class: 'balance' }, [num(b.balance), el('small', { text: 'credits' })]));
-      kids.push(el('p', { style: 'color:var(--muted);margin-bottom:18px', text: 'Every event includes ' + b.pricing.freeCameras + ' cameras and ' + b.pricing.freeMinutes + ' live minutes free; then ' + num(b.pricing.cameraPrice) + ' credits per extra camera and ' + num(b.pricing.minutePrice) + ' per live minute' + (b.pricing.viewerMinutePrice > 0 ? ', plus ' + b.pricing.viewerMinutePrice + ' per viewer-minute (watch page, YouTube, Facebook)' + (b.freeViewerMinutes ? '; ' + num(b.freeViewerMinutes) + ' free viewer-minutes left' : '') : '') + '.' }));
+      kids.push(el('p', { style: 'color:var(--muted);margin-bottom:18px', text: (function (p) {
+        var cam = p.cameraMinutePrice > 0 ? num(p.cameraMinutePrice) + ' credits a minute per extra camera while live' : num(p.cameraPrice) + ' credits per extra camera';
+        var view = p.viewerMinutePrice > 0 ? ', plus ' + num(Math.round(p.viewerMinutePrice * 6000) / 100) + ' per viewer-hour (' + (p.chargeSocialViewers === false ? 'watch page; YouTube and Facebook viewers free' : 'watch page, YouTube, Facebook') + ')' + (b.freeViewerMinutes ? '; ' + num(b.freeViewerMinutes) + ' free viewer-minutes left' : '') : '';
+        return 'Live: ' + num(p.minutePrice) + ' credits a minute with ' + p.freeCameras + ' cameras included' + (p.freeMinutes ? ' (first ' + p.freeMinutes + ' minutes free)' : '') + '; ' + cam + view + '.';
+      })(b.pricing) }));
       if (b.suspended) {
         kids.push(el('p', { class: 'notice', text: 'This organisation is paused' + (b.suspendedReason ? ': ' + b.suspendedReason : '.') + ' Contact us to resume.' }));
       } else if (!b.paymentsEnabled) {

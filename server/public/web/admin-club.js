@@ -1,5 +1,5 @@
 import { get, post, patch, del, api, el, stat, table, inr, num, when, day, dialog, confirmBox, toast, guard, go, logInAs } from './core.js';
-import { PRICING_LABELS, TX_LABELS, ROLE_LABELS, FEATURE_LABELS } from './labels.js';
+import { BOOL_PRICING, PRICING_LABELS, TX_LABELS, ROLE_LABELS, FEATURE_LABELS } from './labels.js';
 
 export const title = 'Club';
 
@@ -54,10 +54,11 @@ export async function render(view, { id }) {
     const pricingForm = el('form', { class: 'form', onsubmit: guard(async (e) => {
       e.preventDefault();
       const overrides = {};
-      for (const k of Object.keys(PRICING_LABELS)) { const v = e.target.elements[k].value.trim(); if (v !== '') overrides[k] = Number(v); }
+      for (const k of Object.keys(PRICING_LABELS)) { const v = e.target.elements[k].value.trim(); if (v !== '') overrides[k] = BOOL_PRICING.has(k) ? v === 'true' : Number(v); }
       await patch(`/api/admin/orgs/${id}/billing`, { overrides }); toast('Club pricing saved'); reload();
-    }) }, Object.entries(PRICING_LABELS).map(([k, label]) => el('div', {}, el('label', { text: label }),
-      el('input', { name: k, type: 'number', step: 'any', min: 0, value: c.overrides[k] ?? '', placeholder: `Platform: ${c.platformPricing[k]}` }))),
+    }) }, Object.entries(PRICING_LABELS).map(([k, label]) => el('div', {}, el('label', { text: label }), BOOL_PRICING.has(k)
+      ? el('select', { name: k }, el('option', { value: '', text: `Platform (${c.platformPricing[k] === false ? 'no' : 'yes'})` }), el('option', { value: 'true', selected: c.overrides[k] === true || undefined, text: 'Yes' }), el('option', { value: 'false', selected: c.overrides[k] === false || undefined, text: 'No' }))
+      : el('input', { name: k, type: 'number', step: 'any', min: 0, value: c.overrides[k] ?? '', placeholder: `Platform: ${c.platformPricing[k]}` }))),
       el('div', {}, el('button', { class: 'btn primary', text: 'Save club pricing' })));
 
     const notes = el('textarea', { rows: 3, value: x.notes ?? '', placeholder: 'Private notes for the Go Live team' });

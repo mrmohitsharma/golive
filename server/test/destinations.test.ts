@@ -130,7 +130,7 @@ describe('one show to several YouTube channels and stream keys; 1 destination fr
   it('the first destination is free; adding another asks for an extra destination', async () => {
     await expectOk(api(h, 'POST', `/api/tournaments/${tid}/youtube/broadcast`, { privacy: 'public' }, director));
     const s = await expectOk(api(h, 'GET', `/api/tournaments/${tid}/destinations`, undefined, director));
-    assert.deepEqual(s.billing.destinations, { free: 1, extra: 0, limit: 1, used: 1, price: 50 });
+    assert.deepEqual(s.billing.destinations, { free: 1, extra: 0, limit: 1, used: 1, price: 50, perMinute: 0 });
     const channels = (await expectOk(api(h, 'GET', `/api/orgs/${owner.orgId}/youtube/channels`, undefined, director))).channels;
     const second = channels.find((c: any) => !c.main).id;
     const refused = await api(h, 'POST', `/api/tournaments/${tid}/destinations`, { kind: 'channel', channelId: second }, director);

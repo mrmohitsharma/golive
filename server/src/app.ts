@@ -122,6 +122,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   const destinations = new DestinationsService(config, repo, sealer, youtube);
   const outputs = new OutputsService(config, repo, sealer, youtube, facebook, relay, log, destinations, billing);
   billing.destinationCounter = (t) => outputs.destinationCount(t);
+  billing.liveCameraCounter = async (tid) => (await repo.camerasForTournament(tid)).filter((c) => hub.cameraSending(c)).length;
   const secrets = new PlatformSecrets(repo, sealer);
   const platform = new PlatformSettings(config, repo);
   await platform.reload();

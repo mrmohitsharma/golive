@@ -46,6 +46,17 @@ export const pricingSchema = z.object({
   tickerPrice: z.number().min(0).max(1_000_000).default(0),
   /** Free viewer-minutes a new club gets once, for any events. */
   welcomeViewerMinutes: z.number().int().min(0).max(10_000_000).default(100),
+  /**
+   * V9 simple pricing. Per minute while live, for each camera sending video beyond `freeCameras`
+   * and each destination beyond `freeDestinations` (0 = off; then the slots above are used).
+   * With a per-minute price there is no slot to buy: switch it on and it is charged while live.
+   */
+  cameraMinutePrice: z.number().min(0).max(10_000).default(0),
+  destinationMinutePrice: z.number().min(0).max(10_000).default(0),
+  /** Charge YouTube / Facebook viewers too (they cost us nothing). Off = only our watch page. */
+  chargeSocialViewers: z.boolean().default(true),
+  /** Credits a new club gets once, in its wallet. */
+  welcomeCredits: z.number().min(0).max(1_000_000).default(0),
 });
 export type Pricing = z.infer<typeof pricingSchema>;
 
@@ -68,6 +79,40 @@ export const DEFAULT_PRICING: Pricing = {
   welcomeViewerMinutes: 100,
   brandingPrice: 100,
   tickerPrice: 0,
+  cameraMinutePrice: 0,
+  destinationMinutePrice: 0,
+  chargeSocialViewers: true,
+  welcomeCredits: 0,
+};
+
+/**
+ * V9 "simple plan" (Admin > Pricing > Use the simple plan): one live rate, extras per minute
+ * while switched on, viewers on our watch page only, one-off add-ons, welcome credits.
+ * Aimed at about 4–5× our running cost (see docs/PRICING.md).
+ */
+export const SIMPLE_PLAN: Pricing = {
+  freeCameras: 2,
+  freeMinutes: 0,
+  cameraPrice: 0,
+  minutePrice: 6,
+  graceMinutes: 5,
+  freeDestinations: 1,
+  destinationPrice: 0,
+  viewershipPrice: 499,
+  viewershipMessages: 500,
+  messagePrice: 1,
+  viewerMinutePrice: 0.1333,
+  viewerTier2From: 0,
+  viewerTier2Pct: 100,
+  viewerTier3From: 0,
+  viewerTier3Pct: 100,
+  welcomeViewerMinutes: 0,
+  brandingPrice: 199,
+  tickerPrice: 199,
+  cameraMinutePrice: 2,
+  destinationMinutePrice: 1,
+  chargeSocialViewers: false,
+  welcomeCredits: 300,
 };
 
 /**
@@ -155,9 +200,12 @@ export interface TournamentBilling {
   suspendedReason: string | null;
   balance: number;
   pricing: Pricing;
-  cameras: { free: number; extra: number; limit: number; used: number; price: number };
+  /** `perMinute` > 0: no slots, each camera sending video beyond `free` costs that much a minute while live (`liveNow` of them now). */
+  cameras: { free: number; extra: number; limit: number; used: number; price: number; perMinute: number; liveNow: number };
   /** Places the show is streamed to (main platforms + extra destinations). */
-  destinations: { free: number; extra: number; limit: number; used: number; price: number };
+  destinations: { free: number; extra: number; limit: number; used: number; price: number; perMinute: number };
+  /** Credits per minute at this moment while live: live time + extras + viewers. */
+  perMinuteNow: number;
   minutes: {
     free: number;
     liveSeconds: number;
@@ -184,6 +232,8 @@ interface Meter {
   stopRequestedAt: number;
   /** Viewer-seconds counted per second at the last tick (for "time left at this audience"). */
   viewerRate: number;
+  /** Cameras sending video at the last tick. */
+  liveCameras: number;
 }
 
 export interface BillingHooks {
@@ -203,6 +253,8 @@ export class BillingService {
   flushViewers: (() => Promise<void>) | null = null;
   /** How many destinations an event streams to (set by the app wiring: OutputsService.destinationCount). */
   destinationCounter: ((t: TournamentRow) => Promise<number>) | null = null;
+  /** How many of an event's cameras are sending video now (set by the app wiring: the hub's health). */
+  liveCameraCounter: ((tournamentId: string) => Promise<number>) | null = null;
 
   constructor(
     private readonly config: Config,
@@ -251,9 +303,21 @@ export class BillingService {
   async orgBilling(orgId: string, q: Q = this.repo.db): Promise<OrgBillingRow> {
     const hit = (await q.query<OrgBillingRow>('SELECT * FROM org_billing WHERE org_id = $1', [orgId])).rows[0];
     if (hit) return hit;
-    // A new club: the welcome viewer-minutes come with its wallet, once.
+    // A new club: the welcome viewer-minutes and welcome credits come with its wallet, once.
     const { pricing } = await this.settings();
-    await q.query('INSERT INTO org_billing (org_id, free_viewer_sec) VALUES ($1, $2) ON CONFLICT DO NOTHING', [orgId, pricing.welcomeViewerMinutes * 60]);
+    const welcomeCc = this.enabled ? toCc(pricing.welcomeCredits) : 0;
+    const ins = await q.query('INSERT INTO org_billing (org_id, free_viewer_sec, balance_cc) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING org_id', [
+      orgId,
+      pricing.welcomeViewerMinutes * 60,
+      welcomeCc,
+    ]);
+    if (ins.rows[0] && welcomeCc > 0) {
+      await q.query("INSERT INTO wallet_tx (org_id, kind, amount_cc, ref, note, created_by) VALUES ($1, 'welcome', $2, $3, 'Welcome credits', 'system') ON CONFLICT DO NOTHING", [
+        orgId,
+        welcomeCc,
+        `welcome:${orgId}`,
+      ]);
+    }
     return (await q.query<OrgBillingRow>('SELECT * FROM org_billing WHERE org_id = $1', [orgId])).rows[0];
   }
 
@@ -376,6 +440,7 @@ export class BillingService {
   async cameraLimit(t: TournamentRow): Promise<number | null> {
     if (!this.enabled) return null;
     const p = await this.pricingFor(t.org_id);
+    if (p.cameraMinutePrice > 0) return null; // per minute while live: no slots
     return p.freeCameras + (t.extra_cameras ?? 0);
   }
 
@@ -405,6 +470,7 @@ export class BillingService {
   async destinationLimit(t: TournamentRow): Promise<{ limit: number; price: number } | null> {
     if (!this.enabled) return null;
     const p = await this.pricingFor(t.org_id);
+    if (p.destinationMinutePrice > 0) return null; // per minute while live: no slots
     return { limit: p.freeDestinations + (t.extra_destinations ?? 0), price: p.destinationPrice };
   }
 
@@ -483,15 +549,16 @@ export class BillingService {
   /** Buys the own-logo pack or the ticker for one event (once). Free when the price is 0 or billing is off. */
   async buyAddon(t: TournamentRow, what: 'branding' | 'ticker', by: string): Promise<void> {
     const col = what === 'branding' ? 'branding_paid_at' : 'ticker_paid_at';
-    if (t[col]) return;
+    if (t[col] || (await this.addonOn(t, what))) return;
     const p = await this.pricingFor(t.org_id);
     const price = what === 'branding' ? p.brandingPrice : p.tickerPrice;
     const cc = this.enabled ? toCc(price) : 0;
     const b = await this.orgBilling(t.org_id);
     if (this.enabled && b.suspended) throw new HttpError(403, 'club_suspended', suspendedText(b));
-    const label = what === 'branding' ? 'Own logo and watermark' : 'Scrolling ticker';
+    const label = what === 'branding' ? 'Branding: logo, watermark and ticker' : 'Branding: ticker, logo and watermark';
     await this.repo.tx(async (c) => {
-      const r = await c.query(`UPDATE tournaments SET ${col} = now() WHERE id = $1 AND ${col} IS NULL`, [t.id]);
+      // One purchase turns on the whole branding pack (logo + watermark + ticker).
+      const r = await c.query(`UPDATE tournaments SET branding_paid_at = COALESCE(branding_paid_at, now()), ticker_paid_at = COALESCE(ticker_paid_at, now()) WHERE id = $1 AND ${col} IS NULL`, [t.id]);
       if (!r.rowCount || cc <= 0) return;
       const left = await this.debit(c, t.org_id, cc, { kind: what, quantity: 1, tournamentId: t.id, note: label, by });
       if (left === null) throw new HttpError(402, 'insufficient_credits', `${label} costs ${fromCc(cc)} credits; the club has ${fromCc(b.balance_cc)}. Buy credits first.`);
@@ -501,7 +568,7 @@ export class BillingService {
 
   /** Whether an add-on is usable for this event: bought, or free (price 0 / billing off). */
   async addonOn(t: TournamentRow, what: 'branding' | 'ticker'): Promise<boolean> {
-    if (what === 'branding' ? t.branding_paid_at : t.ticker_paid_at) return true;
+    if (t.branding_paid_at || t.ticker_paid_at) return true; // one pack: either purchase covers both
     if (!this.enabled) return true;
     const p = await this.pricingFor(t.org_id);
     return (what === 'branding' ? p.brandingPrice : p.tickerPrice) <= 0;
@@ -543,19 +610,26 @@ export class BillingService {
     const freeLeft = Math.max(0, freeSec - live);
     let remaining: number | null = null;
     // Credits used per second at the current audience (viewers), on top of live minutes.
-    const viewerRate = this.meters.get(t.id)?.viewerRate ?? 0;
+    const meter = this.meters.get(t.id);
+    const viewerRate = meter?.viewerRate ?? 0;
+    const destUsed = this.destinationCounter ? await this.destinationCounter(t) : 0;
+    const camsLive = meter?.liveCameras ?? 0;
+    // Extras switched on now, charged per minute while live (simple pricing).
+    const extrasCcPerMin = extraCamerasCc(camsLive, p) + extraDestinationsCc(destUsed, p);
     const viewerCcPerSec = (viewerRate * p.viewerMinutePrice * 100) / 60;
     const minuteCcPerSec = toCc(p.minutePrice) / 60;
-    if (this.enabled && (p.minutePrice > 0 || viewerCcPerSec > 0)) {
+    const burnCcPerSec = minuteCcPerSec + viewerCcPerSec + extrasCcPerMin / 60;
+    if (this.enabled && burnCcPerSec > 0) {
       const prepaid = Math.max(0, billed * 60 - Math.max(0, live - freeSec));
       const free = p.minutePrice > 0 ? freeLeft + prepaid : 0;
-      remaining = free + Math.floor(balanceCc / (minuteCcPerSec + viewerCcPerSec));
+      remaining = free + Math.floor(balanceCc / burnCcPerSec);
     }
     const vCounted = Number(t.viewer_sec_counted ?? 0);
     const vFree = Number(t.viewer_sec_free ?? 0);
     const vBillable = Number(t.viewer_sec_billable ?? 0);
-    const destUsed = this.destinationCounter ? await this.destinationCounter(t) : 0;
-    const destLimit = p.freeDestinations + (t.extra_destinations ?? 0);
+    const destPerMinute = p.destinationMinutePrice > 0;
+    const destLimit = destPerMinute ? Math.max(destUsed, p.freeDestinations) : p.freeDestinations + (t.extra_destinations ?? 0);
+    const camPerMinute = p.cameraMinutePrice > 0;
     const graceLeft = this.meters.get(t.id)?.inGrace ? Math.max(0, p.graceMinutes * 60 - (t.grace_seconds ?? 0)) : null;
     let reason: string | null = null;
     if (this.enabled && b.suspended) reason = suspendedText(b);
@@ -569,8 +643,17 @@ export class BillingService {
       suspendedReason: b.suspended_reason,
       balance: fromCc(balanceCc),
       pricing: p,
-      cameras: { free: p.freeCameras, extra: t.extra_cameras ?? 0, limit: p.freeCameras + (t.extra_cameras ?? 0), used, price: p.cameraPrice },
-      destinations: { free: p.freeDestinations, extra: t.extra_destinations ?? 0, limit: destLimit, used: destUsed, price: p.destinationPrice },
+      cameras: {
+        free: p.freeCameras,
+        extra: t.extra_cameras ?? 0,
+        limit: camPerMinute ? Math.max(used, p.freeCameras) : p.freeCameras + (t.extra_cameras ?? 0),
+        used,
+        price: camPerMinute ? 0 : p.cameraPrice,
+        perMinute: p.cameraMinutePrice,
+        liveNow: camsLive,
+      },
+      destinations: { free: p.freeDestinations, extra: t.extra_destinations ?? 0, limit: destLimit, used: destUsed, price: destPerMinute ? 0 : p.destinationPrice, perMinute: p.destinationMinutePrice },
+      perMinuteNow: meter ? Math.round(burnCcPerSec * 60) / 100 : 0,
       minutes: { free: p.freeMinutes, liveSeconds: live, billed, price: p.minutePrice, freeSecondsLeft: freeLeft, remainingSeconds: remaining },
       viewers: {
         minutes: Math.floor(vCounted / 60),
@@ -610,7 +693,7 @@ export class BillingService {
       if (!t) continue;
       let m = this.meters.get(tid);
       if (!m) {
-        m = { lastTick: now, carryMs: 0, warned: new Set(), inGrace: false, stopRequestedAt: 0, viewerRate: 0 };
+        m = { lastTick: now, carryMs: 0, warned: new Set(), inGrace: false, stopRequestedAt: 0, viewerRate: 0, liveCameras: 0 };
         this.meters.set(tid, m);
         await this.repo.db.query('UPDATE tournaments SET live_session_at = COALESCE(live_session_at, now()), grace_seconds = 0 WHERE id = $1', [tid]);
         continue;
@@ -677,6 +760,9 @@ export class BillingService {
     const v = await this.meterViewers(t, p, m, sec);
     if (v === 'paid') charged = true;
     if (v === 'short') short = true;
+    const x = await this.meterExtras(t, p, m, sec);
+    if (x === 'paid') charged = true;
+    if (x === 'short') short = true;
     if (charged && !short) {
       if (m.inGrace) {
         m.inGrace = false;
@@ -707,8 +793,43 @@ export class BillingService {
     hooks.changed(t.id, state);
   }
 
-  /** Viewer-seconds of an event while live: watch page (real seconds) + YouTube + Facebook (per minute). */
-  async viewerSeconds(tid: string): Promise<number> {
+  /**
+   * Extra cameras (sending video, beyond the free ones) and extra destinations, per minute while
+   * live. Fractions of a hundredth accrue; whole hundredths are charged on one growing ledger
+   * line per broadcast. 'short' = the wallet could not pay (grace, like live minutes).
+   */
+  private async meterExtras(t: TournamentRow, p: Pricing, m: Meter, sec: number): Promise<'none' | 'paid' | 'short'> {
+    if (p.cameraMinutePrice <= 0 && p.destinationMinutePrice <= 0) return 'none';
+    m.liveCameras = this.liveCameraCounter ? await this.liveCameraCounter(t.id) : 0;
+    const dests = p.destinationMinutePrice > 0 && this.destinationCounter ? await this.destinationCounter(t) : 0;
+    const add = [
+      { kind: 'cameras' as const, col: 'cam', cc: (extraCamerasCc(m.liveCameras, p) * sec) / 60, note: 'Extra cameras while live' },
+      { kind: 'destinations' as const, col: 'dest', cc: (extraDestinationsCc(dests, p) * sec) / 60, note: 'Extra destinations while live' },
+    ];
+    let out: 'none' | 'paid' | 'short' = 'none';
+    for (const a of add) {
+      const r = await this.repo.tx(async (c) => {
+        const row = (
+          await c.query<{ acc: string; billed: string }>(
+            `UPDATE tournaments SET ${a.col}_cc_accrued = ${a.col}_cc_accrued + $2 WHERE id = $1 RETURNING ${a.col}_cc_accrued::text AS acc, ${a.col}_cc_billed::text AS billed`,
+            [t.id, a.cc],
+          )
+        ).rows[0];
+        const owed = Math.floor(Number(row.acc)) - Number(row.billed);
+        if (owed <= 0) return 'none' as const;
+        const left = await this.debit(c, t.org_id, owed, { kind: a.kind, tournamentId: t.id, ref: `${a.col}live:${t.id}:${(t.live_session_at ?? new Date()).toISOString()}`, note: a.note, by: 'system' });
+        if (left === null) return 'short' as const;
+        await c.query(`UPDATE tournaments SET ${a.col}_cc_billed = ${a.col}_cc_billed + $2 WHERE id = $1`, [t.id, owed]);
+        return 'paid' as const;
+      });
+      if (r === 'short') out = 'short';
+      else if (r === 'paid' && out === 'none') out = 'paid';
+    }
+    return out;
+  }
+
+  /** Viewer-seconds of an event while live: watch page (real seconds) + YouTube + Facebook (per minute, when charged). */
+  async viewerSeconds(tid: string, social = true): Promise<number> {
     const r = (
       await this.repo.db.query<{ watch: string; social: string }>(
         `SELECT COALESCE((SELECT sum(live_sec) FROM viewers WHERE tournament_id = $1 AND NOT flagged), 0)::text AS watch,
@@ -716,7 +837,7 @@ export class BillingService {
         [tid],
       )
     ).rows[0];
-    return Number(r.watch) + 60 * Number(r.social);
+    return Number(r.watch) + (social ? 60 * Number(r.social) : 0);
   }
 
   /**
@@ -724,7 +845,7 @@ export class BillingService {
    * X per viewer-minute (with this event's tiers). 'short' = the wallet could not pay (grace).
    */
   private async meterViewers(t: TournamentRow, p: Pricing, m: Meter | null, sec: number): Promise<'none' | 'paid' | 'short'> {
-    const total = await this.viewerSeconds(t.id);
+    const total = await this.viewerSeconds(t.id, p.chargeSocialViewers);
     const counted = Number(t.viewer_sec_counted ?? 0);
     const delta = Math.max(0, total - counted);
     if (m && sec > 0) m.viewerRate = m.viewerRate ? m.viewerRate * 0.6 + (delta / sec) * 0.4 : delta / sec;
@@ -802,6 +923,11 @@ export class BillingService {
       );
     }
     if (vr === 'paid') await this.walletChanged(t0.org_id, tid);
+    // Extras the wallet could not pay at the end are written off too; the next broadcast starts clean.
+    await this.repo.db.query(
+      'UPDATE tournaments SET cam_cc_accrued = cam_cc_billed, dest_cc_accrued = dest_cc_billed WHERE id = $1',
+      [tid],
+    );
     const t = (await this.repo.tournamentById(tid))!;
     const freeSec = p.freeMinutes * 60;
     const owed = Math.ceil(Math.max(0, t.live_seconds - freeSec) / 60);
@@ -825,6 +951,16 @@ export class BillingService {
       if (t && t.org_id === orgId) this.hooks.changed(tid, await this.tournamentState(t));
     }
   }
+}
+
+/** Hundredths of a credit per minute for the cameras sending video beyond the free ones. */
+export function extraCamerasCc(live: number, p: Pricing): number {
+  return p.cameraMinutePrice > 0 ? Math.max(0, live - p.freeCameras) * toCc(p.cameraMinutePrice) : 0;
+}
+
+/** Hundredths of a credit per minute for destinations beyond the free ones. */
+export function extraDestinationsCc(used: number, p: Pricing): number {
+  return p.destinationMinutePrice > 0 ? Math.max(0, used - p.freeDestinations) * toCc(p.destinationMinutePrice) : 0;
 }
 
 export function suspendedText(b: OrgBillingRow): string {

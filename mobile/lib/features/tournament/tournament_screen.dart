@@ -201,22 +201,26 @@ class _TournamentScreenState extends State<TournamentScreen> {
       ],
       _PlanRow(
         icon: Icons.videocam,
-        title: 'Cameras: ${b.camerasUsed} of ${b.cameraLimit} used',
-        subtitle: '${b.camerasFree} free${b.camerasExtra > 0 ? ' + ${b.camerasExtra} bought' : ''}. Extra camera ${formatAmount(b.pricing.cameraPrice)} credits.',
-        action: TextButton(onPressed: b.suspended || _busy ? null : _buyCameras, child: const Text('Add camera')),
+        title: b.camerasPerMinute ? 'Cameras: ${b.camerasUsed} (${b.camerasFree} included)' : 'Cameras: ${b.camerasUsed} of ${b.cameraLimit} used',
+        subtitle: b.camerasPerMinute
+            ? 'Each extra camera ${formatAmount(b.pricing.cameraMinutePrice)} credits a minute while it sends video live. Nothing to buy first.'
+            : '${b.camerasFree} free${b.camerasExtra > 0 ? ' + ${b.camerasExtra} bought' : ''}. Extra camera ${formatAmount(b.pricing.cameraPrice)} credits.',
+        action: b.camerasPerMinute ? null : TextButton(onPressed: b.suspended || _busy ? null : _buyCameras, child: const Text('Add camera')),
       ),
       _PlanRow(
         icon: Icons.cell_tower,
-        title: 'Destinations: ${b.destinationsUsed} of ${b.destinationLimit} included',
-        subtitle: '${b.destinationsFree} free${b.destinationsExtra > 0 ? ' + ${b.destinationsExtra} bought' : ''}. '
-            'Each YouTube channel, Facebook or Instagram account counts as one. Extra destination ${formatAmount(b.destinationPrice)} credits.',
-        warn: b.destinationsUsed > b.destinationLimit,
+        title: b.destinationsPerMinute ? 'Destinations: ${b.destinationsUsed} (${b.destinationsFree} included)' : 'Destinations: ${b.destinationsUsed} of ${b.destinationLimit} included',
+        subtitle: b.destinationsPerMinute
+            ? 'Each YouTube channel, Facebook or Instagram account counts as one. Each extra one ${formatAmount(b.pricing.destinationMinutePrice)} credits a minute while live.'
+            : '${b.destinationsFree} free${b.destinationsExtra > 0 ? ' + ${b.destinationsExtra} bought' : ''}. '
+                'Each YouTube channel, Facebook or Instagram account counts as one. Extra destination ${formatAmount(b.destinationPrice)} credits.',
+        warn: !b.destinationsPerMinute && b.destinationsUsed > b.destinationLimit,
       ),
       _PlanRow(
         icon: Icons.timer_outlined,
         title: rem == null ? 'Live time: no limit' : (b.graceActive ? 'Credits finished: grace period' : 'Live time left: about $rem min'),
         subtitle: [
-          freeMin > 0 ? '$freeMin of ${b.pricing.freeMinutes} free minutes left' : 'Free ${b.pricing.freeMinutes} minutes used',
+          if (b.pricing.freeMinutes > 0) freeMin > 0 ? '$freeMin of ${b.pricing.freeMinutes} free minutes left' : 'Free ${b.pricing.freeMinutes} minutes used',
           if (b.pricing.minutePrice > 0) 'then ${formatAmount(b.pricing.minutePrice)} credits per minute',
         ].join(', '),
         warn: b.low || b.graceActive,

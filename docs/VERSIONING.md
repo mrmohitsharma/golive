@@ -17,7 +17,7 @@ v5.0, v6.0…   tags: frozen snapshots of each released version
 | V6 | `v6.0` when released | On `v6-dev`: 5-minute onboarding and the viewership engine (influencers, games, prizes, reports) |
 | V7 | `v7.0` when released | On `v7-dev`: the web app (super admin and the owner/director web with the control room), first-login setup and product tour, Cloud OBS / Laptop OBS with auto-stop, our own HLS watch player through Bunny CDN, the redesigned watch page (games pop-up, points, Top players, reactions, celebrations), camera app controls (brightness/zoom arcs, focus, lock, torch, mic mute, portrait, pocket mode, call handling), support tickets, the new website with Features page, and viewer-minute billing |
 | V8 | `v8.0` when released | On `v8-dev` (frozen): event branding (themes, own logo, watermark, ticker) and the Go Live laptop app (Windows/Mac, 6-digit pairing, OBS set up for you, Laptop OBS wizard) |
-| V9 | `v9.0` when released | On `v9-dev`: brand channels at `<brand>.gogetslive.com` (follow by email, live alerts) and gift credits (viewers gift during a live show, organiser payouts every 7 days), auto camera switch with Fade/Slide transitions, remote zoom/brightness/focus from the control room |
+| V9 | `v9.0` when released | On `v9-dev`: brand channels at `<brand>.gogetslive.com` (follow by email, live alerts) and gift credits (viewers gift during a live show, organiser payouts every 7 days), auto camera switch with Fade/Slide transitions, remote zoom/brightness/focus from the control room, simple pricing (one live rate, extras per minute while on; see [PRICING.md](PRICING.md)) |
 
 ## Working on the next version
 

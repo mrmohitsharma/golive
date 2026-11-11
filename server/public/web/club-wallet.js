@@ -33,8 +33,11 @@ export async function render(view) {
   const p = b.pricing;
   view.append(
     b.suspended ? el('div', { class: 'banner bad', text: `Your club is suspended: ${b.suspendedReason ?? ''}. Contact Go Live support.` }) : null,
-    el('div', { class: 'grid' }, stat(num(b.balance), 'Credits'), stat(`${p.freeCameras} cameras · ${p.freeMinutes} min`, 'Free with every event'), stat(`${num(p.minutePrice)} / min`, 'Live minutes after that'), stat(`${num(p.cameraPrice)}`, 'Each extra camera'),
-      stat(`${p.viewerMinutePrice} / viewer-min`, `Viewers (watch page, YouTube, Facebook)${b.freeViewerMinutes ? ` · ${num(b.freeViewerMinutes)} free left` : ''}`)),
+    el('div', { class: 'grid' }, stat(num(b.balance), 'Credits'),
+      stat(`${num(p.minutePrice)} / min`, `Live${p.freeMinutes ? ` after ${p.freeMinutes} free min` : ''} · ${p.freeCameras} cameras + ${p.freeDestinations} destination included`),
+      p.cameraMinutePrice > 0 ? stat(`${num(p.cameraMinutePrice)} / min`, 'Each extra camera, while live') : stat(`${num(p.cameraPrice)}`, 'Each extra camera, per event'),
+      p.destinationMinutePrice > 0 ? stat(`${num(p.destinationMinutePrice)} / min`, 'Each extra destination, while live') : stat(`${num(p.destinationPrice)}`, 'Each extra destination, per event'),
+      stat(p.viewerMinutePrice > 0 ? `${num(Math.round(p.viewerMinutePrice * 6000) / 100)} / viewer-hour` : 'Free', `Viewers (${p.chargeSocialViewers === false ? 'watch page; YouTube and Facebook free' : 'watch page, YouTube, Facebook'})${b.freeViewerMinutes ? ` · ${num(b.freeViewerMinutes)} free viewer-min left` : ''}`)),
     el('h2', { text: 'Buy credits' }),
     !b.enabled ? el('p', { class: 'muted', text: 'Billing is off on this server: everything is free.' })
     : !b.paymentsEnabled ? el('div', { class: 'banner warn', text: 'Online payment is not available yet. Contact Go Live support to add credits.' })
