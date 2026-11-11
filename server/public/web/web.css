@@ -319,3 +319,10 @@ dialog.welcome { max-width:520px; text-align:left; }
 .cr-adj-v { color: var(--muted); }
 .cr-switch { margin: 12px 0 4px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
 .cr-switch select { padding: 4px 8px; }
+
+/* V9: UPI QR in the branding preview (bottom right; the watermark moves left of it) */
+.bp-upi { position:absolute; right:3%; bottom:6%; background:#fff; border-radius:6px; padding:4px 4px 0; border-top:3px solid var(--accent); box-shadow:0 4px 14px rgba(0,0,0,.4); }
+.bp-upi img { display:block; width:100%; aspect-ratio:1; object-fit:contain; }
+.bp-upi div { color:#111; font-weight:800; font-size:9px; text-align:center; padding:3px 2px 4px; line-height:1.1; }
+.bp-tk ~ .bp-upi { bottom:19%; }
+.bp-video.with-upi .bp-wm { right:28%; }

@@ -1,7 +1,7 @@
 // Event branding (V8): watch-page theme by kind of event, colour, own logo (paid per event;
 // the Go Live logo otherwise), logo watermark and a TV-style scrolling ticker in the video.
 // A live preview shows the watch page bar and the video with watermark and ticker.
-import { get, post, patch, del, el, toast, guard, go, confirmBox, num } from './core.js';
+import { get, post, patch, del, el, toast, guard, go, confirmBox, num, dialog } from './core.js';
 
 const GL = '<svg viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="#ee3b2f"/><circle cx="15" cy="15" r="10.5" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="46 20" stroke-linecap="round"/><path d="M12.6 10.4v9.2l7.4-4.6z" fill="#fff"/></svg>';
 
@@ -14,10 +14,10 @@ const readFile = (file) => new Promise((resolve, reject) => {
 
 /** Buys an add-on; offers the wallet when credits are short. Returns the new view or null. */
 async function buy(id, what, price) {
-  const label = what === 'branding' ? 'Your own logo and watermark' : 'The scrolling ticker';
+  const label = what === 'upi' ? 'Your UPI QR' : 'Branding: logo, watermark and ticker';
   if (!(await confirmBox(`${label} for this event`, `${num(price)} credits from the club's wallet, once for this event.`, `Buy for ${num(price)} credits`, false))) return null;
   try {
-    const r = await post(`/api/tournaments/${id}/branding/buy`, { what });
+    const r = what === 'upi' ? await post(`/api/tournaments/${id}/upi/buy`) : await post(`/api/tournaments/${id}/branding/buy`, { what });
     toast(`${label}: ready to use`);
     return r;
   } catch (e) {
@@ -47,7 +47,8 @@ export async function render(body, id) {
     const preview = el('div', { class: 'bp', style: `--bg:${th.bg};--panel:${th.panel};--panel2:${th.panel2};--ink:${th.ink};--muted:${th.muted};--accent:${accent};--live:${th.live}` },
       el('div', { class: 'bp-bar f-' + th.font }, el('div', { class: 'bp-logo' }, logo), el('div', { style: 'flex:1;min-width:0' }, el('div', { class: 'bp-org', text: 'Your club' }), el('div', { class: 'bp-title', text: 'Your event' })),
         el('span', { class: 'bp-clock', text: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }), el('span', { class: 'bp-live', text: 'LIVE' })),
-      el('div', { class: 'bp-video' }, el('div', { class: 'bp-pic' }), wm, ticker),
+      el('div', { class: 'bp-video' + (b.upi.show && v.upi ? ' with-upi' : '') }, el('div', { class: 'bp-pic' }), wm, ticker,
+        b.upi.show && v.upi ? el('div', { class: 'bp-upi', style: `width:${Math.round(b.upi.size / 1080 * 100 * 0.62)}%` }, el('img', { src: v.upi.qrUrl, alt: '' }), b.upi.caption ? el('div', { text: b.upi.caption }) : null) : null),
       el('div', { class: 'small', style: 'color:var(--muted);padding:8px 12px', text: 'Preview: the watch page bar on top, the video below with the watermark and the ticker (also on YouTube, Facebook and Instagram).' }));
 
     // ---------------------------------------------------------------- themes
@@ -112,6 +113,49 @@ export async function render(body, id) {
             el('span', { class: 'small', text: `The ticker costs ${num(v.prices.ticker)} credits for this event.` }),
             el('button', { class: 'btn primary', onclick: guard(async () => { const r = await buy(id, 'ticker', v.prices.ticker); if (r) { v = r; draw(); } }), text: `Buy (${num(v.prices.ticker)} credits)` })));
 
+    // ---------------------------------------------------------------- V9: UPI QR
+    const qrIn = el('input', { type: 'file', accept: 'image/png,image/jpeg', hidden: true, onchange: guard(async (e) => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      if (f.size > 3_000_000) throw new Error('The picture must be 3 MB or smaller.');
+      v = await post(`/api/tournaments/${id}/upi`, { dataUrl: await readFile(f) });
+      toast(`UPI QR saved: ${v.upi.upiId}`); draw();
+    }) });
+    const typeId = guard(async () => {
+      const r = await dialog({ title: 'Your UPI ID', text: 'We draw a UPI QR for it. Payments go straight to this UPI ID.', ok: 'Make the QR', fields: [
+        { name: 'upiId', label: 'UPI ID', value: v.upi?.upiId ?? '', placeholder: 'name@okhdfcbank', required: true },
+        { name: 'payee', label: 'Name shown to payers (optional)', value: v.upi?.payee ?? '' }] });
+      if (!r) return;
+      v = await post(`/api/tournaments/${id}/upi`, { upiId: r.upiId, payee: r.payee || undefined });
+      toast('UPI QR ready'); draw();
+    });
+    const cap = el('input', { maxlength: '60', value: b.upi.caption, placeholder: 'e.g. Scan to support the team', style: 'flex:1;min-width:180px' });
+    const sizes = v.upiSizes ?? { S: 220, M: 300, L: 400 };
+    const upiCard = el('div', { class: 'card' },
+      el('div', { class: 'row' }, el('strong', { text: 'UPI QR: collect money directly' }), el('div', { class: 'sp' }),
+        v.owned.upiQr && v.upi ? el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: b.upi.show || undefined, onchange: (e) => save({ upi: { show: e.target.checked } }, e.target.checked ? 'UPI QR on air' : 'UPI QR off air')() }), 'On air') : null),
+      el('p', { class: 'small muted', style: 'margin:4px 0 10px', text: 'Your own UPI QR at the bottom right of the video, and a "Pay by UPI" card on the watch page. Money goes straight to your UPI ID: Go Live never receives it and cannot see who paid. For confirmed, on-screen thank-yous, use gift credits.' }),
+      !v.owned.upiQr
+        ? el('div', { class: 'row', style: 'flex-wrap:wrap' },
+            el('span', { class: 'small', text: `The UPI QR costs ${num(v.prices.upiQr)} credits for this event.` }),
+            el('button', { class: 'btn primary', onclick: guard(async () => { const r = await buy(id, 'upi', v.prices.upiQr); if (r) { v = r; draw(); } }), text: `Buy (${num(v.prices.upiQr)} credits)` }))
+        : el('div', {},
+            v.upi ? el('div', { class: 'row', style: 'align-items:center;margin-bottom:10px;gap:14px' },
+              el('img', { src: v.upi.qrUrl, alt: 'Your UPI QR', style: 'width:96px;height:96px;background:#fff;border-radius:8px;padding:4px;object-fit:contain' }),
+              el('div', {}, el('div', { text: v.upi.payee || 'Your UPI QR' }), el('div', { class: 'small mono muted', text: v.upi.upiId ?? '' }))) : null,
+            el('div', { class: 'row', style: 'flex-wrap:wrap' },
+              el('button', { class: 'btn primary', onclick: () => qrIn.click(), text: v.upi ? 'Change QR picture' : 'Upload your UPI QR' }),
+              el('button', { class: 'btn', onclick: typeId, text: v.upi ? 'Use a UPI ID instead' : 'Type a UPI ID instead' }),
+              v.upi ? el('button', { class: 'btn ghost', onclick: guard(async () => { if (!(await confirmBox('Remove the UPI QR?', 'It comes off the video and the watch page.', 'Remove'))) return; v = await del(`/api/tournaments/${id}/upi`); toast('UPI QR removed'); draw(); }), text: 'Remove' }) : null, qrIn),
+            el('p', { class: 'small muted', style: 'margin:8px 0 0', text: 'A screenshot of the QR from PhonePe, Google Pay, Paytm or BHIM works (PNG or JPG, up to 3 MB). A business QR is the most reliable for payers.' }),
+            v.upi ? el('div', { class: 'row', style: 'flex-wrap:wrap;margin-top:12px' },
+              el('span', { class: 'small', text: 'Size on the video' }),
+              ...Object.entries(sizes).map(([k, px]) => el('button', { class: 'btn small ' + (b.upi.size === px ? 'primary' : ''), onclick: save({ upi: { size: px } }, `Size ${k}`), text: k })),
+              el('input', { type: 'range', min: '160', max: '440', step: '10', value: String(b.upi.size), style: 'width:140px', onchange: (e) => save({ upi: { size: Number(e.target.value) } })() })) : null,
+            v.upi ? el('div', { class: 'row', style: 'flex-wrap:wrap;margin-top:8px' }, el('span', { class: 'small', text: 'Caption' }), cap,
+              el('button', { class: 'btn small', onclick: () => save({ upi: { caption: cap.value } }, 'Caption saved')(), text: 'Save' })) : null));
+
     body.replaceChildren(
       el('div', { class: 'brand-layout' },
         el('div', {},
@@ -121,7 +165,7 @@ export async function render(body, id) {
               b.accent ? el('button', { class: 'btn small ghost', onclick: save({ accent: null }, 'Theme colour'), text: 'Reset' }) : null),
             el('p', { class: 'small muted', style: 'margin:4px 0 10px', text: 'Colours and type of the watch page and of the graphics in the video. Free. Pick the kind of event closest to yours.' }),
             themes),
-          logoCard, wmCard, tkCard),
+          logoCard, wmCard, tkCard, upiCard),
         el('div', { class: 'brand-preview' }, preview)));
   };
   draw();

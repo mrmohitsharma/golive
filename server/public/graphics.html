@@ -101,6 +101,15 @@
   #wm .gl { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 2px; color: #fff; }
   #wm .gl svg { width: 46px; height: 46px; } #wm.small .gl svg { width: 34px; height: 34px; } #wm.large .gl svg { width: 60px; height: 60px; }
   #wm .gl span { font-size: 30px; } #wm.small .gl span { font-size: 22px; } #wm.large .gl span { font-size: 38px; }
+  /* ---------- V9: the organiser's UPI QR (bottom right); the watermark moves to its left */
+  #upi { position: absolute; right: 56px; bottom: 52px; --qr: 300px; width: var(--qr); background: #fff; border-radius: 18px; padding: 14px 14px 0; box-shadow: 0 14px 40px rgba(0,0,0,.45);
+    border-top: 6px solid var(--gold); transition: bottom .45s var(--ease), opacity .45s, transform .45s var(--ease); --off: 40px; }
+  #upi img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; image-rendering: pixelated; }
+  #upi .cap { font-weight: 800; color: #111; text-align: center; padding: 10px 4px 12px; line-height: 1.15; font-size: calc(var(--qr) * .075); }
+  #upi .cap:empty { padding: 6px 0 0; }
+  #upi .id { font: 600 calc(var(--qr) * .052)/1.2 var(--font); color: #555; text-align: center; margin-top: -6px; padding-bottom: 12px; overflow-wrap: anywhere; }
+  body.ticker #upi { bottom: 112px; }
+  body.upi #wm { right: calc(56px + var(--qrw, 300px) + 28px); }
   #tk { position: absolute; left: 0; right: 0; bottom: 30px; height: 64px; display: flex; background: rgba(8,10,14,.9); border-top: 3px solid var(--gold); box-shadow: 0 -8px 30px rgba(0,0,0,.35); --off: 0; }
   #tk.hide { transform: translateY(120px) !important; }
   #tk .lbl { flex: none; position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 0 30px; background: var(--red); font-weight: 800; font-size: 30px; letter-spacing: 4px; text-transform: uppercase; }
@@ -158,6 +167,7 @@
   </div>
 
   <div id="wm" class="block hide"></div>
+  <div id="upi" class="block hide"><img id="upiImg" alt=""><div class="cap" id="upiCap"></div><div class="id" id="upiId"></div></div>
 
   <div id="tk" class="block hide"><div class="lbl"><span class="dot"></span><span id="tkLabel">LIVE</span></div><div class="run"><div class="track" id="tkTrack"></div></div></div>
 
@@ -196,6 +206,17 @@
         wm.dataset.src = want;
         wm.innerHTML = b.watermark.logoUrl ? '<img alt="" src="' + esc(b.watermark.logoUrl) + '">' : '<div class="gl">' + GL + '</div>';
       }
+    }
+    // V9: the organiser's UPI QR, sized by the director (px on the 1080p picture).
+    var u = b.upiQr;
+    document.body.classList.toggle('upi', !!u);
+    show($('upi'), !!u);
+    if (u) {
+      $('upi').style.setProperty('--qr', u.size + 'px');
+      document.documentElement.style.setProperty('--qrw', u.size + 'px');
+      if ($('upiImg').getAttribute('src') !== u.url) $('upiImg').setAttribute('src', u.url);
+      $('upiCap').textContent = u.caption || '';
+      $('upiId').textContent = u.upiId || '';
     }
     var tk = b.ticker;
     document.body.classList.toggle('ticker', !!tk);

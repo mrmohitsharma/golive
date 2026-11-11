@@ -83,7 +83,16 @@ export interface Branding {
   logo: { file: string; v: string } | null;
   watermark: { enabled: boolean; size: 'small' | 'medium' | 'large'; opacity: number };
   ticker: { enabled: boolean; label: string; lines: string[]; sponsors: string[]; speed: keyof typeof TICKER_SPEEDS };
+  /**
+   * V9: the organiser's own UPI QR (paid per event). `qr` is the picture (uploaded, or drawn from
+   * the UPI ID); `show` puts it on the video, bottom right, `size` px tall on a 1080p picture.
+   * The watch page shows it whenever there is one.
+   */
+  upi: { qr: { file: string; v: string } | null; upiId: string | null; payee: string | null; caption: string; show: boolean; size: number };
 }
+
+export const UPI_SIZES = { S: 220, M: 300, L: 400 } as const;
+export const UPI_DEFAULT_CAPTION = 'Scan to pay with any UPI app';
 
 export function defaultBranding(eventType: string | null | undefined): Branding {
   return {
@@ -92,6 +101,7 @@ export function defaultBranding(eventType: string | null | undefined): Branding 
     logo: null,
     watermark: { enabled: true, size: 'medium', opacity: 0.7 },
     ticker: { enabled: false, label: 'LIVE', lines: [], sponsors: [], speed: 'normal' },
+    upi: { qr: null, upiId: null, payee: null, caption: UPI_DEFAULT_CAPTION, show: false, size: UPI_SIZES.M },
   };
 }
 
@@ -103,6 +113,8 @@ export function brandingOf(t: { event_type?: string | null; branding?: unknown }
   const s = (t.branding ?? {}) as Partial<Branding>;
   const w = (s.watermark ?? {}) as Partial<Branding['watermark']>;
   const k = (s.ticker ?? {}) as Partial<Branding['ticker']>;
+  const u = (s.upi ?? {}) as Partial<Branding['upi']>;
+  const qr = u.qr && typeof u.qr.file === 'string' && /^[a-z0-9-]+\.(png|jpg)$/.test(u.qr.file) ? { file: u.qr.file, v: String(u.qr.v ?? '') } : null;
   return {
     theme: typeof s.theme === 'string' && BY_ID.has(s.theme) ? s.theme : d.theme,
     accent: typeof s.accent === 'string' && HEX.test(s.accent) ? s.accent.toLowerCase() : null,
@@ -119,6 +131,14 @@ export function brandingOf(t: { event_type?: string | null; branding?: unknown }
       sponsors: Array.isArray(k.sponsors) ? k.sponsors.map((x) => clean(x, 120)).filter(Boolean).slice(0, 10) : [],
       speed: k.speed === 'slow' || k.speed === 'fast' ? k.speed : 'normal',
     },
+    upi: {
+      qr,
+      upiId: typeof u.upiId === 'string' && /^[a-z0-9._-]{2,256}@[a-z][a-z0-9.-]{1,63}$/i.test(u.upiId) ? u.upiId.toLowerCase() : null,
+      payee: clean(u.payee, 80) || null,
+      caption: typeof u.caption === 'string' ? clean(u.caption, 60) : d.upi.caption,
+      show: Boolean(qr && u.show),
+      size: typeof u.size === 'number' && Number.isFinite(u.size) ? Math.round(Math.min(440, Math.max(160, u.size))) : d.upi.size,
+    },
   };
 }
 
@@ -131,6 +151,13 @@ export function patchBranding(cur: Branding, p: Record<string, unknown>): Brandi
   if (w) Object.assign(next.watermark, w);
   const k = p.ticker && typeof p.ticker === 'object' ? (p.ticker as Record<string, unknown>) : null;
   if (k) Object.assign(next.ticker, k);
+  // The director changes only how the QR shows; the QR and UPI ID come from the upload route.
+  const u = p.upi && typeof p.upi === 'object' ? (p.upi as Record<string, unknown>) : null;
+  if (u) {
+    if (typeof u.show === 'boolean') next.upi.show = u.show;
+    if (typeof u.size === 'number') next.upi.size = u.size;
+    if (typeof u.caption === 'string') next.upi.caption = u.caption;
+  }
   return brandingOf({ event_type: null, branding: next });
 }
 
@@ -156,6 +183,15 @@ export function tickerItems(b: Branding): { text: string; sponsor: boolean }[] {
 /** URL of an event's own logo file (served by /api/public/branding/:file), or null. */
 export const logoUrl = (b: Branding) => (b.logo ? `/api/public/branding/${b.logo.file}?v=${encodeURIComponent(b.logo.v)}` : null);
 
+/** URL of the organiser's UPI QR picture (same file route as logos), or null. */
+export const upiQrUrl = (b: Branding) => (b.upi.qr ? `/api/public/branding/${b.upi.qr.file}?v=${encodeURIComponent(b.upi.qr.v)}` : null);
+
+/** The watch page's "Pay by UPI" card: null when there is no QR. */
+export function publicUpi(b: Branding) {
+  if (!b.upi.qr) return null;
+  return { qrUrl: upiQrUrl(b), upiId: b.upi.upiId, payee: b.upi.payee, caption: b.upi.caption };
+}
+
 /** What the watch page needs: colours, font style and the logo (null = the Go Live logo). */
 export function publicBranding(b: Branding) {
   const th = themeColors(b);
@@ -177,5 +213,6 @@ export function overlayBranding(b: Branding) {
     font: th.font,
     watermark: b.watermark.enabled ? { logoUrl: logoUrl(b), size: b.watermark.size, opacity: b.watermark.opacity } : null,
     ticker: b.ticker.enabled && items.length ? { label: b.ticker.label, items, pxPerSec: TICKER_SPEEDS[b.ticker.speed] } : null,
+    upiQr: b.upi.show && b.upi.qr ? { url: upiQrUrl(b), caption: b.upi.caption, size: b.upi.size, upiId: b.upi.upiId } : null,
   };
 }

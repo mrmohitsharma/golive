@@ -57,6 +57,8 @@ export const pricingSchema = z.object({
   chargeSocialViewers: z.boolean().default(true),
   /** Credits a new club gets once, in its wallet. */
   welcomeCredits: z.number().min(0).max(1_000_000).default(0),
+  /** The organiser's own UPI QR on the video and the watch page, per event (money goes straight to them). */
+  upiQrPrice: z.number().min(0).max(1_000_000).default(99),
 });
 export type Pricing = z.infer<typeof pricingSchema>;
 
@@ -83,6 +85,7 @@ export const DEFAULT_PRICING: Pricing = {
   destinationMinutePrice: 0,
   chargeSocialViewers: true,
   welcomeCredits: 0,
+  upiQrPrice: 99,
 };
 
 /**
@@ -113,6 +116,7 @@ export const SIMPLE_PLAN: Pricing = {
   destinationMinutePrice: 1,
   chargeSocialViewers: false,
   welcomeCredits: 300,
+  upiQrPrice: 99,
 };
 
 /**
@@ -167,7 +171,7 @@ export interface OrgBillingRow {
 export interface WalletTxRow {
   id: string;
   org_id: string;
-  kind: 'purchase' | 'cameras' | 'minutes' | 'admin' | 'refund' | 'destinations' | 'viewership' | 'messages' | 'viewers' | 'branding' | 'ticker';
+  kind: 'purchase' | 'cameras' | 'minutes' | 'admin' | 'refund' | 'destinations' | 'viewership' | 'messages' | 'viewers' | 'branding' | 'ticker' | 'welcome' | 'upiqr';
   amount_cc: string;
   quantity: number | null;
   tournament_id: string | null;
@@ -564,6 +568,27 @@ export class BillingService {
       if (left === null) throw new HttpError(402, 'insufficient_credits', `${label} costs ${fromCc(cc)} credits; the club has ${fromCc(b.balance_cc)}. Buy credits first.`);
     });
     if (cc > 0) await this.walletChanged(t.org_id);
+  }
+
+  /** V9: the organiser's UPI QR for one event (once). Free when the price is 0 or billing is off. */
+  async buyUpiQr(t: TournamentRow, by: string): Promise<void> {
+    if (await this.upiQrOn(t)) return;
+    const b = await this.orgBilling(t.org_id);
+    if (b.suspended) throw new HttpError(403, 'club_suspended', suspendedText(b));
+    const p = await this.pricingFor(t.org_id, b);
+    const cc = toCc(p.upiQrPrice);
+    await this.repo.tx(async (c) => {
+      const r = await c.query('UPDATE tournaments SET upi_qr_paid_at = now() WHERE id = $1 AND upi_qr_paid_at IS NULL', [t.id]);
+      if (!r.rowCount || cc <= 0) return;
+      const left = await this.debit(c, t.org_id, cc, { kind: 'upiqr', quantity: 1, tournamentId: t.id, note: 'UPI QR', by });
+      if (left === null) throw new HttpError(402, 'insufficient_credits', `The UPI QR costs ${fromCc(cc)} credits; the club has ${fromCc(b.balance_cc)}. Buy credits first.`);
+    });
+    if (cc > 0) await this.walletChanged(t.org_id);
+  }
+
+  async upiQrOn(t: TournamentRow): Promise<boolean> {
+    if (t.upi_qr_paid_at || !this.enabled) return true;
+    return (await this.pricingFor(t.org_id)).upiQrPrice <= 0;
   }
 
   /** Whether an add-on is usable for this event: bought, or free (price 0 / billing off). */

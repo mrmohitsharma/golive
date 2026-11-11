@@ -341,7 +341,7 @@
   // ---------------------------------------------------------------- prices
   // Shown until /api/public/pricing answers (the V9 simple plan).
   var P = { freeCameras: 2, freeMinutes: 0, cameraPrice: 0, minutePrice: 6, cameraMinutePrice: 2, freeDestinations: 1, destinationPrice: 0, destinationMinutePrice: 1,
-    viewerMinutePrice: 0.1333, chargeSocialViewers: false, welcomeViewerMinutes: 0, welcomeCredits: 300, brandingPrice: 199, tickerPrice: 199, viewershipPrice: 499, viewershipMessages: 500 };
+    viewerMinutePrice: 0.1333, chargeSocialViewers: false, welcomeViewerMinutes: 0, welcomeCredits: 300, brandingPrice: 199, tickerPrice: 199, viewershipPrice: 499, viewershipMessages: 500, upiQrPrice: 99 };
   var inrPerCredit = 1;
   var GST = { rate: 18, included: false };
   var rupees = function (n) { return n > 0 && n < 1 ? '₹' + String(+Number(n).toFixed(2)) : '₹' + (Math.round(n * 100) / 100).toLocaleString('en-IN'); };
@@ -365,6 +365,7 @@
     if (P.viewerMinutePrice > 0) r.push([P.chargeSocialViewers === false ? 'Viewers on your watch page (YouTube and Facebook viewers are free)' : 'Viewers on your watch page, YouTube and Facebook', cr(P.viewerMinutePrice * 60) + ' / viewer-hour']);
     else r.push(['Viewers', 'Free']);
     r.push(['Branding: your logo, video watermark and ticker, per event', P.brandingPrice > 0 ? cr(P.brandingPrice) : 'Free']);
+    if (P.upiQrPrice != null) r.push(['Your UPI QR on the video and watch page: money comes straight to you, per event', P.upiQrPrice > 0 ? cr(P.upiQrPrice) : 'Free']);
     if (P.viewershipPrice != null) r.push(['Influencers & games, per event (' + num(P.viewershipMessages || 0) + ' SMS included)', P.viewershipPrice > 0 ? cr(P.viewershipPrice) : 'Free']);
     r.push(['Cloud mixing, watch page, chat, replays, themes', 'Included']);
     list.replaceChildren.apply(list, r.map(function (x) {

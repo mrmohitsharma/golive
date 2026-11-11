@@ -19,6 +19,7 @@ export const PRICING_LABELS = {
   viewershipPrice: '4 · Influencers & games add-on (credits)',
   viewershipMessages: '4 · SMS included with the add-on',
   messagePrice: '4 · Credits per extra SMS',
+  upiQrPrice: '4 · UPI QR on the video and watch page, per event',
   welcomeCredits: '5 · Welcome credits for a new club',
   welcomeViewerMinutes: '5 · Free viewer-minutes for a new club',
   cameraPrice: '6 · Credits per extra camera slot (when per-minute is 0)',
@@ -27,7 +28,7 @@ export const PRICING_LABELS = {
 export const BOOL_PRICING = new Set(['chargeSocialViewers']);
 export const TX_LABELS = {
   purchase: 'Credits bought', cameras: 'Extra cameras', minutes: 'Live minutes', admin: 'Admin adjustment', refund: 'Refund',
-  destinations: 'Extra destinations', viewership: 'Influencers & games', messages: 'SMS', viewers: 'Viewer-minutes', branding: 'Branding', ticker: 'Branding', welcome: 'Welcome credits',
+  destinations: 'Extra destinations', viewership: 'Influencers & games', messages: 'SMS', viewers: 'Viewer-minutes', branding: 'Branding', ticker: 'Branding', welcome: 'Welcome credits', upiqr: 'UPI QR',
 };
 export const ROLE_LABELS = { owner: 'Owner', director: 'Director', scorer: 'Scorer', commentator: 'Commentator', camera: 'Camera' };
 export const FEATURE_LABELS = { cloud: 'Cloud OBS (OBS on our servers)', viewership: 'Influencers & games add-on' };

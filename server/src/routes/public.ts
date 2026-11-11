@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { brandingOf, publicBranding } from '../branding.js';
+import { brandingOf, publicBranding, publicUpi } from '../branding.js';
 import type { Ctx } from '../context.js';
 import { HttpError } from '../errors.js';
 import { originList } from '../config.js';
@@ -119,6 +119,8 @@ export function registerPublicRoutes(app: FastifyInstance, ctx: Ctx) {
         tournament: summary({ ...t, org_name: org?.name }),
         // V8: theme colours, font style and the event's logo (null = Go Live logo).
         branding: publicBranding(brandingOf(t)),
+        // V9: the organiser's own UPI QR (money goes straight to them), or null.
+        upi: publicUpi(brandingOf(t)),
         // Our own player: the live HLS stream (once FFmpeg is writing it) and the replays.
         watch: await ctx.hls.info(t, ctx.relay.status(t.id).some((s) => s.id === 'watch' && s.state === 'live')),
         onAir: e.streaming.active && onAir && !e.fallbackActive ? { hole: onAir.hole, replay: e.replayActive } : null,

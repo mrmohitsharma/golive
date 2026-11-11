@@ -13,6 +13,7 @@ Switch to it with **Use the simple plan**, check the values, then **Save prices*
 | 3 | YouTube and Facebook viewers | Free | `chargeSocialViewers` = no |
 | 4 | Branding: logo, watermark and ticker (one purchase covers all three) | 199 per event | `brandingPrice`, `tickerPrice` |
 | 4 | Influencers & games, 500 SMS included | 499 per event, then 1 per SMS | `viewershipPrice`, `viewershipMessages`, `messagePrice` |
+| 4 | UPI QR: the organiser's own QR on the video (bottom right) and the watch page; money goes straight to them | 99 per event | `upiQrPrice` |
 | 5 | Welcome credits for a new club | 300 once | `welcomeCredits`, `welcomeViewerMinutes` (0) |
 | – | Gift credits | 15% of each gift | Admin → Gifts & payouts |
 

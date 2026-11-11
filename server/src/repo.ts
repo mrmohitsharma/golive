@@ -47,6 +47,8 @@ export interface TournamentRow {
   branding?: Record<string, unknown>;
   branding_paid_at?: Date | null;
   ticker_paid_at?: Date | null;
+  /** V9: the organiser's UPI QR bought for this event. */
+  upi_qr_paid_at?: Date | null;
   audio: Record<string, unknown>;
   cloud_engine: Record<string, unknown>;
   yt_broadcast_id: string | null;

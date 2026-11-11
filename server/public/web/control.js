@@ -372,7 +372,21 @@ export async function render(view, { id }) {
               ? el('button', { class: 'btn ' + (b.ticker.enabled ? 'primary' : ''), disabled: !v.tickerItems.length || undefined, onclick: () => bpatch({ ticker: { enabled: !b.ticker.enabled } }, b.ticker.enabled ? 'Ticker off' : 'Ticker on air'), text: `Ticker: ${b.ticker.enabled ? 'ON' : 'off'}` })
               : el('a', { class: 'btn', href: `/web/e/${id}/branding`, text: 'Set up the ticker' }),
             v.owned.ticker ? el('button', { class: 'btn', onclick: editLines, text: 'Edit lines' }) : null,
-            el('button', { class: 'btn ' + (b.watermark.enabled ? 'primary' : ''), onclick: () => bpatch({ watermark: { enabled: !b.watermark.enabled } }, b.watermark.enabled ? 'Watermark off' : 'Watermark on'), text: `Watermark: ${b.watermark.enabled ? 'ON' : 'off'}` })));
+            el('button', { class: 'btn ' + (b.watermark.enabled ? 'primary' : ''), onclick: () => bpatch({ watermark: { enabled: !b.watermark.enabled } }, b.watermark.enabled ? 'Watermark off' : 'Watermark on'), text: `Watermark: ${b.watermark.enabled ? 'ON' : 'off'}` })),
+          // V9: the organiser's UPI QR, bottom right of the video: on/off, size, caption.
+          el('label', { style: 'margin-top:14px', text: 'UPI QR (bottom right)' }),
+          !v.upi
+            ? el('div', { class: 'small muted' }, v.owned.upiQr ? 'No QR yet. ' : `Collect money straight to your UPI ID (${v.prices.upiQr} credits per event). `,
+                el('a', { href: `/web/e/${id}/branding`, text: v.owned.upiQr ? 'Add the UPI QR' : 'Set it up' }))
+            : el('div', {},
+                el('div', { class: 'row', style: 'flex-wrap:wrap;align-items:center' },
+                  el('button', { class: 'btn ' + (b.upi.show ? 'primary' : ''), onclick: () => bpatch({ upi: { show: !b.upi.show } }, b.upi.show ? 'UPI QR off air' : 'UPI QR on air'), text: `UPI QR: ${b.upi.show ? 'ON' : 'off'}` }),
+                  ...Object.entries(v.upiSizes ?? { S: 220, M: 300, L: 400 }).map(([k, px]) => el('button', { class: 'btn small ' + (b.upi.size === px ? 'primary' : ''), title: `${px}px tall on the 1080p picture`, onclick: () => bpatch({ upi: { size: px } }, `UPI QR size ${k}`), text: k })),
+                  el('input', { type: 'range', min: '160', max: '440', step: '10', value: String(b.upi.size), title: 'Size', 'aria-label': 'UPI QR size', style: 'width:110px', onchange: (e) => bpatch({ upi: { size: Number(e.target.value) } }, `UPI QR size ${e.target.value}px`) })),
+                el('div', { class: 'row', style: 'margin-top:6px' },
+                  el('input', { maxlength: '60', value: b.upi.caption, placeholder: 'Caption, e.g. Scan to support the team', 'aria-label': 'UPI QR caption', style: 'flex:1;min-width:0', onkeydown: (e) => { if (e.key === 'Enter') bpatch({ upi: { caption: e.target.value } }, 'Caption saved'); } }),
+                  el('button', { class: 'btn small', onclick: (e) => bpatch({ upi: { caption: e.target.previousSibling.value } }, 'Caption saved'), text: 'Save' })),
+                el('div', { class: 'small muted', style: 'margin-top:4px', text: `${v.upi.payee ? v.upi.payee + ' · ' : ''}${v.upi.upiId ?? ''} · money goes straight to this UPI ID` })));
       }).catch(() => brandBox.replaceChildren());
     } else if (tab === 'Audio') {
       const a = s.audio ?? {};

@@ -125,6 +125,18 @@
   .msg.gift .em { font-size:22px; line-height:1; flex:none; }
   .msg.gift .amt { display:inline-block; font-weight:800; color:#141414; background:var(--gold); border-radius:6px; padding:0 6px; font-size:12px; margin-right:6px; }
   .msg.gift.big { border-width:2px; box-shadow:0 0 0 3px rgba(224,181,50,.12); }
+  /* V9: the organiser's own UPI QR (money goes straight to them) */
+  .upi { display:flex; gap:16px; align-items:center; margin-top:12px; padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+  .upi .qr { flex:none; width:148px; height:148px; background:#fff; border-radius:10px; padding:8px; box-sizing:border-box; }
+  .upi .qr img { width:100%; height:100%; object-fit:contain; display:block; }
+  .upi h3 { margin:0 0 4px; font-size:16px; }
+  .upi .who { font-size:14px; }
+  .upi .vpa { font:600 13px/1.3 ui-monospace,monospace; color:var(--muted); overflow-wrap:anywhere; }
+  .upi .acts { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 6px; }
+  .upi .acts a, .upi .acts button { font:inherit; font-size:13px; font-weight:700; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--panel2); color:inherit; text-decoration:none; cursor:pointer; }
+  .upi .acts a.go { background:var(--gold); border-color:var(--gold); color:#111; }
+  .upi .note { font-size:11.5px; color:var(--muted); }
+  @media (max-width:560px) { .upi { flex-direction:column; align-items:flex-start; } .upi .qr { width:180px; height:180px; } }
   .giftbar { margin:10px 12px 2px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); font-size:13px; }
   .giftbar .goal b { color:var(--gold); }
   .giftbar .meter { height:8px; border-radius:6px; background:rgba(255,255,255,.08); overflow:hidden; margin:6px 0 2px; }
@@ -319,7 +331,32 @@
   const floats = el('div', { class: 'floats', 'aria-hidden': 'true' });
   const stage = el('div', { class: 'stage' }, playerBox, floats);
   const bar = el('div', { class: 'bar' });
-  const mainCol = el('div', { class: 'main' }, stage, bar);
+  const upiBox = el('div');
+  const mainCol = el('div', { class: 'main' }, stage, bar, upiBox);
+  // V9: "Pay by UPI" with the organiser's own QR. On a phone, a button opens the UPI app; we never
+  // see the payment (it goes straight to the organiser).
+  let upiSig = null;
+  function renderUpi(u, t) {
+    const sig = JSON.stringify(u);
+    if (sig === upiSig) return;
+    upiSig = sig;
+    if (!u) { upiBox.replaceChildren(); return; }
+    const phone = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    const who = u.payee || (t && t.orgName) || 'the organiser';
+    const link = u.upiId ? 'upi://pay?' + new URLSearchParams({ pa: u.upiId, pn: u.payee || '', cu: 'INR', tn: ((t && t.name) || 'Go Live').slice(0, 50) }).toString().replace(/\+/g, '%20') : null;
+    const copy = el('button', { type: 'button', text: 'Copy UPI ID' });
+    copy.onclick = () => { navigator.clipboard?.writeText(u.upiId).then(() => { copy.textContent = 'Copied'; setTimeout(() => (copy.textContent = 'Copy UPI ID'), 1500); }).catch(() => {}); };
+    upiBox.replaceChildren(el('section', { class: 'upi', 'aria-label': 'Pay by UPI' },
+      el('div', { class: 'qr' }, el('img', { src: u.qrUrl, alt: 'UPI QR code to pay ' + who, decoding: 'async' })),
+      el('div', { style: 'min-width:0' },
+        el('h3', { text: u.caption || 'Pay by UPI' }),
+        el('div', { class: 'who', text: 'Pay ' + who + ' with any UPI app' }),
+        u.upiId ? el('div', { class: 'vpa', text: u.upiId }) : null,
+        el('div', { class: 'acts' },
+          phone && link ? el('a', { class: 'go', href: link, text: 'Open UPI app' }) : null,
+          u.upiId && navigator.clipboard ? copy : null),
+        el('div', { class: 'note', text: (phone ? 'Or scan the QR from another phone. ' : 'Scan with PhonePe, Google Pay, Paytm or any UPI app. ') + 'Your payment goes straight to ' + who + '; Go Live does not receive or refund it.' }))));
+  }
   const boardPanel = el('div', { class: 'board' });
   const chatPanel = el('div', { class: 'chat' });
   const clipsPanel = el('div', { class: 'clipsTab' });
@@ -1254,6 +1291,7 @@
         placeLayer();
       }
       renderPlayer(t, d.watch);
+      renderUpi(d.upi, t);
       // Golf events show the leaderboard; other kinds of event go straight to the chat.
       const golf = !t.eventType || t.eventType === 'golf';
       if (!golf && hasBoard) { hasBoard = false; drawSide(); }
