@@ -29,7 +29,15 @@ export function registerChannelRoutes(app: FastifyInstance, ctx: Ctx & { channel
   const domain = config.CHANNEL_DOMAIN.toLowerCase();
   const logoDir = path.join(config.MEDIA_DIR, 'branding');
 
-  const read = (f: string) => fs.readFileSync(path.join(publicDir!, f), 'utf8');
+  // Page templates are read once in production (every request in development, for quick edits).
+  const files = new Map<string, string>();
+  const read = (f: string) => {
+    const hit = process.env.NODE_ENV === 'production' ? files.get(f) : undefined;
+    if (hit) return hit;
+    const text = fs.readFileSync(path.join(publicDir!, f), 'utf8');
+    files.set(f, text);
+    return text;
+  };
 
   /** The channel page, with its title and share tags filled in for search engines and WhatsApp. */
   const sendChannel = async (reply: FastifyReply, c: ChannelRow) => {
@@ -97,10 +105,10 @@ export function registerChannelRoutes(app: FastifyInstance, ctx: Ctx & { channel
 
   // ---------------------------------------------------------------- public API
   app.get('/api/public/channels/:slug', async (req, reply) => {
-    const c = await channels.bySlug(String((req.params as { slug: string }).slug));
-    if (!c) throw new HttpError(404, 'channel_not_found', 'Channel not found.');
+    const v = await channels.publicBySlug(String((req.params as { slug: string }).slug).slice(0, 40));
+    if (!v) throw new HttpError(404, 'channel_not_found', 'Channel not found.');
     reply.header('Cache-Control', 'public, max-age=10');
-    return channels.publicView(c);
+    return v;
   });
 
   app.post('/api/public/channels/:slug/follow', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
@@ -212,6 +220,7 @@ export function registerChannelRoutes(app: FastifyInstance, ctx: Ctx & { channel
          starts_at = CASE WHEN $5::boolean THEN $6::timestamptz ELSE starts_at END, reminded_at = CASE WHEN $5::boolean THEN NULL ELSE reminded_at END WHERE id = $1`,
       [t.id, b.hidden ?? null, b.series !== undefined, b.series?.trim() || null, b.startsAt !== undefined, b.startsAt ?? null],
     );
+    channels.changed();
     return { ok: true };
   });
 }

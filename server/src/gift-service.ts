@@ -8,6 +8,7 @@ import type { ChatService } from './chat.js';
 import type { GraphicsService } from './graphics.js';
 import type { Mailer } from './email.js';
 import { HttpError } from './errors.js';
+import { TtlCache } from './ttl-cache.js';
 import {
   AGREEMENT_VERSION,
   agreementText,
@@ -35,6 +36,8 @@ export class GiftService {
   /** Is this event on air now (set by the app from the hub). */
   isLive: (tournamentId: string) => boolean = () => false;
   private hits = new Map<string, number[]>();
+  /** Hot reads: settings and readiness (30 s), each event's public gift view (5 s). Dropped on change. */
+  private cache = new TtlCache();
 
   constructor(
     private readonly config: Config,
@@ -61,24 +64,41 @@ export class GiftService {
 
   // ---------------------------------------------------------------- settings
   async settings(): Promise<GiftSettings> {
-    const r = (await this.db.query<{ gifts: unknown }>('SELECT gifts FROM platform_settings WHERE id')).rows[0];
-    return mergeGiftSettings(r?.gifts);
+    return this.cache.get('settings', 30_000, async () => {
+      const r = (await this.db.query<{ gifts: unknown }>('SELECT gifts FROM platform_settings WHERE id')).rows[0];
+      return mergeGiftSettings(r?.gifts);
+    });
   }
 
   async saveSettings(v: unknown): Promise<GiftSettings> {
     const s = mergeGiftSettings(v);
     await this.db.query('UPDATE platform_settings SET gifts = $1 WHERE id', [JSON.stringify(s)]);
+    this.cache.drop('*');
     return s;
   }
 
   async overrides(orgId: string): Promise<Record<string, unknown>> {
-    const r = (await this.db.query<{ gift_overrides: Record<string, unknown> }>('SELECT gift_overrides FROM org_billing WHERE org_id = $1', [orgId])).rows[0];
-    return r?.gift_overrides ?? {};
+    return this.cache.get(`ov:${orgId}`, 30_000, async () => {
+      const r = (await this.db.query<{ gift_overrides: Record<string, unknown> }>('SELECT gift_overrides FROM org_billing WHERE org_id = $1', [orgId])).rows[0];
+      return r?.gift_overrides ?? {};
+    });
   }
 
   async saveOverrides(orgId: string, v: Record<string, unknown>): Promise<void> {
     await this.db.query('INSERT INTO org_billing (org_id) VALUES ($1) ON CONFLICT DO NOTHING', [orgId]);
     await this.db.query('UPDATE org_billing SET gift_overrides = $2 WHERE org_id = $1', [orgId, JSON.stringify(v)]);
+    this.cache.drop('*');
+  }
+
+  /** A club's payout set-up changed: readiness and every public view are read again. */
+  private clubChanged(orgId: string): void {
+    this.cache.drop(`ready:${orgId}`);
+    this.cache.drop('view:*');
+  }
+
+  /** An event's gifts changed (a gift paid, approved, hidden; its set-up saved). */
+  eventChanged(tid: string): void {
+    this.cache.drop(`view:${tid}`);
   }
 
   /** The platform settings with the club's own values on top. */
@@ -104,6 +124,10 @@ export class GiftService {
 
   /** Why a club cannot take gifts yet, or null when it can. */
   async notReady(orgId: string): Promise<string | null> {
+    return this.cache.get(`ready:${orgId}`, 30_000, () => this.readiness(orgId));
+  }
+
+  private async readiness(orgId: string): Promise<string | null> {
     const s = await this.forOrg(orgId);
     if (!s.enabled) return `${s.label} are switched off for this club.`;
     const p = await this.payee(orgId);
@@ -131,6 +155,7 @@ export class GiftService {
     );
     // New bank details: any agreement signed for the old account must be signed again.
     await this.db.query('UPDATE payout_agreements SET revoked_at = now() WHERE org_id = $1 AND revoked_at IS NULL', [orgId]);
+    this.clubChanged(orgId);
     return (await this.payee(orgId))!;
   }
 
@@ -140,6 +165,7 @@ export class GiftService {
       [orgId, ok ? 'verified' : 'rejected', note, by],
     );
     if (!r.rows[0]) throw new HttpError(404, 'payee_not_found', 'This club has no payout details.');
+    this.clubChanged(orgId);
     return r.rows[0];
   }
 
@@ -203,6 +229,7 @@ export class GiftService {
       [a.id, name.slice(0, 120), v.ip, v.agent.slice(0, 300)],
     );
     const signed = r.rows[0] ?? (await this.agreementByToken(token))!;
+    this.clubChanged(a.org_id);
     const s = await this.forOrg(a.org_id);
     const copy = [
       `Signed by ${signed.signer_name} on ${signed.signed_at!.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST from IP ${signed.signer_ip}.`,
@@ -252,7 +279,17 @@ export class GiftService {
     ).rows.map((r) => ({ name: r.name, total: Number(r.total), count: r.count }));
   }
 
+  /** What every viewer's watch page polls: cached 5 s per event, dropped when a gift lands. */
   async publicView(t: TournamentRow) {
+    return this.cache.get(`view:${t.id}`, 5_000, () => this.buildPublicView(t));
+  }
+
+  /** Same, without even reading the event when the view is cached (the public poll route). */
+  async publicViewById(tid: string, load: () => Promise<TournamentRow>) {
+    return this.cache.get(`view:${tid}`, 5_000, async () => this.buildPublicView(await load()));
+  }
+
+  private async buildPublicView(t: TournamentRow) {
     const { s, e } = await this.eventConfig(t);
     if (!e.enabled) return { enabled: false };
     const reason = await this.openReason(t);
@@ -288,7 +325,7 @@ export class GiftService {
   /** A viewer starts a gift: checks, limits, a UPI order. Returns where to pay. */
   async create(t: TournamentRow, v: { name: string; message?: string | null; stickerId?: string | null; amount?: number | null; device: string; ip: string }) {
     const { s, e } = await this.eventConfig(t);
-    const reason = await this.openReason(t);
+    const reason = !e.enabled ? 'off' : (await this.notReady(t.org_id)) ?? (s.onlyWhileLive && !this.isLive(t.id) ? `${s.label} open when the broadcast is live.` : null);
     if (reason) throw new HttpError(409, 'gifts_closed', reason === 'off' ? `${s.label} are not on for this event.` : reason);
     const name = v.name.replace(/\s+/g, ' ').trim().slice(0, 40);
     if (name.length < 2) throw new HttpError(400, 'name_required', 'Type your name (it shows with your gift).');
@@ -368,6 +405,7 @@ export class GiftService {
         [g.id, s.holdDays, sp.gst, sp.fee, sp.share, sp.tds, sp.net, JSON.stringify(sp), Boolean(e?.inVideo)],
       );
       const paid = upd.rows[0];
+      if (paid) this.eventChanged(paid.tournament_id);
       if (paid && paid.approved) await this.show(paid);
       return paid ?? (await this.byId(g.id))!;
     }
@@ -393,6 +431,7 @@ export class GiftService {
   }
 
   async moderate(g: GiftRow, v: { approve?: boolean; hidden?: boolean }): Promise<GiftRow> {
+    this.eventChanged(g.tournament_id);
     if (v.approve && !g.approved) {
       const r = (await this.db.query<GiftRow>('UPDATE gifts SET approved = true WHERE id = $1 RETURNING *', [g.id])).rows[0];
       if (r.status === 'paid' && !r.hidden) await this.show(r);
@@ -532,6 +571,7 @@ export class GiftService {
     if (g.status !== 'paid') throw new HttpError(409, 'not_paid', 'Only a paid gift can be marked refunded.');
     if (g.payout_id) throw new HttpError(409, 'paid_out', 'This gift is in a payout already. Cancel the payout first (if it is not paid yet).');
     const r = (await this.db.query<GiftRow>("UPDATE gifts SET status = 'refunded', hidden = true WHERE id = $1 RETURNING *", [g.id])).rows[0];
+    this.eventChanged(g.tournament_id);
     if (g.chat_message_id) {
       const m = await this.chat.byId(Number(g.chat_message_id));
       if (m) await this.chat.update(m, { hidden: true });

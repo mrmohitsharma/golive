@@ -5,6 +5,7 @@ import type { Mailer } from './email.js';
 import type { MediaService } from './replay.js';
 import { HttpError } from './errors.js';
 import { THEMES } from './branding.js';
+import { TtlCache } from './ttl-cache.js';
 
 /**
  * V9 brand channels: one per club, at <slug>.gogetslive.com (and /c/<slug>). The page shows
@@ -62,6 +63,20 @@ export const channelLogoUrl = (l: ChannelLook) => (l.logo ? `/api/public/brandin
 export class ChannelService {
   isLive: (tid: string) => boolean = () => false;
   private timer: NodeJS.Timeout | null = null;
+  /** Each channel's public page data, polled by every viewer: cached 10 s, dropped on any change. */
+  private cache = new TtlCache(500);
+
+  /** Something shown on a channel changed (settings, logo, an event, followers, live). */
+  changed(): void {
+    this.cache.drop('*');
+  }
+
+  async publicBySlug(slug: string) {
+    return this.cache.get(`ch:${slug.toLowerCase()}`, 10_000, async () => {
+      const c = await this.bySlug(slug);
+      return c ? this.publicView(c) : null;
+    });
+  }
 
   constructor(
     private readonly config: Config,
@@ -121,6 +136,7 @@ export class ChannelService {
        ON CONFLICT (org_id) DO UPDATE SET slug = $2, name = $3, description = $4, look = $5, public = $6, featured_tournament_id = $7, updated_at = now() RETURNING *`,
       [orgId, slug, str(v.name, 60) || slug, (v.description ?? cur?.description ?? '').trim().slice(0, 600), JSON.stringify(look), v.public ?? cur?.public ?? true, v.featuredTournamentId ?? null],
     );
+    this.changed();
     return r.rows[0];
   }
 
@@ -128,6 +144,7 @@ export class ChannelService {
     const c = await this.byOrg(orgId);
     if (!c) throw new HttpError(409, 'no_channel', 'Save your brand page first.');
     const r = await this.db.query<ChannelRow>('UPDATE channels SET look = $2, updated_at = now() WHERE id = $1 RETURNING *', [c.id, JSON.stringify({ ...c.look, logo })]);
+    this.changed();
     return r.rows[0];
   }
 
@@ -235,12 +252,14 @@ export class ChannelService {
   async confirmFollow(token: string): Promise<ChannelRow | null> {
     const r = (await this.db.query<{ channel_id: string }>('UPDATE channel_followers SET verified_at = coalesce(verified_at, now()) WHERE token = $1 RETURNING channel_id', [token])).rows[0];
     if (!r) return null;
+    this.changed();
     return (await this.db.query<ChannelRow>('SELECT * FROM channels WHERE id = $1', [r.channel_id])).rows[0] ?? null;
   }
 
   async unfollow(token: string): Promise<ChannelRow | null> {
     const r = (await this.db.query<{ channel_id: string }>('DELETE FROM channel_followers WHERE token = $1 RETURNING channel_id', [token])).rows[0];
     if (!r) return null;
+    this.changed();
     return (await this.db.query<ChannelRow>('SELECT * FROM channels WHERE id = $1', [r.channel_id])).rows[0] ?? null;
   }
 
@@ -252,8 +271,9 @@ export class ChannelService {
   private async mailFollowers(c: ChannelRow, t: TournamentRow, kind: 'live' | 'reminder'): Promise<number> {
     const fs = (await this.db.query<{ email: string; token: string }>('SELECT email, token FROM channel_followers WHERE channel_id = $1 AND verified_at IS NOT NULL', [c.id])).rows;
     const url = this.url(c.slug) + this.eventPath(t);
-    for (const f of fs) {
-      await this.mailer.send({
+    // A few at a time: a big channel's emails go out in parallel without flooding the mail server.
+    const one = (f: { email: string; token: string }) =>
+      this.mailer.send({
         to: f.email,
         subject: kind === 'live' ? `${c.name} is live now: ${t.name}` : `Starting in an hour: ${t.name} on ${c.name}`,
         body: [
@@ -265,7 +285,7 @@ export class ChannelService {
         ref: `${t.id}:${kind}:${f.email}:${new Date().toISOString().slice(0, 13)}`,
         orgId: c.org_id,
       });
-    }
+    for (let i = 0; i < fs.length; i += 8) await Promise.all(fs.slice(i, i + 8).map((f) => one(f).catch(() => false)));
     return fs.length;
   }
 
@@ -277,6 +297,7 @@ export class ChannelService {
     if (!c) return 0;
     const claim = await this.db.query("UPDATE tournaments SET live_alerted_at = now() WHERE id = $1 AND (live_alerted_at IS NULL OR live_alerted_at < now() - interval '6 hours') RETURNING id", [tid]);
     if (!claim.rows[0]) return 0;
+    this.changed();
     return this.mailFollowers(c, t, 'live');
   }
 

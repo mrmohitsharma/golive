@@ -45,9 +45,9 @@ export function registerGiftRoutes(app: FastifyInstance, ctx: Ctx & { gifts: Gif
 
   // ---------------------------------------------------------------- viewers
   app.get('/api/public/tournaments/:id/gifts', async (req, reply) => {
-    const t = await publicEvent(pid(req));
+    const id = pid(req);
     reply.header('Cache-Control', 'no-store');
-    return gifts.publicView(t);
+    return gifts.publicViewById(id, () => publicEvent(id));
   });
 
   app.post('/api/public/tournaments/:id/gifts', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
@@ -148,6 +148,7 @@ document.getElementById('pay').onclick = function () {
       if (nr) throw new HttpError(409, 'gifts_not_ready', nr);
     }
     await repo.setTournamentJson(t.id, 'gifts', clean);
+    gifts.eventChanged(t.id);
     return { config: clean };
   });
 

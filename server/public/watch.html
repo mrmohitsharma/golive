@@ -1139,7 +1139,8 @@
   }
   async function pollGifts() {
     try { gift.data = await api(`/api/public/tournaments/${id}/gifts`); drawGiftBar(); } catch {}
-    setTimeout(pollGifts, document.hidden ? 30000 : 15000);
+    // Gifts off for this event: check rarely (in case they are switched on). New gifts also arrive through chat.
+    setTimeout(pollGifts, gift.data && !gift.data.enabled ? 60000 : document.hidden ? 30000 : 15000);
   }
   function openGift() {
     const d = gift.data;

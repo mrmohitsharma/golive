@@ -211,10 +211,14 @@
       if (!r.ok) throw new Error();
       const d = await r.json();
       const heroChanged = !data || JSON.stringify(d.hero) !== JSON.stringify(data.hero);
+      // Only redraw what changed: rebuilding the lists would stop a highlight that is playing.
+      const listSig = JSON.stringify([d.live, d.upcoming, d.past, d.clips.map((c) => c.id), d.channel.description, d.channel.links, d.channel.sponsors]);
+      const listsChanged = !data || listSig !== data.listSig;
+      d.listSig = listSig;
       data = d;
       if (first) { theme(d.channel); header(d.channel); }
       if (heroChanged) hero(d);
-      lists(d);
+      if (listsChanged) lists(d);
     } catch { if (first) $('hero').replaceChildren(el('div', { class: 'side', style: 'grid-column:1/-1' }, el('h2', { text: 'Channel not found' }))); }
   }
   load(true);
