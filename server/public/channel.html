@@ -105,7 +105,7 @@
   };
   const fmt = (iso) => new Date(iso).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   const fmtDay = (d) => new Date(d + 'T12:00:00+05:30').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-  const when = (e) => (e.startsAt ? fmt(e.startsAt) : e.startsOn ? fmtDay(e.startsOn) : e.wentLiveAt ? new Date(e.wentLiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+  const when = (e) => (e.startsAt ? fmt(e.startsAt) : e.startsOn ? fmtDay(e.startsOn) : e.wentLiveAt ? new Date(e.wentLiveAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date to be announced');
   const href = (e) => base + e.path;
   const initials = (s) => s.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   let data = null;

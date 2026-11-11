@@ -384,7 +384,7 @@ export class GiftService {
         source: 'watch',
         author: g.sender_name,
         authorKey: `gift:${g.id}`,
-        text: g.message || `sent ${emoji} ₹${amount.toLocaleString('en-IN')}`,
+        text: g.message || `sent ${g.sticker?.name && g.sticker.name !== 'Gift' ? g.sticker.name : 'a gift'}`,
         gift: { amount, emoji, name: g.sticker?.name ?? 'Gift' },
       })
       .catch(() => null);

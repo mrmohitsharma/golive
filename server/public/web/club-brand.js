@@ -37,7 +37,7 @@ export async function render(view) {
     const desc = el('textarea', { rows: 3, maxlength: '600', value: c?.description ?? '' });
     const isPublic = el('input', { type: 'checkbox' }); isPublic.checked = c ? c.public : true;
     const theme = el('select', {}, ...[...new Set(v.themes.map((t) => t.group))].map((g) => el('optgroup', { label: g }, ...v.themes.filter((t) => t.group === g).map((t) => el('option', { value: t.id, selected: t.id === look.theme || undefined, text: t.label })))));
-    const accent = el('input', { type: 'color', value: look.accent ?? v.themes.find((t) => t.id === look.theme)?.accent ?? '#4fb3ff' });
+    const accent = el('input', { type: 'color', style: 'width:64px;height:38px;padding:2px;flex:none', value: look.accent ?? v.themes.find((t) => t.id === look.theme)?.accent ?? '#4fb3ff' });
     let useAccent = Boolean(look.accent);
     accent.addEventListener('input', () => (useAccent = true));
     const links = el('textarea', { rows: 3, placeholder: 'One per line: Label | https://…\nInstagram | https://instagram.com/ourclub', value: (look.links ?? []).map((l) => `${l.label} | ${l.url}`).join('\n') });

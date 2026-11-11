@@ -184,3 +184,9 @@ Rough figures to plan with; check your provider's current prices.
 | VM compute | 2 vCPU / 4 GB + ~1 vCPU for the Instagram re-encode | + engine container ~6 vCPU / 6 GB while running |
 
 On AWS Mumbai (ap-south-1) egress is about USD 0.11/GB: roughly USD 12 per event in laptop mode and USD 5 in cloud mode (plus the engine's compute hours, `CLOUD_ENGINE_COST_PER_HOUR`). With YouTube only, subtract about USD 2. Viewers on the watch page add nothing: YouTube streams to them.
+
+## Brand channels and gift credits (V9)
+
+- `src/channels.ts`, `routes/channels.ts`, `public/channel.html`: one channel per club (`channels`), served on `<slug>.CHANNEL_DOMAIN` by an `onRequest` hook (Host header) and at `/c/<slug>`; events under it get `watch.html` with `window.GL_TID`. Followers (`channel_followers`) confirm by email; `Hub` calls `channels.wentLive` on the first Go live; a 1-minute timer sends reminders for `tournaments.starts_at`.
+- `src/gifts.ts` (settings, split maths, agreement text), `src/gift-service.ts`, `routes/gifts.ts`: gifts are Cashfree orders `gf_…` (UPI only) confirmed by the return page or the webhook; the split is fixed at payment (`gifts.split`); paid gifts go into chat (`chat_messages.gift`) and the overlay (`GraphicsService.gift`, message type `gift`). `payee_accounts` holds sealed PAN and account; `payout_agreements` the emailed agreement (token hash, text hash, signer name, IP, agent); `gift_payouts` groups gifts older than the hold.
+

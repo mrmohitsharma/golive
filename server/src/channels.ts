@@ -169,9 +169,11 @@ export class ChannelService {
       wentLiveAt: t.first_live_at ? new Date(t.first_live_at).toISOString() : null,
     });
     const live = evs.filter((t) => this.isLive(t.id)).map(card);
+    // Coming up: never live yet, and either dated in the future or not dated (date to be announced, listed last).
+    const at = (t: TournamentRow) => (t.starts_at ? new Date(t.starts_at).getTime() : t.starts_on ? Date.parse(t.starts_on + 'T09:00:00+05:30') : Number.MAX_SAFE_INTEGER);
     const upcoming = evs
-      .filter((t) => !this.isLive(t.id) && !t.first_live_at && (t.starts_at ? new Date(t.starts_at).getTime() > now - 3 * 3600_000 : t.starts_on ? new Date(t.starts_on + 'T23:59:59+05:30').getTime() > now : false))
-      .sort((a, b) => (a.starts_at ? new Date(a.starts_at).getTime() : Date.parse(a.starts_on + 'T09:00:00+05:30')) - (b.starts_at ? new Date(b.starts_at).getTime() : Date.parse(b.starts_on + 'T09:00:00+05:30')))
+      .filter((t) => !this.isLive(t.id) && !t.first_live_at && (t.starts_at ? new Date(t.starts_at).getTime() > now - 3 * 3600_000 : t.starts_on ? new Date(t.starts_on + 'T23:59:59+05:30').getTime() > now : true))
+      .sort((a, b) => at(a) - at(b))
       .map(card);
     const past = evs.filter((t) => !this.isLive(t.id) && t.first_live_at).map(card);
     const clips = (

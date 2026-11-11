@@ -387,3 +387,18 @@ OBS_TEST_URL=ws://127.0.0.1:4455 OBS_TEST_PASSWORD=… node --import tsx --test 
 MEDIAMTX_BIN=… DATABASE_URL=postgres://…/cg_live_e2e npm run e2e     # 29-step pipeline incl. real headless OBS and 3 restreams
 tools/sim-camera.sh https://live.cogolfers.com K7Q-2MX "Hole 3 Tee" 3   # fake phone using a camera join code
 ```
+
+## V9: brand channels and gift credits
+
+**Brand channels at `<brand>.gogetslive.com`.** Every channel also works at `https://gogetslive.com/c/<brand>` with no DNS change, so channels can be used before this step.
+
+1. DNS: add a wildcard record `*.gogetslive.com` (A/AAAA, or CNAME) pointing at the same server as `gogetslive.com`.
+2. HTTPS: a wildcard certificate for `*.gogetslive.com`. With Let's Encrypt this needs the DNS-01 challenge (e.g. `certbot certonly --dns-<provider> -d 'gogetslive.com' -d '*.gogetslive.com'`), or put Cloudflare in front (proxied wildcard record, "Full (strict)").
+3. The reverse proxy must pass the original `Host` (or `X-Forwarded-Host`) header to the app; Caddy and nginx do by default (`proxy_set_header Host $host;`).
+4. `CHANNEL_DOMAIN` (default `gogetslive.com`) is the domain whose subdomains are channels. Reserved names (www, app, api, admin, live, support…) are never channels.
+
+Followers confirm by email; they get an email when a channel event goes live (once per 6 hours per event) and an hour before an event with a start time (checked every minute).
+
+**Gift credits.** Needs the Cashfree gateway on (Admin > Money > Payment gateway) and Cashfree's approval for collecting on behalf of organisers. Every setting is in Admin > Gifts & payouts: name ("Gift credits"), share, GST method (out of the gift first, by default), TDS (0.1%, section 194-O), gateway fee and who pays it, hold (7 days), minimum payout, fraud limits per phone, network and club, the phone sent to Cashfree (viewers are not asked; orders are UPI only), default stickers and blocked words. Per-club overrides in the Clubs tab.
+
+Weekly routine: Admin > Gifts & payouts > Clubs: verify new payout details. Payouts: Create payouts now, Download bank file (full account numbers: keep it safe, delete after upload), pay from the bank, then Mark paid with each UTR (the club is emailed). Deposit the TDS against each organiser's PAN and file 26Q; issue the GST invoice for Go Live's share. Ask your CA to confirm the GST and TDS treatment before launch.
