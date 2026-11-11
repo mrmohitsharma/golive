@@ -35,7 +35,7 @@ const schema = z.object({
   BRAND_NAME: z.string().default('Go Live'),
   SUPPORT_EMAIL: z.string().default('support@gogetslive.com'),
   // Contact page and policies (payment gateway reviews check these). Phone is optional.
-  SUPPORT_PHONE: optional,
+  SUPPORT_PHONE: z.string().default('+91 96644 03568'),
   SUPPORT_HOURS: z.string().default('Monday to Friday, 10 am to 7 pm IST'),
   // Where the Go Live agent apps (Windows, Mac) are downloaded from: GitHub release assets built by
   // .github/workflows/agent-apps.yml. Point it elsewhere to host the files yourself.
@@ -43,7 +43,7 @@ const schema = z.object({
   LEGAL_ENTITY: z.string().default('S.R Fairway Ventures'), // registered business name
   LEGAL_ADDRESS: z.string().default('A402, Sector 6, Gurgaon, Haryana 122103, India'), // registered office address
   LEGAL_JURISDICTION: z.string().default('Gurugram, Haryana'),
-  GRIEVANCE_OFFICER: optional, // name of the Grievance Officer (IT Rules 2021 / DPDP Act 2023)
+  GRIEVANCE_OFFICER: z.string().default('Abhishek'), // name of the Grievance Officer (IT Rules 2021 / DPDP Act 2023)
   LEGAL_UPDATED: z.string().default('11 November 2026'),
   PLAY_STORE_URL: optional,
   APP_STORE_URL: optional,

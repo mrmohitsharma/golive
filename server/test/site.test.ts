@@ -39,13 +39,14 @@ describe('public website, legal pages and data-retention duties', () => {
     assert.ok(privacy.includes('Test Media Pvt Ltd'));
     assert.ok(privacy.includes('help@test.example'));
     assert.ok(privacy.includes('A402, Sector 6, Gurgaon, Haryana 122103, India'), 'the registered address is the default');
-    assert.ok(privacy.includes('[Grievance Officer name: set GRIEVANCE_OFFICER]'));
+    assert.ok(privacy.includes('Abhishek'), 'the Grievance Officer is named');
+    assert.ok(!privacy.includes('class="todo"'), 'no missing details left');
   });
 
   it('has the pages payment gateways check: contact, refunds and cancellations, shipping, INR prices', async () => {
     const contact = await (await fetch(h.baseUrl + '/contact')).text();
     for (const must of ['Test Media Pvt Ltd', 'A402, Sector 6, Gurgaon', 'help@test.example', 'Monday to Friday, 10 am to 7 pm IST', 'href="/support"']) assert.ok(contact.includes(must), `contact has ${must}`);
-    assert.ok(!contact.includes('Phone and WhatsApp'), 'no phone line without SUPPORT_PHONE');
+    assert.ok(contact.includes('Phone and WhatsApp') && contact.includes('href="tel:+919664403568"') && contact.includes('+91 96644 03568'), 'the support phone');
     const refunds = await (await fetch(h.baseUrl + '/refunds')).text();
     for (const must of ['7 to 10 working days', 'Unused credits', 'Cancelling', 'Cashfree']) assert.ok(refunds.includes(must), `refunds has ${must}`);
     assert.match(await (await fetch(h.baseUrl + '/shipping')).text(), /delivered electronically/);
