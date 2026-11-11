@@ -30,6 +30,12 @@ FirstRun=true
 LastVersion=503316482
 EnableAutoUpdates=false
 
+[Basic]
+Profile=Untitled
+ProfileDir=Untitled
+SceneCollection=Untitled
+SceneCollectionFile=Untitled
+
 [OBSWebSocket]
 FirstLoad=false
 ServerEnabled=true
@@ -39,6 +45,38 @@ AuthRequired=true
 ServerPassword=$OBS_PASSWORD
 EOF
 cp "$CFG/global.ini" "$CFG/user.ini"
+
+# V9: camera switches use OBS's Fade or Slide transition. Fade is built in; Slide is added in the
+# scene collection OBS opens (the agent creates every scene itself, so it starts with one empty scene).
+mkdir -p "$CFG/basic/scenes"
+if [ ! -f "$CFG/basic/scenes/Untitled.json" ]; then
+cat > "$CFG/basic/scenes/Untitled.json" <<'JSON'
+{
+    "name": "Untitled",
+    "current_scene": "Scene",
+    "current_program_scene": "Scene",
+    "scene_order": [{ "name": "Scene" }],
+    "sources": [
+        {
+            "id": "scene",
+            "versioned_id": "scene",
+            "name": "Scene",
+            "enabled": true,
+            "flags": 0,
+            "mixers": 0,
+            "muted": false,
+            "volume": 1.0,
+            "settings": { "custom_size": false, "id_counter": 0, "items": [] }
+        }
+    ],
+    "groups": [],
+    "quick_transitions": [],
+    "current_transition": "Fade",
+    "transition_duration": 700,
+    "transitions": [{ "name": "Slide", "id": "slide_transition", "settings": { "direction": "left" } }]
+}
+JSON
+fi
 
 log() { echo "[cloud-engine] $*"; }
 

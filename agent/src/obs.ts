@@ -101,6 +101,7 @@ const FALLBACK_TEXT = 'CG Fallback Text';
 const TEXT_KINDS = ['text_gdiplus_v3', 'text_gdiplus_v2', 'text_ft2_source_v2', 'text_ft2_source'];
 const COLOR_KINDS = ['color_source_v3', 'color_source_v2', 'color_source'];
 const BROWSER_KIND = 'browser_source';
+export const SLIDE_MISSING_WARNING = 'The Slide transition is not in this OBS, so switches use Fade. Open the Go Live app to add it (or in OBS: Scene Transitions > + > Slide, named "Slide").';
 const NO_BROWSER_WARNING = 'This OBS has no Browser Source, so graphics (scores, lower thirds) are off. Install OBS from obsproject.com.';
 
 export function feedInputSettings(srtUrl: string) {
@@ -234,6 +235,9 @@ export class ObsController {
     if (!studio.studioModeEnabled) await this.obs.call('SetStudioModeEnabled', { studioModeEnabled: true });
     this.state.studioMode = true;
     this.state.obsConnected = true;
+    // A new OBS session: read its transitions again (the Slide transition may have been added).
+    this.transitionNames = null;
+    this.transitionNow = null;
     this.state.lastError = null;
     this.state.warnings = this.inputKinds.includes(BROWSER_KIND) ? [] : [NO_BROWSER_WARNING];
     await this.applyStreamDestination();
@@ -629,6 +633,39 @@ export class ObsController {
     await this.obs.call('SetCurrentProgramScene', { sceneName: back }).catch((err) => this.log(`return from replay failed: ${(err as Error).message}`));
   }
 
+  /** OBS transitions available (read once per connection) and the one set last. */
+  private transitionNames: string[] | null = null;
+  private transitionNow: { name: string; ms: number } | null = null;
+
+  /**
+   * V9: sets OBS's transition (Fade or Slide, and its duration) before a switch, so manual and
+   * automatic switches look smooth. Slide missing: Fade, with a warning for the director. A
+   * failure here never blocks the switch itself.
+   */
+  private async useTransition(raw: unknown): Promise<void> {
+    const t = raw && typeof raw === 'object' ? (raw as { name?: unknown; ms?: unknown }) : null;
+    if (!t || typeof t.name !== 'string') return;
+    try {
+      if (!this.transitionNames) {
+        const r = await this.obs.call('GetSceneTransitionList');
+        this.transitionNames = ((r?.transitions ?? []) as { transitionName: string }[]).map((x) => x.transitionName);
+      }
+      let name = t.name;
+      if (!this.transitionNames.includes(name)) {
+        if (name === 'Slide' && !this.state.warnings.includes(SLIDE_MISSING_WARNING)) this.state.warnings = [...this.state.warnings, SLIDE_MISSING_WARNING];
+        name = this.transitionNames.includes('Fade') ? 'Fade' : '';
+        if (!name) return;
+      } else if (name === 'Slide') this.state.warnings = this.state.warnings.filter((w) => w !== SLIDE_MISSING_WARNING);
+      const ms = typeof t.ms === 'number' ? Math.min(2000, Math.max(100, Math.round(t.ms))) : 700;
+      if (this.transitionNow?.name !== name) await this.obs.call('SetCurrentSceneTransition', { transitionName: name });
+      if (this.transitionNow?.name !== name || this.transitionNow?.ms !== ms) await this.obs.call('SetCurrentSceneTransitionDuration', { transitionDuration: ms });
+      this.transitionNow = { name, ms };
+    } catch (err) {
+      this.transitionNow = null;
+      this.log(`transition not set: ${(err as Error).message}`);
+    }
+  }
+
   async execute(action: string, cameraId: string | null, extra: Record<string, unknown> = {}): Promise<void> {
     if (!this.state.obsConnected) throw new Error('OBS is not connected.');
     const sceneName = typeof extra.sceneName === 'string' ? extra.sceneName : null;
@@ -640,10 +677,12 @@ export class ObsController {
       }
       case 'take':
       case 'cut':
+        await this.useTransition(extra.transition);
         await this.obs.call('SetCurrentProgramScene', { sceneName: this.sceneFor(cameraId, sceneName) });
         return;
       case 'fallback':
         await this.ensureFallbackScene();
+        await this.useTransition(extra.transition);
         await this.obs.call('SetCurrentProgramScene', { sceneName: this.fallbackScene });
         return;
       case 'replay.play':

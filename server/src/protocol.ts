@@ -20,6 +20,8 @@ export interface CameraTelemetry {
   micMuted?: boolean | null;
   /** A phone call is ringing or in progress on the camera phone. */
   inCall?: boolean | null;
+  /** V9: zoom, brightness and focus now (the director's remote controls show these). */
+  controls?: { zoom: number; zoomMin: number; zoomMax: number; ev: number; evMin: number; evMax: number; evStep: number; autoFocus: boolean; locked: boolean } | null;
 }
 
 export interface CameraHealth {

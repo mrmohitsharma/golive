@@ -1,4 +1,5 @@
 import { eventProfile } from './event-types.js';
+import { nextCamera, OBS_TRANSITION, switchingOf, type Switching } from './switching.js';
 import type { ViewershipService } from './viewership.js';
 import type { InfluencersService } from './influencers.js';
 import crypto from 'node:crypto';
@@ -78,6 +79,12 @@ interface TournamentLive {
   camerasPaused: boolean;
   /** Laptop OBS: pause the cameras this long after End broadcast unless live again. */
   endTimer: NodeJS.Timeout | null;
+  /** V9: auto switch and transition settings (loaded with the event, updated on save). */
+  switching: Switching | null;
+  /** When the camera on air last changed (by hand or automatically): the auto-switch clock. */
+  lastSwitchAt: number;
+  /** Main-camera mode: the last of the other cameras shown, so they take turns. */
+  autoLastOther: string | null;
 }
 
 export interface Logger {
@@ -146,6 +153,13 @@ export class Hub {
     this.pingTimer = setInterval(() => this.heartbeat(), 15000);
   }
 
+  private autoTimer: NodeJS.Timeout | null = null;
+  /** V9: checks every second whether an event with auto switch on is due for the next camera. */
+  startAutoSwitch(): void {
+    if (this.autoTimer) return;
+    this.autoTimer = setInterval(() => void this.autoSwitchTick().catch((err) => this.log.warn({ err: (err as Error).message }, 'auto switch failed')), 1000);
+  }
+
   startYoutubePolling(): void {
     if (this.ytTimer) return;
     this.ytTimer = setInterval(() => void this.pollYoutube(), this.config.YOUTUBE_POLL_MS);
@@ -153,6 +167,7 @@ export class Hub {
 
   close(): void {
     clearInterval(this.pingTimer);
+    if (this.autoTimer) clearInterval(this.autoTimer);
     for (const t of this.chatTimers.values()) clearTimeout(t);
     if (this.ytTimer) clearInterval(this.ytTimer);
     for (const p of this.pending.values()) clearTimeout(p.timer);
@@ -163,10 +178,99 @@ export class Hub {
   private liveFor(tournamentId: string): TournamentLive {
     let l = this.live.get(tournamentId);
     if (!l) {
-      l = { engine: emptyEngineState(), engineClient: null, telemetry: new Map(), programmeOfflineSince: null, youtube: emptyYoutube(), lastMetersAt: 0, relayCheckedAt: 0, camerasPaused: false, endTimer: null };
+      l = { engine: emptyEngineState(), engineClient: null, telemetry: new Map(), programmeOfflineSince: null, youtube: emptyYoutube(), lastMetersAt: 0, relayCheckedAt: 0, camerasPaused: false, endTimer: null, switching: null, lastSwitchAt: Date.now(), autoLastOther: null };
       this.live.set(tournamentId, l);
     }
     return l;
+  }
+
+  // ------------------------------------------------------------------ V9 switching
+  /** The event's switching settings (from memory; read from the event the first time). */
+  async switching(tid: string): Promise<Switching> {
+    const l = this.liveFor(tid);
+    if (!l.switching) {
+      const t = await this.repo.tournamentById(tid);
+      l.switching = switchingOf((t as { switching?: unknown } | null)?.switching);
+    }
+    return l.switching;
+  }
+
+  /** Saved from the control room: takes effect at once; the auto clock restarts when switched on. */
+  setSwitching(tid: string, sw: Switching): void {
+    const l = this.liveFor(tid);
+    const turnedOn = sw.auto.on && !l.switching?.auto.on;
+    l.switching = sw;
+    if (turnedOn) l.lastSwitchAt = Date.now();
+    this.pushSwitching(tid);
+  }
+
+  /** What the control room shows: settings, when the next automatic switch happens and to which camera. */
+  async switchingView(tid: string) {
+    const sw = await this.switching(tid);
+    const l = this.liveFor(tid);
+    let next: string | null = null;
+    if (sw.auto.on) {
+      const cams = await this.repo.camerasForTournament(tid);
+      next = nextCamera(cams.filter((c) => this.usableForAir(tid, c)), l.engine.programmeCameraId, sw.auto, l.autoLastOther);
+    }
+    return { ...sw, nextAt: sw.auto.on ? new Date(l.lastSwitchAt + sw.auto.everySec * 1000).toISOString() : null, nextCameraId: next, running: sw.auto.on && this.autoReady(tid) };
+  }
+
+  private pushSwitching(tid: string): void {
+    void this.switchingView(tid)
+      .then((v) => this.toTournament(tid, { type: 'switching', switching: v }, 'direct'))
+      .catch(() => {});
+  }
+
+  /** A camera that can go on air now: sending video, not on a call, not paused. */
+  private usableForAir(tid: string, c: CameraRow): boolean {
+    if (!this.healthFor(c.stream_path).online) return false;
+    const tel = this.telemetryFor(tid, c.id);
+    return !tel?.inCall && tel?.state !== 'paused';
+  }
+
+  /** Auto switch only runs while live, with the engine up, and never over a replay or the fallback screen. */
+  private autoReady(tid: string): boolean {
+    const l = this.liveFor(tid);
+    const e = l.engine;
+    return Boolean(l.engineClient && e.obsConnected && e.streaming.active && !e.replayActive && !e.fallbackActive);
+  }
+
+  async autoSwitchTick(): Promise<void> {
+    const now = Date.now();
+    for (const [tid, l] of this.live) {
+      const sw = l.switching;
+      if (!sw?.auto.on || !this.autoReady(tid)) continue;
+      if (now - l.lastSwitchAt < sw.auto.everySec * 1000) continue;
+      // Try again in a few seconds if nothing can be switched to (or the command fails).
+      l.lastSwitchAt = now - sw.auto.everySec * 1000 + 5000;
+      const cams = await this.repo.camerasForTournament(tid);
+      const nextId = nextCamera(cams.filter((c) => this.usableForAir(tid, c)), l.engine.programmeCameraId, sw.auto, l.autoLastOther);
+      const next = nextId ? cams.find((c) => c.id === nextId) : null;
+      if (!next) continue;
+      const r = this.dispatch(tid, 'cut', next.id, null, null, { sceneName: sceneNameFor(next.stream_path), auto: true });
+      if (r.ok) {
+        l.lastSwitchAt = now;
+        if (sw.auto.mode === 'main' && next.id !== sw.auto.mainCameraId) l.autoLastOther = next.id;
+        this.pushSwitching(tid);
+      }
+    }
+  }
+
+  /**
+   * V9: the director adjusts a camera phone from the control room (zoom, brightness, focus).
+   * The phone applies it (zooming smoothly when it is on air) and reports the new values.
+   */
+  adjustCamera(tid: string, cameraId: string, v: { zoom?: number; ev?: number; focus?: 'auto' | 'lock' }): boolean {
+    const smooth = this.liveFor(tid).engine.programmeCameraId === cameraId;
+    let sent = false;
+    for (const c of this.clients) {
+      if (c.tournamentId === tid && c.cameraId === cameraId) {
+        this.send(c, { type: 'camera.adjust', ...v, smooth });
+        sent = true;
+      }
+    }
+    return sent;
   }
 
   engineState(tournamentId: string): EngineState {
@@ -298,7 +402,7 @@ export class Hub {
       production: this.productionState(t),
       youtube: await this.youtubeState(t),
       outputs: await this.services.outputs.state(t),
-      ...(can(role, 'direct') ? { billing: await this.services.billing.tournamentState(t) } : {}),
+      ...(can(role, 'direct') ? { billing: await this.services.billing.tournamentState(t), switching: await this.switchingView(t.id) } : {}),
     };
   }
 
@@ -480,7 +584,7 @@ export class Hub {
         const call = t.inCall === true && before?.inCall !== true;
         const paused = t.state === 'paused' && before?.state !== 'paused';
         if (call || paused) await this.cameraInterrupted(client.tournamentId, client.cameraId, call ? 'call' : 'paused');
-        if (call || paused || (t.micMuted ?? false) !== (before?.micMuted ?? false) || (t.inCall ?? false) !== (before?.inCall ?? false)) {
+        if (call || paused || (t.micMuted ?? false) !== (before?.micMuted ?? false) || (t.inCall ?? false) !== (before?.inCall ?? false) || JSON.stringify(t.controls ?? null) !== JSON.stringify(before?.controls ?? null)) {
           await this.pushCameras(client.tournamentId).catch(() => {});
         }
         return;
@@ -503,6 +607,7 @@ export class Hub {
         l.engine = { ...l.engine, connected: true, updatedAt: new Date().toISOString() };
         this.send(client, { type: 'engine.config', ...(await this.engineConfig(t)) });
         this.broadcastEngine(t.id);
+        await this.switching(t.id).catch(() => {});
         this.alert(t.id, 'info', `Broadcast engine connected (${t.production_mode === 'cloud' ? 'cloud' : 'laptop'}).`);
         await this.services.cloud.engineConnected(t.id).catch(() => {});
         return;
@@ -569,7 +674,12 @@ export class Hub {
           : null,
       updatedAt: new Date().toISOString(),
     };
-    if (l.engine.programmeCameraId !== prevProgramme) l.programmeOfflineSince = null;
+    if (l.engine.programmeCameraId !== prevProgramme) {
+      l.programmeOfflineSince = null;
+      // Any switch (the director's or automatic) restarts the auto-switch clock from that camera.
+      l.lastSwitchAt = Date.now();
+      if (l.switching?.auto.on) this.pushSwitching(tournamentId);
+    }
     this.broadcastEngine(tournamentId);
     if (l.engine.programmeCameraId !== prevProgramme || l.engine.previewCameraId !== prevPreview || l.engine.replayActive !== prevReplay) {
       this.broadcastTally(tournamentId);
@@ -771,7 +881,10 @@ export class Hub {
       actor: requestedBy ? principalKey(requestedBy.principal) : 'system',
       timer,
     });
-    this.toEngine(tournamentId, { type: 'command', id, action, cameraId, ...extra });
+    // V9: every switch to a camera or the fallback screen uses the event's transition (Fade or Slide).
+    const sw = this.liveFor(tournamentId).switching;
+    const transition = ['take', 'cut', 'fallback'].includes(action) ? { name: OBS_TRANSITION[sw?.transition.style ?? 'fade'], ms: sw?.transition.ms ?? 700 } : undefined;
+    this.toEngine(tournamentId, { type: 'command', id, action, cameraId, ...(transition ? { transition } : {}), ...extra });
     return { ok: true, id };
   }
 
@@ -1023,5 +1136,26 @@ export function sanitizeTelemetry(raw: unknown): CameraTelemetry {
     error: str(r.error),
     micMuted: typeof r.micMuted === 'boolean' ? r.micMuted : null,
     inCall: typeof r.inCall === 'boolean' ? r.inCall : null,
+    controls: sanitizeControls(r.controls),
+  };
+}
+
+/** V9: the phone's zoom, brightness and focus, so the director's sliders show the real values. */
+function sanitizeControls(raw: unknown): CameraTelemetry['controls'] {
+  if (!raw || typeof raw !== 'object') return null;
+  const c = raw as Record<string, unknown>;
+  const n = (v: unknown, lo: number, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null);
+  const zoomMin = n(c.zoomMin, 0.1, 100), zoomMax = n(c.zoomMax, 0.1, 200);
+  if (zoomMin == null || zoomMax == null) return null;
+  return {
+    zoom: n(c.zoom, zoomMin, zoomMax) ?? 1,
+    zoomMin,
+    zoomMax,
+    ev: n(c.ev, -20, 20) ?? 0,
+    evMin: n(c.evMin, -20, 0) ?? 0,
+    evMax: n(c.evMax, 0, 20) ?? 0,
+    evStep: n(c.evStep, 0.01, 5) ?? 0.5,
+    autoFocus: typeof c.autoFocus === 'boolean' ? c.autoFocus : true,
+    locked: typeof c.locked === 'boolean' ? c.locked : false,
   };
 }

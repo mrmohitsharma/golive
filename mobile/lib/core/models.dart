@@ -374,6 +374,7 @@ class CameraTelemetry {
     this.error,
     this.micMuted,
     this.inCall,
+    this.controls,
   });
 
   final String state;
@@ -393,6 +394,10 @@ class CameraTelemetry {
   /// A phone call is ringing or in progress on the camera phone.
   final bool? inCall;
 
+  /// V9: the camera's zoom / brightness / focus and their limits, so the director can adjust
+  /// them from the control room (zoom, zoomMin, zoomMax, ev, evMin, evMax, evStep, autoFocus, locked).
+  final Map<String, dynamic>? controls;
+
   static CameraTelemetry? fromJson(Map<String, dynamic>? j) => j == null
       ? null
       : CameraTelemetry(
@@ -408,6 +413,7 @@ class CameraTelemetry {
           error: j['error'] as String?,
           micMuted: j['micMuted'] as bool?,
           inCall: j['inCall'] as bool?,
+          controls: j['controls'] is Map ? Map<String, dynamic>.from(j['controls'] as Map) : null,
         );
 
   Map<String, dynamic> toJson() => {
@@ -423,6 +429,7 @@ class CameraTelemetry {
         if (error != null) 'error': error,
         if (micMuted != null) 'micMuted': micMuted,
         if (inCall != null) 'inCall': inCall,
+        if (controls != null) 'controls': controls,
       };
 }
 

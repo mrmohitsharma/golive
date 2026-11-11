@@ -127,6 +127,118 @@ export async function render(view, { id }) {
   const cams = () => s.cameras ?? [];
   const camName = (cid) => cams().find((c) => c.id === cid)?.name ?? '–';
 
+  // ---------------------------------------------------------------- V9 camera adjust (NEXT camera)
+  // Zoom, brightness and focus of the camera in NEXT, sent to the phone. The phone's operator can
+  // change them too: the last change wins and these sliders follow what the phone reports.
+  const adjustBox = el('div', { class: 'cr-adjust' });
+  let adjustFor = null, adjustTimer = null, dragging = false, lastLocal = 0;
+  const adjustSend = (cid, body) => post(`/api/tournaments/${id}/cameras/${cid}/adjust`, body).catch((e) => toast(e.message, true));
+  const later = (fn) => { lastLocal = Date.now(); clearTimeout(adjustTimer); adjustTimer = setTimeout(fn, 200); };
+  const zoomToT = (z, c) => Math.round(1000 * Math.log(z / c.zoomMin) / Math.log(c.zoomMax / c.zoomMin));
+  const tToZoom = (t, c) => c.zoomMin * Math.pow(c.zoomMax / c.zoomMin, t / 1000);
+  const drawAdjust = () => {
+    const e = s.engine ?? {};
+    const cam = cams().find((c) => c.id === e.previewCameraId);
+    const c = cam?.telemetry?.controls;
+    if (!cam) { adjustFor = null; adjustBox.replaceChildren(); return; }
+    if (!cam.telemetry) { adjustFor = null; adjustBox.replaceChildren(el('div', { class: 'small muted', text: `${cam.name}: the app is not connected, so zoom and brightness can't be changed from here.` })); return; }
+    if (!c) { adjustFor = null; adjustBox.replaceChildren(el('div', { class: 'small muted', text: 'Update the Go Live app on this phone to zoom and set brightness from here.' })); return; }
+    const key = `${cam.id}|${c.zoomMin}|${c.zoomMax}|${c.evMin}|${c.evMax}`;
+    if (adjustFor !== key) {
+      adjustFor = key;
+      const canZoom = c.zoomMax > c.zoomMin + 0.01;
+      const zoom = el('input', { type: 'range', min: 0, max: 1000, step: 1, disabled: !canZoom || undefined, 'data-k': 'zoom', 'aria-label': 'Zoom' });
+      const zoomV = el('span', { class: 'small mono cr-adj-v', 'data-v': 'zoom' });
+      const ev = el('input', { type: 'range', min: c.evMin, max: c.evMax, step: c.evStep || 0.1, disabled: c.evMax <= c.evMin || undefined, 'data-k': 'ev', 'aria-label': 'Brightness' });
+      const evV = el('span', { class: 'small mono cr-adj-v', 'data-v': 'ev' });
+      const hold = () => (dragging = true), free = () => (dragging = false);
+      for (const r of [zoom, ev]) { r.onpointerdown = hold; r.onpointerup = free; r.onblur = free; }
+      zoom.oninput = () => { const z = tToZoom(Number(zoom.value), c); zoomV.textContent = `${z.toFixed(1)}×`; later(() => adjustSend(cam.id, { zoom: Math.round(z * 100) / 100 })); };
+      ev.oninput = () => { const v = Number(ev.value); evV.textContent = (v > 0 ? '+' : '') + v.toFixed(1); later(() => adjustSend(cam.id, { ev: v })); };
+      const step = (r, d) => () => { r.value = String(Number(r.value) + d); r.oninput(); };
+      const head = (label, v) => el('div', { class: 'cr-adj-head' }, el('span', { class: 'small', text: label }), v);
+      adjustBox.replaceChildren(
+        el('div', { class: 'cr-adj-row' }, head('Zoom', zoomV),
+          el('div', { class: 'cr-adj-ctl' },
+            el('button', { class: 'btn small ghost', disabled: !canZoom || undefined, onclick: step(zoom, -60), title: 'Zoom out', text: '−' }), zoom,
+            el('button', { class: 'btn small ghost', disabled: !canZoom || undefined, onclick: step(zoom, 60), title: 'Zoom in', text: '+' }))),
+        el('div', { class: 'cr-adj-row' }, head('Brightness', evV),
+          el('div', { class: 'cr-adj-ctl' },
+            el('button', { class: 'btn small ghost', onclick: step(ev, -(c.evStep || 0.1) * 3), title: 'Darker', text: '−' }), ev,
+            el('button', { class: 'btn small ghost', onclick: step(ev, (c.evStep || 0.1) * 3), title: 'Brighter', text: '+' }))),
+        el('div', { class: 'cr-adj-row' }, head('Focus', null),
+          el('div', { class: 'cr-adj-ctl' },
+            el('button', { class: 'btn small', 'data-f': 'auto', onclick: () => adjustSend(cam.id, { focus: 'auto' }), text: 'Auto' }),
+            el('button', { class: 'btn small', 'data-f': 'lock', onclick: () => adjustSend(cam.id, { focus: 'lock' }), text: 'Lock' }),
+            el('button', { class: 'btn small ghost', onclick: () => adjustSend(cam.id, { zoom: c.zoomMin <= 1 && c.zoomMax >= 1 ? 1 : c.zoomMin, ev: 0, focus: 'auto' }), title: 'Zoom 1×, normal brightness, auto focus', text: 'Reset' }))),
+        el('div', { class: 'small muted', text: 'Zoom glides smoothly while this camera is on air. The camera operator can change these too.' }));
+    }
+    // Follow the phone (unless the director is moving that slider right now).
+    const zoom = adjustBox.querySelector('[data-k=zoom]'), ev = adjustBox.querySelector('[data-k=ev]');
+    if (!dragging && Date.now() - lastLocal > 1500) {
+      zoom.value = String(zoomToT(Math.min(c.zoomMax, Math.max(c.zoomMin, c.zoom ?? 1)), c) || 0);
+      ev.value = String(c.ev ?? 0);
+    }
+    adjustBox.querySelector('[data-v=zoom]').textContent = `${Number(c.zoom ?? 1).toFixed(1)}×`;
+    adjustBox.querySelector('[data-v=ev]').textContent = (c.ev > 0 ? '+' : '') + Number(c.ev ?? 0).toFixed(1);
+    const f = c.locked ? 'lock' : 'auto';
+    for (const b of adjustBox.querySelectorAll('[data-f]')) b.classList.toggle('primary', b.dataset.f === f);
+  };
+
+  // ---------------------------------------------------------------- V9 auto switch + transition
+  const switchBar = el('div', { class: 'cr-switch' });
+  const swNow = el('span', { class: 'small' });
+  const swPatch = guard(async (p) => { const r = await patch(`/api/tournaments/${id}/switching`, p); s.switching = r.switching; drawSwitch(); });
+  const fmtEvery = (sec) => sec % 60 === 0 ? `${sec / 60} min` : sec > 60 ? `${Math.floor(sec / 60)} min ${sec % 60} s` : `${sec} s`;
+  const drawSwitchNow = () => {
+    const sw = s.switching;
+    if (!sw?.auto?.on) { swNow.replaceChildren(); return; }
+    if (!sw.running) { swNow.replaceChildren(el('span', { class: 'muted', text: 'Waits until you are live with a camera on air' })); return; }
+    const left = sw.nextAt ? Math.max(0, Math.round((Date.parse(sw.nextAt) - Date.now()) / 1000)) : null;
+    swNow.replaceChildren(sw.nextCameraId ? el('span', {}, 'Next: ', el('b', { text: camName(sw.nextCameraId) }), left != null ? ` in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '')
+      : el('span', { class: 'muted', text: 'Needs another camera that is live' }));
+  };
+  const drawSwitch = () => {
+    const sw = s.switching;
+    if (!sw) { switchBar.replaceChildren(); return; }
+    const a = sw.auto, tr = sw.transition;
+    const presets = [15, 30, 60, 120, 300, 600];
+    const every = el('select', { style: 'width:auto', 'aria-label': 'Switch every', onchange: guard(async (e) => {
+      let v = Number(e.target.value);
+      if (v === 0) {
+        const r = await dialog({ title: 'Switch every…', text: 'From 10 seconds to 30 minutes.', ok: 'Save', fields: [
+          { name: 'n', label: 'Number', value: String(a.everySec % 60 === 0 ? a.everySec / 60 : a.everySec) },
+          { name: 'u', label: 'Unit', type: 'select', value: a.everySec % 60 === 0 ? 'min' : 's', options: [{ value: 's', label: 'seconds' }, { value: 'min', label: 'minutes' }] }] });
+        if (!r) { drawSwitch(); return; }
+        v = Math.round(Number(r.n) * (r.u === 'min' ? 60 : 1));
+        if (!(v >= 10 && v <= 1800)) { toast('Pick between 10 seconds and 30 minutes', true); drawSwitch(); return; }
+      }
+      await swPatch({ auto: { everySec: v } });
+    }) }, [...new Set([...presets, a.everySec])].sort((x, y) => x - y).map((n) => el('option', { value: n, selected: n === a.everySec || undefined, text: `every ${fmtEvery(n)}` })),
+      el('option', { value: 0, text: 'Custom…' }));
+    const mode = el('select', { style: 'width:auto', 'aria-label': 'Order', onchange: (e) => swPatch({ auto: { mode: e.target.value } }) },
+      el('option', { value: 'round', selected: a.mode === 'round' || undefined, text: 'Round-robin (1 → 2 → 3 …)' }),
+      el('option', { value: 'main', selected: a.mode === 'main' || undefined, text: 'Main camera + others' }));
+    const main = a.mode === 'main' ? el('select', { style: 'width:auto', 'aria-label': 'Main camera', onchange: (e) => swPatch({ auto: { mainCameraId: e.target.value || null } }) },
+      el('option', { value: '', text: 'Main camera…' }), cams().map((c) => el('option', { value: c.id, selected: c.id === a.mainCameraId || undefined, text: c.name }))) : null;
+    const slideMissing = (s.engine?.warnings ?? []).some((w) => /Slide transition/.test(w));
+    switchBar.replaceChildren(
+      el('div', { class: 'row', style: 'flex-wrap:wrap;gap:8px' },
+        el('button', { class: 'btn small ' + (a.on ? 'primary' : ''), 'data-tour': 'auto-switch', onclick: () => {
+          if (!a.on && a.mode === 'main' && !a.mainCameraId) { toast('Pick the main camera first', true); return; }
+          swPatch({ auto: { on: !a.on } });
+        }, text: `Auto switch: ${a.on ? 'ON' : 'off'}` }),
+        mode, main, every, swNow,
+        el('div', { class: 'sp' }),
+        el('span', { class: 'small muted', text: 'Transition' }),
+        ...['fade', 'slide'].map((st) => el('button', { class: 'btn small ' + (tr.style === st ? 'primary' : ''), onclick: () => swPatch({ transition: { style: st } }), text: st === 'fade' ? 'Fade' : 'Slide' })),
+        el('select', { style: 'width:auto', 'aria-label': 'Transition length', onchange: (e) => swPatch({ transition: { ms: Number(e.target.value) } }) },
+          [...new Set([300, 500, 700, 1000, 1500, tr.ms])].sort((x, y) => x - y).map((ms) => el('option', { value: ms, selected: ms === tr.ms || undefined, text: `${(ms / 1000).toFixed(1)} s` })))),
+      a.mode === 'main' ? el('div', { class: 'small muted', text: 'Goes to the main camera, then one other camera, then back to the main camera.' }) : null,
+      slideMissing && tr.style === 'slide' ? el('div', { class: 'small pill warn', style: 'margin-top:4px', text: 'This OBS has no Slide transition yet, so switches use Fade. Open the Go Live app on the OBS computer once to add it.' }) : null);
+    drawSwitchNow();
+  };
+
   const drawStatus = () => {
     const e = s.engine ?? {};
     const live = e.streaming?.active;
@@ -311,8 +423,9 @@ export async function render(view, { id }) {
   const onMessage = (m) => {
     switch (m.type) {
       case 'snapshot': s = { ...s, ...m }; drawAll(); break;
-      case 'cameras': { const before = (s.commentators ?? []).map((c) => c.id + c.online).join(); s.cameras = m.cameras; s.commentators = m.commentators; drawMonitors(); drawGrid(); if (tab === 'Audio' && before !== (m.commentators ?? []).map((c) => c.id + c.online).join()) drawSide(); break; }
-      case 'engine': s.engine = m.engine ?? m; drawStatus(); drawMonitors(); drawGrid(); drawIdle(); break;
+      case 'switching': s.switching = m.switching ?? m; drawSwitch(); break;
+      case 'cameras': { const before = (s.commentators ?? []).map((c) => c.id + c.online).join(); s.cameras = m.cameras; s.commentators = m.commentators; drawMonitors(); drawGrid(); drawAdjust(); if (tab === 'Audio' && before !== (m.commentators ?? []).map((c) => c.id + c.online).join()) drawSide(); break; }
+      case 'engine': s.engine = m.engine ?? m; drawStatus(); drawMonitors(); drawGrid(); drawIdle(); drawAdjust(); drawSwitch(); break;
       case 'outputs': s.outputs = m.outputs ?? m; drawStatus(); break;
       case 'graphics': s.graphics = m.graphics ?? m; if (tab === 'Graphics') drawSide(); break;
       case 'audio': s.audio = m.audio ?? m; break;
@@ -333,7 +446,7 @@ export async function render(view, { id }) {
     ws.onmessage = (e) => { try { onMessage(JSON.parse(e.data)); } catch {} };
     ws.onclose = () => { if (!closed) { status.prepend(el('span', { class: 'pill bad', text: 'Reconnecting…' })); wsTimer = setTimeout(connect, 2000); } };
   };
-  const drawAll = () => { drawStatus(); drawMonitors(); drawGrid(); drawSide(); };
+  const drawAll = () => { drawStatus(); drawMonitors(); drawGrid(); drawSide(); drawAdjust(); drawSwitch(); };
 
   // Keyboard: 1–9 preview a camera, Shift+1–9 cut to it, Space or Enter = Take.
   const keys = (e) => {
@@ -366,7 +479,7 @@ export async function render(view, { id }) {
       el('div', { class: 'cr-main' },
         // Click a camera → NEXT (small) → TAKE → ON AIR (big) → GO LIVE.
         el('div', { class: 'cr-flow' },
-          el('div', { class: 'cr-next' }, pvwLabel, pvwBox, el('div', { class: 'small muted', style: 'margin-top:4px', text: 'Click a camera below to put it here.' })),
+          el('div', { class: 'cr-next' }, pvwLabel, pvwBox, el('div', { class: 'small muted', style: 'margin-top:4px', text: 'Click a camera below to put it here.' }), adjustBox),
           el('div', { class: 'cr-take-col' },
             el('button', { class: 'btn primary cr-take', 'data-tour': 'take', onclick: () => send('take'), title: 'Puts NEXT on air (Space or Enter)', text: 'TAKE ▶' }),
             el('span', { class: 'small muted', text: 'NEXT → ON AIR' })),
@@ -377,6 +490,7 @@ export async function render(view, { id }) {
               el('button', { class: 'btn small', onclick: () => send('replay', { seconds: Number(replaySec.value), slowmo: slow.checked }), text: '⟲ Replay' }),
               el('span', { class: 'sp' }),
               liveBtn))),
+        switchBar,
         el('div', { class: 'cr-h', text: 'Cameras · click one to put it in NEXT' }),
         grid,
         el('p', { class: 'small muted', text: 'Click a camera, then TAKE. Double-click (or Cut) puts it on air at once. Keys: 1–9 pick, Shift+1–9 cut, Space take.' })),
@@ -390,9 +504,10 @@ export async function render(view, { id }) {
   document.addEventListener('keydown', keys);
   document.addEventListener('keydown', shift, true);
   thumbTimer = setInterval(drawGrid, 5000);
-  idleTimer = setInterval(drawIdle, 1000);
+  idleTimer = setInterval(() => { drawIdle(); drawSwitchNow(); }, 1000);
+  if (!s.switching) get(`/api/tournaments/${id}/switching`).then((r) => { s.switching = r.switching; drawSwitch(); }).catch(() => {});
   return () => {
-    closed = true; clearTimeout(wsTimer); clearInterval(thumbTimer); clearInterval(idleTimer); ws?.close(); pgm.close(); pvw.close(); mic.stop();
+    closed = true; clearTimeout(wsTimer); clearInterval(thumbTimer); clearInterval(idleTimer); clearTimeout(adjustTimer); ws?.close(); pgm.close(); pvw.close(); mic.stop();
     document.removeEventListener('keydown', keys); document.removeEventListener('keydown', shift, true);
     document.body.classList.remove('wide');
   };

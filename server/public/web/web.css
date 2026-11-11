@@ -307,3 +307,15 @@ dialog.welcome { max-width:520px; text-align:left; }
 .lap { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; gap: 10px; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
 .dot.on { background: #2ea043; box-shadow: 0 0 0 3px rgba(46,160,67,.25); }
+
+/* V9: zoom / brightness / focus of the NEXT camera, and the auto switch bar */
+.cr-next { min-width: 0; }
+.cr-adjust { margin-top: 10px; display: grid; gap: 8px; }
+.cr-adj-row { display: grid; gap: 3px; }
+.cr-adj-head { display: flex; justify-content: space-between; align-items: baseline; }
+.cr-adj-ctl { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cr-adj-ctl input[type=range] { flex: 1; min-width: 0; width: auto; padding: 0; margin: 0; }
+.cr-adj-ctl .btn.small { padding: 2px 10px; flex: none; }
+.cr-adj-v { color: var(--muted); }
+.cr-switch { margin: 12px 0 4px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+.cr-switch select { padding: 4px 8px; }

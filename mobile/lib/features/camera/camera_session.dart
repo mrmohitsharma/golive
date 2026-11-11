@@ -273,6 +273,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     zoom = v;
     _notify();
     unawaited(_send('zoom', v, CgStreamer.setZoom));
+    _controlsChanged();
   }
 
   void setBrightness(double value) {
@@ -280,12 +281,75 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     ev = (v / caps.evStep).round() * caps.evStep;
     _notify();
     unawaited(_send('ev', ev, CgStreamer.setExposureBias));
+    _controlsChanged();
   }
+
+  Timer? _controlsTimer;
+
+  /// Zoom / brightness / focus changed here: tell the control room shortly after (the
+  /// director's sliders follow the operator's changes; the last change wins).
+  void _controlsChanged() {
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(const Duration(milliseconds: 400), _sendTelemetry);
+  }
+
+  Timer? _zoomAnim;
+
+  /// The director moved a slider in the control room. [smooth] = this camera is on air, so
+  /// zoom glides there over about a second instead of jumping.
+  void _applyDirectorAdjust(Map<String, dynamic> m) {
+    final z = (m['zoom'] as num?)?.toDouble();
+    if (z != null) {
+      _zoomAnim?.cancel();
+      final target = z.clamp(caps.zoomMin, caps.zoomMax).toDouble();
+      if (m['smooth'] == true && (target - zoom).abs() > 0.05) {
+        final from = zoom;
+        const steps = 20; // 20 x 50 ms = 1 s
+        var i = 0;
+        _zoomAnim = Timer.periodic(const Duration(milliseconds: 50), (t) {
+          i++;
+          final k = i / steps;
+          final eased = k < 0.5 ? 2 * k * k : 1 - math.pow(-2 * k + 2, 2) / 2;
+          setZoom(from + (target - from) * eased);
+          if (i >= steps) t.cancel();
+        });
+      } else {
+        setZoom(target);
+      }
+    }
+    final e = (m['ev'] as num?)?.toDouble();
+    if (e != null) setBrightness(e);
+    switch (m['focus']) {
+      case 'auto':
+        unawaited(() async {
+          if (aeAfLocked) await unlockAeAf();
+          await setAutoFocus(true);
+          await focusAt(0.5, 0.5);
+        }());
+      case 'lock':
+        unawaited(lockAt(0.5, 0.5));
+    }
+    message = 'The director adjusted this camera.';
+  }
+
+  /// What the control room needs to draw the zoom / brightness / focus controls.
+  Map<String, dynamic> get _controls => {
+        'zoom': double.parse(zoom.toStringAsFixed(2)),
+        'zoomMin': caps.zoomMin,
+        'zoomMax': caps.zoomMax,
+        'ev': ev,
+        'evMin': caps.evMin,
+        'evMax': caps.evMax,
+        'evStep': caps.evStep,
+        'autoFocus': autoFocus,
+        'locked': aeAfLocked,
+      };
 
   /// Tap on the picture: focus and set brightness there (also ends a lock).
   Future<void> focusAt(double x, double y) async {
     aeAfLocked = false;
     _notify();
+    _controlsChanged();
     try {
       await CgStreamer.focusAt(x, y);
     } on PlatformException catch (e) {
@@ -299,6 +363,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
     aeAfLocked = true;
     HapticFeedback.mediumImpact();
     _notify();
+    _controlsChanged();
     try {
       await CgStreamer.setAeAfLock(true, x: x, y: y);
     } on PlatformException catch (e) {
@@ -311,6 +376,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> unlockAeAf() async {
     aeAfLocked = false;
     _notify();
+    _controlsChanged();
     try {
       await CgStreamer.setAeAfLock(false);
     } on PlatformException catch (e) {
@@ -322,6 +388,7 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setAutoFocus(bool on) async {
     autoFocus = on;
     _notify();
+    _controlsChanged();
     try {
       await CgStreamer.setAutoFocus(on);
     } on PlatformException catch (e) {
@@ -502,6 +569,8 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
           if (_resumeAfterShow) unawaited(goLive());
           _resumeAfterShow = false;
         }
+      case 'camera.adjust':
+        _applyDirectorAdjust(m);
       case 'error':
         if (m['code'] == 'unauthorized') message = '${m['message']}';
     }
@@ -538,10 +607,11 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
       error: phase == CameraPhase.reconnecting || phase == CameraPhase.error ? message : null,
       micMuted: micMuted,
       inCall: inCall,
+      controls: _controls,
     );
     final json = t.toJson();
     // What matters for the director, without the numbers that change every second.
-    final sig = '${json['state']}|${json['battery']}|${json['charging']}|${json['appState']}|${json['resolution']}|${json['thermal']}|${json['error']}|$micMuted|$inCall';
+    final sig = '${json['state']}|${json['battery']}|${json['charging']}|${json['appState']}|${json['resolution']}|${json['thermal']}|${json['error']}|$micMuted|$inCall|${zoom.toStringAsFixed(2)}|$ev|$autoFocus|$aeAfLocked';
     if (!force && sig == _lastTelemetry) return;
     _lastTelemetry = sig;
     l.send({'type': 'telemetry', 'telemetry': json});
@@ -597,6 +667,8 @@ class CameraSession extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void dispose() {
     _disposed = true;
+    _controlsTimer?.cancel();
+    _zoomAnim?.cancel();
     audioLevel.dispose();
     super.dispose();
   }

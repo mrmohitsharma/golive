@@ -63,6 +63,50 @@ export function enableWs(dir: string): WsSettings {
   return { enabled: true, port: next.server_port, authRequired: true, password };
 }
 
+/**
+ * V9: the scene collection OBS opens (basic/scenes/<name>.json, named in user.ini or global.ini).
+ * Switches in Go Live use OBS's Fade or Slide transition; OBS has Fade built in, Slide is added
+ * here once (OBS must be closed: it rewrites this file when it quits).
+ */
+export function sceneCollectionPath(dir: string): string | null {
+  let name = 'Untitled';
+  for (const ini of ['user.ini', 'global.ini']) {
+    try {
+      const text = fs.readFileSync(path.join(dir, ini), 'utf8');
+      const basic = /^\[Basic\]\s*$([\s\S]*?)(?=^\[|(?![\s\S]))/m.exec(text)?.[1] ?? '';
+      const m = /^SceneCollectionFile=(.+)$/m.exec(basic);
+      if (m) {
+        name = m[1].trim();
+        break;
+      }
+    } catch {
+      /* no such ini */
+    }
+  }
+  const file = path.join(dir, 'basic', 'scenes', `${name}.json`);
+  return fs.existsSync(file) ? file : null;
+}
+
+export function hasSlideTransition(file: string): boolean {
+  try {
+    const j = JSON.parse(fs.readFileSync(file, 'utf8')) as { transitions?: { id?: string; name?: string }[] };
+    return (j.transitions ?? []).some((t) => t.name === 'Slide');
+  } catch {
+    return false;
+  }
+}
+
+/** Adds a "Slide" transition (from the left) to the scene collection. Keeps a .bak copy. */
+export function addSlideTransition(file: string): boolean {
+  const text = fs.readFileSync(file, 'utf8');
+  const j = JSON.parse(text) as { transitions?: unknown[] };
+  if (hasSlideTransition(file)) return false;
+  fs.writeFileSync(file + '.golive.bak', text);
+  j.transitions = [...(Array.isArray(j.transitions) ? j.transitions : []), { name: 'Slide', id: 'slide_transition', settings: { direction: 'left' } }];
+  fs.writeFileSync(file, JSON.stringify(j, null, 4));
+  return true;
+}
+
 const run = (cmd: string, args: string[]) =>
   new Promise<string>((resolve) => execFile(cmd, args, { windowsHide: true, timeout: 10_000 }, (err, out) => resolve(err ? '' : String(out))));
 

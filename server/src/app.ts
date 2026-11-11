@@ -57,6 +57,7 @@ import { registerGiftRoutes } from './routes/gifts.js';
 import { GiftService } from './gift-service.js';
 import { ChannelService } from './channels.js';
 import { registerChannelRoutes } from './routes/channels.js';
+import { registerSwitchingRoutes } from './routes/switching.js';
 import { PrizesService } from './prizes.js';
 import { registerPrizeRoutes } from './routes/prizes.js';
 import { registerReportRoutes } from './routes/reports.js';
@@ -243,6 +244,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
   registerLaptopRoutes(fastify, ctx);
   registerGiftRoutes(fastify, ctx);
   registerChannelRoutes(fastify, ctx);
+  registerSwitchingRoutes(fastify, ctx);
   registerPrizeRoutes(fastify, ctx);
   registerReportRoutes(fastify, ctx);
   registerWebRoutes(fastify, ctx);
@@ -295,6 +297,7 @@ export async function buildApp({ config, db, startBackground = true, fetchImpl, 
     poller.start();
     cloud.start();
     hub.startYoutubePolling();
+    hub.startAutoSwitch();
     billing.start();
     hls.start();
     channels.start();

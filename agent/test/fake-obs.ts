@@ -37,6 +37,10 @@ export class FakeObs implements ObsClient {
     this.em.emit(event, data);
   }
 
+  transitionList = ['Cut', 'Fade'];
+  transition = 'Fade';
+  transitionMs = 300;
+
   itemsIn(scene: string): string[] {
     return this.scenes.get(scene)?.items.map((i) => i.input) ?? [];
   }
@@ -201,6 +205,15 @@ export class FakeObs implements ObsClient {
       case 'StopStream':
         this.streaming = false;
         this.emit('StreamStateChanged', { outputActive: false, outputState: 'OBS_WEBSOCKET_OUTPUT_STOPPED' });
+        return;
+      case 'GetSceneTransitionList':
+        return { currentSceneTransitionName: this.transition, transitions: this.transitionList.map((transitionName) => ({ transitionName })) };
+      case 'SetCurrentSceneTransition':
+        if (!this.transitionList.includes(data.transitionName)) this.err(`No transition was found by the name of \`${data.transitionName}\`.`);
+        this.transition = data.transitionName;
+        return;
+      case 'SetCurrentSceneTransitionDuration':
+        this.transitionMs = data.transitionDuration;
         return;
       case 'SetStreamServiceSettings':
         this.streamService = data;

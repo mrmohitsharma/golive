@@ -97,6 +97,40 @@ describe('ObsController', () => {
     assert.equal(ctl.state.programmeCameraId, 'id-1');
   });
 
+  it('V9: switches use the event transition; Slide falls back to Fade with a warning when OBS has no Slide', async () => {
+    await ctl.sync(config());
+    await ctl.execute('cut', 'id-2', { transition: { name: 'Fade', ms: 500 } });
+    assert.equal(obs.transition, 'Fade');
+    assert.equal(obs.transitionMs, 500);
+    assert.equal(obs.program, 'CG cam-2');
+    // Slide is not in this OBS: still switches, with Fade, and the director is told.
+    await ctl.execute('cut', 'id-1', { transition: { name: 'Slide', ms: 800 } });
+    assert.equal(obs.program, 'CG cam-1');
+    assert.equal(obs.transition, 'Fade');
+    assert.equal(obs.transitionMs, 800);
+    assert.ok(ctl.state.warnings.some((w) => /Slide transition/.test(w)));
+    // Unchanged transition: OBS is not asked again.
+    const before = obs.calls.filter((c) => c.type.startsWith('SetCurrentSceneTransition')).length;
+    await ctl.execute('cut', 'id-2', { transition: { name: 'Slide', ms: 800 } });
+    assert.equal(obs.calls.filter((c) => c.type.startsWith('SetCurrentSceneTransition')).length, before);
+    // A new OBS connection with Slide in it: Slide is used and the warning goes away.
+    obs.transitionList = ['Cut', 'Fade', 'Slide'];
+    await ctl.onConnected();
+    await ctl.execute('take', 'id-1', { transition: { name: 'Slide', ms: 600 } });
+    assert.equal(obs.transition, 'Slide');
+    assert.equal(obs.transitionMs, 600);
+    assert.ok(!ctl.state.warnings.some((w) => /Slide transition/.test(w)));
+  });
+
+  it('V9: a failing transition never blocks the switch', async () => {
+    await ctl.sync(config());
+    obs.transitionList = ['Cut'];
+    await ctl.execute('cut', 'id-2', { transition: { name: 'Slide', ms: 500 } });
+    assert.equal(obs.program, 'CG cam-2');
+    await ctl.execute('cut', 'id-1');
+    assert.equal(obs.program, 'CG cam-1', 'no transition sent (older server): plain switch');
+  });
+
   it('replay plays the clip and returns to the camera when it ends', async () => {
     await ctl.sync(config());
     await ctl.execute('cut', 'id-1');

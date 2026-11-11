@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import type { AgentConfig } from './config.js';
-import { closeObs, enableWs, findObs, launchObs, OBS_DOWNLOAD, obsConfigDir, obsRunning, openUrl, readWsSettings } from './obs-setup.js';
+import { addSlideTransition, closeObs, enableWs, findObs, hasSlideTransition, launchObs, OBS_DOWNLOAD, obsConfigDir, obsRunning, openUrl, readWsSettings, sceneCollectionPath } from './obs-setup.js';
 
 /**
  * The Go Live agent app (Windows / Mac): double-click, and it
@@ -101,6 +101,22 @@ export async function prepareObs(saved: Saved): Promise<{ url: string; password?
   if (!dir) throw new Error('Could not find the OBS settings folder.');
   let ws = readWsSettings(dir);
   const usable = ws && ws.enabled && (!ws.authRequired || ws.password);
+  // V9: the Slide transition for camera switches (added while OBS is closed).
+  const scenes = sceneCollectionPath(dir);
+  const needSlide = Boolean(scenes && !hasSlideTransition(scenes));
+  if (usable && needSlide && saved.obsConsent) {
+    if (await obsRunning()) {
+      say('  Adding the Slide transition to OBS (it closes for a moment)…');
+      if (!(await closeObs())) warn('OBS did not close: switches use Fade until next time.');
+    }
+    if (!(await obsRunning())) {
+      try {
+        if (addSlideTransition(scenes!)) ok('Slide transition added to OBS');
+      } catch (err) {
+        warn(`Could not add the Slide transition: ${(err as Error).message}`);
+      }
+    }
+  }
   if (!usable) {
     if (!saved.obsConsent) {
       say();
@@ -124,6 +140,13 @@ export async function prepareObs(saved: Saved): Promise<{ url: string; password?
     }
     ws = enableWs(dir);
     ok('OBS remote control switched on');
+    if (scenes && needSlide) {
+      try {
+        if (addSlideTransition(scenes)) ok('Slide transition added to OBS');
+      } catch (err) {
+        warn(`Could not add the Slide transition: ${(err as Error).message}`);
+      }
+    }
   } else ok('OBS remote control is on');
   if (!(await obsRunning())) {
     say('  Opening OBS…');
