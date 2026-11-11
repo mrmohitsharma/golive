@@ -238,18 +238,24 @@ describe('auto switch, transitions and remote camera controls', () => {
 
     const offline = await api(h, 'POST', `/api/tournaments/${tid}/cameras/${camC.id}/adjust`, { zoom: 2 }, directorToken);
     assert.equal(offline.status, 409);
-    assert.match(offline.body.error.message, /Cam C/);
+    assert.match(offline.body.error.message, /not connected/);
+    assert.equal((await api(h, 'POST', `/api/tournaments/${tid}/cameras/00000000-0000-4000-8000-000000000001/adjust`, { zoom: 2 }, directorToken)).status, 409, 'not a camera of this event');
     assert.equal((await api(h, 'POST', `/api/tournaments/${tid}/cameras/${camA.id}/adjust`, {}, directorToken)).status, 400);
     assert.equal((await api(h, 'POST', `/api/tournaments/${tid}/cameras/${camA.id}/adjust`, { zoom: 2 }, guestA)).status, 403);
 
     phoneA.send({ type: 'telemetry', telemetry: { state: 'live', controls: { zoom: 2.5, zoomMin: 1, zoomMax: 8, ev: -1, evMin: -4, evMax: 4, evStep: 0.5, autoFocus: true, locked: true, extra: 'x' } } });
-    const cams = await director.next((x) => x.type === 'cameras' && x.cameras.some((c: any) => c.id === camA.id && c.telemetry?.controls?.zoom === 2.5));
-    const ctl = cams.cameras.find((c: any) => c.id === camA.id).telemetry.controls;
+    const msg = await director.next((x) => x.type === 'camera.controls' && x.cameraId === camA.id);
+    const ctl = msg.controls;
+    assert.equal(ctl.zoom, 2.5);
     assert.equal(ctl.locked, true);
     assert.equal(ctl.zoomMax, 8);
     assert.equal(ctl.extra, undefined, 'only known fields');
     // The operator zooms on the phone: the director's slider follows (last change wins).
     phoneA.send({ type: 'telemetry', telemetry: { state: 'live', controls: { zoom: 1.2, zoomMin: 1, zoomMax: 8, ev: -1, evMin: -4, evMax: 4, evStep: 0.5, autoFocus: true, locked: true } } });
-    await director.next((x) => x.type === 'cameras' && x.cameras.some((c: any) => c.id === camA.id && c.telemetry?.controls?.zoom === 1.2));
+    assert.equal((await director.next((x) => x.type === 'camera.controls' && x.cameraId === camA.id)).controls.zoom, 1.2);
+    // Same values again (the 5 s heartbeat): nothing is pushed.
+    director.drain();
+    phoneA.send({ type: 'telemetry', telemetry: { state: 'live', controls: { zoom: 1.2, zoomMin: 1, zoomMax: 8, ev: -1, evMin: -4, evMax: 4, evStep: 0.5, autoFocus: true, locked: true } } });
+    await assert.rejects(director.next((x) => x.type === 'camera.controls', 300));
   });
 });

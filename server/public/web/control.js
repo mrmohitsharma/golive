@@ -133,7 +133,14 @@ export async function render(view, { id }) {
   const adjustBox = el('div', { class: 'cr-adjust' });
   let adjustFor = null, adjustTimer = null, dragging = false, lastLocal = 0;
   const adjustSend = (cid, body) => post(`/api/tournaments/${id}/cameras/${cid}/adjust`, body).catch((e) => toast(e.message, true));
-  const later = (fn) => { lastLocal = Date.now(); clearTimeout(adjustTimer); adjustTimer = setTimeout(fn, 200); };
+  // While a slider moves: the first value goes at once, then one every 250 ms, and always the last.
+  let lastSent = 0;
+  const later = (fn) => {
+    lastLocal = Date.now();
+    clearTimeout(adjustTimer);
+    const wait = Math.max(0, 250 - (Date.now() - lastSent));
+    adjustTimer = setTimeout(() => { lastSent = Date.now(); fn(); }, wait);
+  };
   const zoomToT = (z, c) => Math.round(1000 * Math.log(z / c.zoomMin) / Math.log(c.zoomMax / c.zoomMin));
   const tToZoom = (t, c) => c.zoomMin * Math.pow(c.zoomMax / c.zoomMin, t / 1000);
   const drawAdjust = () => {
@@ -198,8 +205,13 @@ export async function render(view, { id }) {
     swNow.replaceChildren(sw.nextCameraId ? el('span', {}, 'Next: ', el('b', { text: camName(sw.nextCameraId) }), left != null ? ` in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '')
       : el('span', { class: 'muted', text: 'Needs another camera that is live' }));
   };
+  let switchSig = '';
   const drawSwitch = () => {
     const sw = s.switching;
+    const slideWarn = (s.engine?.warnings ?? []).some((w) => /Slide transition/.test(w));
+    const sig = JSON.stringify([sw?.auto, sw?.transition, slideWarn, cams().map((c) => c.id + c.name)]);
+    if (sig === switchSig) { drawSwitchNow(); return; }
+    switchSig = sig;
     if (!sw) { switchBar.replaceChildren(); return; }
     const a = sw.auto, tr = sw.transition;
     const presets = [15, 30, 60, 120, 300, 600];
@@ -221,7 +233,7 @@ export async function render(view, { id }) {
       el('option', { value: 'main', selected: a.mode === 'main' || undefined, text: 'Main camera + others' }));
     const main = a.mode === 'main' ? el('select', { style: 'width:auto', 'aria-label': 'Main camera', onchange: (e) => swPatch({ auto: { mainCameraId: e.target.value || null } }) },
       el('option', { value: '', text: 'Main camera…' }), cams().map((c) => el('option', { value: c.id, selected: c.id === a.mainCameraId || undefined, text: c.name }))) : null;
-    const slideMissing = (s.engine?.warnings ?? []).some((w) => /Slide transition/.test(w));
+    const slideMissing = slideWarn;
     switchBar.replaceChildren(
       el('div', { class: 'row', style: 'flex-wrap:wrap;gap:8px' },
         el('button', { class: 'btn small ' + (a.on ? 'primary' : ''), 'data-tour': 'auto-switch', onclick: () => {
@@ -424,6 +436,7 @@ export async function render(view, { id }) {
     switch (m.type) {
       case 'snapshot': s = { ...s, ...m }; drawAll(); break;
       case 'switching': s.switching = m.switching ?? m; drawSwitch(); break;
+      case 'camera.controls': { const c = cams().find((x) => x.id === m.cameraId); if (c?.telemetry) { c.telemetry.controls = m.controls; if (c.id === s.engine?.previewCameraId) drawAdjust(); } break; }
       case 'cameras': { const before = (s.commentators ?? []).map((c) => c.id + c.online).join(); s.cameras = m.cameras; s.commentators = m.commentators; drawMonitors(); drawGrid(); drawAdjust(); if (tab === 'Audio' && before !== (m.commentators ?? []).map((c) => c.id + c.online).join()) drawSide(); break; }
       case 'engine': s.engine = m.engine ?? m; drawStatus(); drawMonitors(); drawGrid(); drawIdle(); drawAdjust(); drawSwitch(); break;
       case 'outputs': s.outputs = m.outputs ?? m; drawStatus(); break;

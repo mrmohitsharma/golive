@@ -205,19 +205,21 @@ export class Hub {
   }
 
   /** What the control room shows: settings, when the next automatic switch happens and to which camera. */
-  async switchingView(tid: string) {
+  async switchingView(tid: string, known?: CameraRow[]) {
     const sw = await this.switching(tid);
     const l = this.liveFor(tid);
     let next: string | null = null;
     if (sw.auto.on) {
-      const cams = await this.repo.camerasForTournament(tid);
+      const cams = known ?? (await this.repo.camerasForTournament(tid));
       next = nextCamera(cams.filter((c) => this.usableForAir(tid, c)), l.engine.programmeCameraId, sw.auto, l.autoLastOther);
     }
     return { ...sw, nextAt: sw.auto.on ? new Date(l.lastSwitchAt + sw.auto.everySec * 1000).toISOString() : null, nextCameraId: next, running: sw.auto.on && this.autoReady(tid) };
   }
 
-  private pushSwitching(tid: string): void {
-    void this.switchingView(tid)
+  /** Sent only when a director is watching (saves the camera read otherwise). */
+  private pushSwitching(tid: string, cams?: CameraRow[]): void {
+    if (!this.hasClients(tid, 'direct')) return;
+    void this.switchingView(tid, cams)
       .then((v) => this.toTournament(tid, { type: 'switching', switching: v }, 'direct'))
       .catch(() => {});
   }
@@ -252,7 +254,7 @@ export class Hub {
       if (r.ok) {
         l.lastSwitchAt = now;
         if (sw.auto.mode === 'main' && next.id !== sw.auto.mainCameraId) l.autoLastOther = next.id;
-        this.pushSwitching(tid);
+        this.pushSwitching(tid, cams);
       }
     }
   }
@@ -512,6 +514,11 @@ export class Hub {
   }
 
   /** Sends to subscribed (non-engine) clients of a tournament whose role has `cap`. */
+  private hasClients(tournamentId: string, cap: Capability): boolean {
+    for (const c of this.clients) if (c.tournamentId === tournamentId && !c.isEngine && !c.cameraId && can(c.role, cap)) return true;
+    return false;
+  }
+
   toTournament(tournamentId: string, msg: object, cap: Capability = 'watch'): void {
     const data = JSON.stringify(msg);
     for (const c of this.clients) {
@@ -584,8 +591,11 @@ export class Hub {
         const call = t.inCall === true && before?.inCall !== true;
         const paused = t.state === 'paused' && before?.state !== 'paused';
         if (call || paused) await this.cameraInterrupted(client.tournamentId, client.cameraId, call ? 'call' : 'paused');
-        if (call || paused || (t.micMuted ?? false) !== (before?.micMuted ?? false) || (t.inCall ?? false) !== (before?.inCall ?? false) || JSON.stringify(t.controls ?? null) !== JSON.stringify(before?.controls ?? null)) {
+        if (call || paused || (t.micMuted ?? false) !== (before?.micMuted ?? false) || (t.inCall ?? false) !== (before?.inCall ?? false)) {
           await this.pushCameras(client.tournamentId).catch(() => {});
+        } else if (t.controls && !sameControls(t.controls, before?.controls)) {
+          // Zoom / brightness / focus moved on the phone: just that, no camera list rebuild.
+          this.toTournament(client.tournamentId, { type: 'camera.controls', cameraId: client.cameraId, controls: t.controls }, 'direct');
         }
         return;
       }
@@ -1158,4 +1168,9 @@ function sanitizeControls(raw: unknown): CameraTelemetry['controls'] {
     autoFocus: typeof c.autoFocus === 'boolean' ? c.autoFocus : true,
     locked: typeof c.locked === 'boolean' ? c.locked : false,
   };
+}
+
+function sameControls(a: CameraTelemetry['controls'], b: CameraTelemetry['controls'] | undefined): boolean {
+  if (!a || !b) return a === (b ?? null);
+  return a.zoom === b.zoom && a.ev === b.ev && a.autoFocus === b.autoFocus && a.locked === b.locked && a.zoomMin === b.zoomMin && a.zoomMax === b.zoomMax && a.evMin === b.evMin && a.evMax === b.evMax && a.evStep === b.evStep;
 }

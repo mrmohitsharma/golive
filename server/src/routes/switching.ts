@@ -40,11 +40,11 @@ export function registerSwitchingRoutes(app: FastifyInstance, ctx: Ctx) {
   /** Zoom (×), brightness (exposure steps) or focus (auto / lock) on one camera phone. */
   app.post('/api/tournaments/:id/cameras/:cid/adjust', { preHandler: any, config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (req) => {
     const { t } = await requireTournament(repo, req.principal!, pid(req), 'direct');
-    const cam = await repo.cameraById(pid(req, 'cid'));
-    if (!cam || cam.tournament_id !== t.id) throw new HttpError(404, 'camera_not_found', 'Camera not found.');
+    const cid = pid(req, 'cid');
     const b = z.object({ zoom: z.number().min(0.1).max(200).optional(), ev: z.number().min(-20).max(20).optional(), focus: z.enum(['auto', 'lock']).optional() }).parse(req.body);
     if (b.zoom == null && b.ev == null && !b.focus) throw new HttpError(400, 'nothing_to_change', 'Send zoom, ev or focus.');
-    if (!hub.adjustCamera(t.id, cam.id, b)) throw new HttpError(409, 'camera_offline', `${cam.name} is not connected to the app right now.`);
+    // No camera read: the hub only reaches a phone joined to this camera in this event.
+    if (!hub.adjustCamera(t.id, cid, b)) throw new HttpError(409, 'camera_offline', 'This camera is not connected to the app right now.');
     return { ok: true };
   });
 }

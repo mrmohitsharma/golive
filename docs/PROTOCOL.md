@@ -185,6 +185,7 @@ Who receives what depends on capability: **direct** (owner, director), **watch**
 | `meters` | direct | `levels {obsInputName: peak dBFS}` ~4×/s |
 | `clip` | direct | clip object on create and on each status change (`queued → processing → ready|failed`) |
 | `alert` | direct | `level`, `message`, `at` |
+| `camera.controls` | direct | V9 `cameraId`, `controls`: a phone's zoom / brightness / focus changed (sent alone, without rebuilding the camera list) |
 | `switching` | direct | V9 switching view (`auto`, `transition`, `nextAt`, `nextCameraId`, `running`) after a change and after each switch while auto is on |
 | `command.result` | sender | `requestId`, `action`, `ok`, `error?` |
 
