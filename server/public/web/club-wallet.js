@@ -16,14 +16,16 @@ export async function render(view) {
   const org = state.orgs.find((o) => o.id === id);
   const owner = org?.role === 'owner' || state.me.platformAdmin;
   const [b, inv] = await Promise.all([get(`/api/orgs/${id}/billing`), owner ? get(`/api/orgs/${id}/invoices`).catch(() => ({ invoices: [] })) : { invoices: [] }]);
+  const gstOn = b.gst && !b.gst.included && b.gst.rate > 0;
   const buy = (pack) => guard(async () => {
-    const v = await dialog({ title: `Buy ${num(pack.credits)} credits`, text: `${pack.label}: ${inr(pack.priceInr)}. You pay on Cashfree (UPI, cards, net banking).`, ok: 'Continue to payment', fields: [
+    const total = gstOn ? Math.round(pack.priceInr * (100 + b.gst.rate)) / 100 : pack.priceInr;
+    const v = await dialog({ title: `Buy ${num(pack.credits)} credits`, text: gstOn ? `${pack.label}: ${inr(pack.priceInr)} + ${b.gst.rate}% GST = ${inr(total)}. You pay on Cashfree (UPI, cards, net banking).` : `${pack.label}: ${inr(pack.priceInr)} (GST included). You pay on Cashfree (UPI, cards, net banking).`, ok: 'Continue to payment', fields: [
       { name: 'phone', label: 'Mobile number for the receipt', value: b.details?.phone ?? '', required: !b.details?.phone, placeholder: '98123 45678' },
       { name: 'coupon', label: 'Coupon code (optional)' }] });
     if (!v) return;
     if (v.coupon) {
       const q = await post(`/api/orgs/${id}/billing/coupon`, { packId: pack.id, coupon: v.coupon });
-      toast(`Coupon applied: pay ${inr(q.amountInr)}${q.bonusCredits ? `, +${num(q.bonusCredits)} bonus credits` : ''}`);
+      toast(`Coupon applied: pay ${inr(q.amountInr)}${q.gstIncluded ? '' : ` incl. ${q.gstRate}% GST`}${q.bonusCredits ? `, +${num(q.bonusCredits)} bonus credits` : ''}`);
     }
     const r = await post(`/api/orgs/${id}/billing/checkout`, { packId: pack.id, phone: v.phone || undefined, coupon: v.coupon || null, returnTo: '/web/wallet' });
     location.href = r.checkoutUrl;
@@ -36,8 +38,8 @@ export async function render(view) {
     el('h2', { text: 'Buy credits' }),
     !b.enabled ? el('p', { class: 'muted', text: 'Billing is off on this server: everything is free.' })
     : !b.paymentsEnabled ? el('div', { class: 'banner warn', text: 'Online payment is not available yet. Contact Go Live support to add credits.' })
-    : el('div', { class: 'grid' }, b.packs.map((k) => el('div', { class: 'card' }, el('div', { class: 'small muted', text: k.label }), el('div', { style: 'font-size:24px;font-weight:800', text: inr(k.priceInr) }),
-        el('div', { class: 'small', text: `${num(k.credits)} credits` }), el('button', { class: 'btn primary small', style: 'margin-top:10px', onclick: buy(k), text: 'Buy' })))),
+    : el('div', { class: 'grid' }, b.packs.map((k) => el('div', { class: 'card' }, el('div', { class: 'small muted', text: k.label }), el('div', { style: 'font-size:24px;font-weight:800', text: inr(k.priceInr) + (gstOn ? ' + GST' : '') }),
+        el('div', { class: 'small', text: `${num(k.credits)} credits${gstOn ? ` · ${inr(Math.round(k.priceInr * (100 + b.gst.rate)) / 100)} with ${b.gst.rate}% GST` : ' · GST included'}` }), el('button', { class: 'btn primary small', style: 'margin-top:10px', onclick: buy(k), text: 'Buy' })))),
     el('h2', { text: 'History' }),
     table(['When', 'What', 'Event', { t: 'Qty', n: true }, { t: 'Credits', n: true }, 'Note'], b.transactions.map((t) => [when(t.at), TX_LABELS[t.kind] ?? t.kind, t.tournamentName ?? '–', t.quantity ?? '',
       el('span', { style: `color:${t.credits < 0 ? 'var(--bad)' : '#7ee0a6'}`, text: num(t.credits) }), t.note ?? '']), { empty: 'No activity yet.' }),

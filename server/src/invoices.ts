@@ -26,7 +26,7 @@ export const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   stateCode: '06',
   sac: '998439',
   gstRate: 18,
-  pricesIncludeGst: true,
+  pricesIncludeGst: false, // prices on the website are plus GST, added at checkout
   prefix: 'GL',
   email: null,
 };
@@ -125,7 +125,8 @@ export class InvoiceService {
       const p = (await q.query('SELECT * FROM payments WHERE id = $1 AND status = $2', [paymentId, 'paid'])).rows[0];
       if (!p) return null;
       const buyer = await this.buyer(q, p.org_id);
-      const g = gstSplit(Number(p.amount_inr), s, buyer.stateCode);
+      // amount_inr is what the customer paid, GST included (added at checkout when prices are plus GST).
+      const g = gstSplit(Number(p.amount_inr), { ...s, pricesIncludeGst: true }, buyer.stateCode);
       const at = p.paid_at ?? new Date();
       const number = await this.nextNumber(q, s, 'invoice', at);
       const credits = Number(p.credits_cc) / 100;

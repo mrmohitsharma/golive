@@ -73,6 +73,8 @@ describe('billing: free allowance, extra cameras, live minutes, credits, Cashfre
       cashfreeFetch: cf.fetchImpl,
       billingClock: () => now,
     });
+    // These tests use prices that include GST; the plus-GST checkout has its own test (gst-checkout).
+    await h.db.query('UPDATE platform_settings SET invoice = $1 WHERE id', [JSON.stringify({ pricesIncludeGst: true })]);
     const a = await signup(h, 'staff@cogolfers.test', 'CoGolfers');
     await h.db.query('UPDATE users SET is_platform_admin = true WHERE id = $1', [a.userId]);
     adminToken = a.token;

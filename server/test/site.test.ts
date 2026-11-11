@@ -23,7 +23,7 @@ describe('public website, legal pages and data-retention duties', () => {
   after(async () => h.close());
 
   it('serves every page with the brand filled in and no template tokens left', async () => {
-    for (const path of ['/', '/signup', '/login', '/account', '/terms', '/privacy', '/delete-account']) {
+    for (const path of ['/', '/signup', '/login', '/account', '/terms', '/privacy', '/delete-account', '/contact', '/refunds', '/shipping', '/features']) {
       const res = await fetch(h.baseUrl + path);
       assert.equal(res.status, 200, path);
       assert.match(res.headers.get('content-type') ?? '', /text\/html/);
@@ -38,7 +38,26 @@ describe('public website, legal pages and data-retention duties', () => {
     const privacy = await (await fetch(h.baseUrl + '/privacy')).text();
     assert.ok(privacy.includes('Test Media Pvt Ltd'));
     assert.ok(privacy.includes('help@test.example'));
-    assert.ok(privacy.includes('[Registered address: set LEGAL_ADDRESS]'));
+    assert.ok(privacy.includes('A402, Sector 6, Gurgaon, Haryana 122103, India'), 'the registered address is the default');
+    assert.ok(privacy.includes('[Grievance Officer name: set GRIEVANCE_OFFICER]'));
+  });
+
+  it('has the pages payment gateways check: contact, refunds and cancellations, shipping, INR prices', async () => {
+    const contact = await (await fetch(h.baseUrl + '/contact')).text();
+    for (const must of ['Test Media Pvt Ltd', 'A402, Sector 6, Gurgaon', 'help@test.example', 'Monday to Friday, 10 am to 7 pm IST', 'href="/support"']) assert.ok(contact.includes(must), `contact has ${must}`);
+    assert.ok(!contact.includes('Phone and WhatsApp'), 'no phone line without SUPPORT_PHONE');
+    const refunds = await (await fetch(h.baseUrl + '/refunds')).text();
+    for (const must of ['7 to 10 working days', 'Unused credits', 'Cancelling', 'Cashfree']) assert.ok(refunds.includes(must), `refunds has ${must}`);
+    assert.match(await (await fetch(h.baseUrl + '/shipping')).text(), /delivered electronically/);
+    for (const [from, to] of [['/contact-us', '/contact'], ['/refund-policy', '/refunds'], ['/cancellation-policy', '/refunds'], ['/shipping-policy', '/shipping']]) {
+      const r = await fetch(h.baseUrl + from, { redirect: 'manual' });
+      assert.equal(r.headers.get('location'), to);
+    }
+    const home = await (await fetch(h.baseUrl + '/')).text();
+    for (const link of ['href="/contact"', 'href="/refunds"', 'href="/shipping"', 'href="/terms"']) assert.ok(home.includes(link), `footer links ${link}`);
+    assert.ok(home.includes('All prices are in Indian rupees (INR)'));
+    const pr = await (await fetch(h.baseUrl + '/api/public/pricing')).json();
+    assert.deepEqual(pr.gst, { rate: 18, included: false });
   });
 
   it('privacy policy carries what Google OAuth verification checks for', async () => {

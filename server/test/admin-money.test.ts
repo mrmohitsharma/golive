@@ -54,6 +54,8 @@ describe('V7 money: gateway from admin, transactions, refunds, coupons, GST invo
   before(async () => {
     // No Cashfree keys in the server config: they are set from the admin panel.
     h = await startHarness({ env: { BILLING_ENABLED: 'true', CASHFREE_API_BASE: 'https://cf.fake/pg' }, cashfreeFetch: cf.fetchImpl });
+    // These tests use prices that include GST; the plus-GST checkout has its own test (gst-checkout).
+    await h.db.query('UPDATE platform_settings SET invoice = $1 WHERE id', [JSON.stringify({ pricesIncludeGst: true })]);
     admin = await signup(h, 'boss@golive.test', 'Go Live HQ');
     await h.db.query('UPDATE users SET is_platform_admin = true WHERE id = $1', [admin.userId]);
     owner = await signup(h, 'rahul@dlf.test', 'DLF Golf Club');
@@ -128,9 +130,9 @@ describe('V7 money: gateway from admin, transactions, refunds, coupons, GST invo
 
   it('GST invoices: settings, backfill, numbering, club access, printable page, register CSV', async () => {
     assert.equal((await api(h, 'POST', '/api/admin/invoices/backfill', {}, admin.token)).body.error.code, 'invoices_off');
-    const bad = await api(h, 'PUT', '/api/admin/invoice-settings', { ...DEFAULT_INVOICE_SETTINGS, enabled: true, legalName: 'Go Live Media Pvt Ltd', address: 'Gurugram', gstin: '07ABCDE1234F1Z5', stateCode: '06' }, admin.token);
+    const bad = await api(h, 'PUT', '/api/admin/invoice-settings', { ...DEFAULT_INVOICE_SETTINGS, pricesIncludeGst: true, enabled: true, legalName: 'Go Live Media Pvt Ltd', address: 'Gurugram', gstin: '07ABCDE1234F1Z5', stateCode: '06' }, admin.token);
     assert.equal(bad.body.error.code, 'state_mismatch');
-    await expectOk(api(h, 'PUT', '/api/admin/invoice-settings', { ...DEFAULT_INVOICE_SETTINGS, enabled: true, legalName: 'Go Live Media Pvt Ltd', address: 'Sector 44\nGurugram, Haryana', gstin: '06ABCDE1234F1Z5', stateCode: '06', email: 'billing@golive.test' }, admin.token));
+    await expectOk(api(h, 'PUT', '/api/admin/invoice-settings', { ...DEFAULT_INVOICE_SETTINGS, pricesIncludeGst: true, enabled: true, legalName: 'Go Live Media Pvt Ltd', address: 'Sector 44\nGurugram, Haryana', gstin: '06ABCDE1234F1Z5', stateCode: '06', email: 'billing@golive.test' }, admin.token));
     assert.equal((await expectOk(api(h, 'POST', '/api/admin/invoices/backfill', {}, admin.token))).created, 3);
     assert.equal((await expectOk(api(h, 'POST', '/api/admin/invoices/backfill', {}, admin.token))).created, 0, 'once each');
     // New payments get an invoice straight away; a club with a Delhi GSTIN pays IGST.

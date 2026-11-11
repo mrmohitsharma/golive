@@ -51,6 +51,7 @@ export function registerBillingRoutes(app: FastifyInstance, ctx: Ctx) {
       freeViewerMinutes: Math.floor(Number(b.free_viewer_sec ?? 0) / 60),
       pricing,
       packs,
+      gst: await payments.gstMode(),
       paymentsEnabled: payments.enabled,
       suspended: b.suspended,
       suspendedReason: b.suspended_reason,
@@ -109,7 +110,7 @@ export function registerBillingRoutes(app: FastifyInstance, ctx: Ctx) {
     await requireOrg(repo, req.principal!, orgId, 'create');
     const body = z.object({ packId: z.string().min(1).max(32), coupon: z.string().trim().min(1).max(40) }).parse(req.body);
     const q = await payments.quote(orgId, body.packId, body.coupon);
-    return { listInr: q.listInr, amountInr: q.amountInr, discountInr: q.discountInr, credits: q.credits, bonusCredits: q.bonusCredits, description: q.coupon?.description ?? null };
+    return { listInr: q.listInr, amountInr: q.amountInr, netInr: q.netInr, gstInr: q.gstInr, gstRate: q.gstRate, gstIncluded: q.gstIncluded, discountInr: q.discountInr, credits: q.credits, bonusCredits: q.bonusCredits, description: q.coupon?.description ?? null };
   });
 
   /** GST invoices and credit notes of the club (owners). */
@@ -156,7 +157,9 @@ export function registerBillingRoutes(app: FastifyInstance, ctx: Ctx) {
     const p = await payments.byId(idParam(req));
     if (!p) return page(reply.status(404), 'Payment', '<h1>Payment not found</h1>');
     const org = await repo.orgById(p.org_id);
-    const summary = `<h1>Buy credits</h1><div class="sub">${esc(org?.name ?? '')}</div><div class="amt">₹${Number(p.amount_inr).toLocaleString('en-IN')}</div><div class="sub">${fromCc(p.credits_cc).toLocaleString('en-IN')} credits</div>`;
+    const g = await payments.gstMode();
+    const gstNote = g.included ? `Includes ${g.rate}% GST` : `Includes ${g.rate}% GST added to the pack price`;
+    const summary = `<h1>Buy credits</h1><div class="sub">${esc(org?.name ?? '')}</div><div class="amt">₹${Number(p.amount_inr).toLocaleString('en-IN')}</div><div class="sub">${fromCc(p.credits_cc).toLocaleString('en-IN')} credits · ${gstNote}</div>`;
     if (p.status === 'paid') return page(reply, 'Paid', `${summary}<p class="ok">Already paid. You can close this page.</p>`);
     if (p.status !== 'created' || !p.session_id) return page(reply, 'Payment', `${summary}<p class="bad">This payment link has expired. Start again from the app.</p>`);
     const mode = payments.mode;

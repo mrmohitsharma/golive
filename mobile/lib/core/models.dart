@@ -1430,6 +1430,8 @@ class OrgBilling {
     this.suspendedReason,
     this.details,
     this.transactions = const [],
+    this.gstRate = 18,
+    this.gstIncluded = true,
   });
   final bool enabled;
   final double balance;
@@ -1443,6 +1445,13 @@ class OrgBilling {
   final BillingDetails? details;
   final List<WalletTx> transactions;
 
+  /// GST on credit packs: included in the price, or added on top at checkout.
+  final double gstRate;
+  final bool gstIncluded;
+
+  /// What the customer pays for a pack, GST included.
+  double payInr(CreditPack p) => gstIncluded ? p.priceInr : (p.priceInr * (100 + gstRate)).roundToDouble() / 100;
+
   factory OrgBilling.fromJson(Map<String, dynamic> j) => OrgBilling(
         enabled: (j['enabled'] as bool?) ?? false,
         balance: _d(j['balance']),
@@ -1453,6 +1462,8 @@ class OrgBilling {
         suspendedReason: j['suspendedReason'] as String?,
         details: j['details'] is Map<String, dynamic> ? BillingDetails.fromJson(j['details'] as Map<String, dynamic>) : null,
         transactions: ((j['transactions'] as List?) ?? const []).map((t) => WalletTx.fromJson(t as Map<String, dynamic>)).toList(),
+        gstRate: j['gst'] is Map ? _d((j['gst'] as Map)['rate']) : 18,
+        gstIncluded: j['gst'] is Map ? ((j['gst'] as Map)['included'] as bool? ?? true) : true,
       );
 }
 

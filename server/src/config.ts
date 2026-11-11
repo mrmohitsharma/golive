@@ -33,15 +33,18 @@ const schema = z.object({
   // Public website (/, /signup, /login, /account, /terms, /privacy, /delete-account).
   // The legal pages show these; Google and Meta app reviews check them, so fill them in.
   BRAND_NAME: z.string().default('Go Live'),
-  SUPPORT_EMAIL: optional,
+  SUPPORT_EMAIL: z.string().default('support@gogetslive.com'),
+  // Contact page and policies (payment gateway reviews check these). Phone is optional.
+  SUPPORT_PHONE: optional,
+  SUPPORT_HOURS: z.string().default('Monday to Friday, 10 am to 7 pm IST'),
   // Where the Go Live agent apps (Windows, Mac) are downloaded from: GitHub release assets built by
   // .github/workflows/agent-apps.yml. Point it elsewhere to host the files yourself.
   AGENT_DOWNLOAD_BASE: z.string().default('https://github.com/mrmohitsharma/golive/releases/download/agent-latest'),
-  LEGAL_ENTITY: optional, // registered company name, e.g. "Example Media Pvt Ltd"
-  LEGAL_ADDRESS: optional, // registered office address
+  LEGAL_ENTITY: z.string().default('S.R Fairway Ventures'), // registered business name
+  LEGAL_ADDRESS: z.string().default('A402, Sector 6, Gurgaon, Haryana 122103, India'), // registered office address
   LEGAL_JURISDICTION: z.string().default('Gurugram, Haryana'),
   GRIEVANCE_OFFICER: optional, // name of the Grievance Officer (IT Rules 2021 / DPDP Act 2023)
-  LEGAL_UPDATED: z.string().default('27 October 2026'),
+  LEGAL_UPDATED: z.string().default('11 November 2026'),
   PLAY_STORE_URL: optional,
   APP_STORE_URL: optional,
   // Join links open the app (onboarding P1-9). Android App Links: the package and the SHA-256

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact us | {{BRAND}}</title>
+<meta name="description" content="How to reach {{BRAND}}: email, support hours, registered address and support form.">
+<meta name="theme-color" content="#0f1a28">
+<link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/site/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/site/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/site/site.css">
+</head>
+<body>
+{{> header}}
+<main id="main" class="legal">
+  <div class="wrap">
+    <nav class="legal-toc" aria-label="Contents">
+      <ol>
+        <li><a href="#reach">Reach us</a></li>
+        <li><a href="#business">Business details</a></li>
+        <li><a href="#urgent">During a live event</a></li>
+        <li><a href="#payments">Payments and refunds</a></li>
+        <li><a href="#grievance">Grievances</a></li>
+      </ol>
+    </nav>
+    <article>
+      <h1>Contact us</h1>
+      <p class="updated">We usually reply within one working day.</p>
+
+      <h2 id="reach">Reach us</h2>
+      <dl class="contact-list">
+        <dt>Email</dt><dd><a href="mailto:{{EMAIL}}">{{EMAIL}}</a></dd>
+        {{PHONE_ROW}}
+        <dt>Support hours</dt><dd>{{HOURS}}</dd>
+        <dt>Support form</dt><dd><a href="/support">Open a support request</a>: track it and add screenshots</dd>
+      </dl>
+
+      <h2 id="business">Business details</h2>
+      <dl class="contact-list">
+        <dt>Business name</dt><dd>{{ENTITY}}</dd>
+        <dt>Registered address</dt><dd>{{ADDRESS}}</dd>
+        <dt>Service</dt><dd>{{BRAND}} ({{DOMAIN}}): multi-camera live streaming from phones, sold as prepaid credits</dd>
+      </dl>
+
+      <h2 id="urgent">During a live event</h2>
+      <p>If something goes wrong while you are live, open a <a href="/support">support request</a> and choose <strong>Urgent</strong>. Urgent requests are watched during and outside support hours while events are on air.</p>
+
+      <h2 id="payments">Payments and refunds</h2>
+      <p>For a payment that went through without credits being added, or any refund question, email <a href="mailto:{{EMAIL}}">{{EMAIL}}</a> with your club name and the order number from your receipt. See our <a href="/refunds">Refunds and cancellations policy</a>.</p>
+
+      <h2 id="grievance">Grievances</h2>
+      <p>Complaints about content on the Service or about our terms can be sent to our Grievance Officer: {{GRIEVANCE}}, {{ENTITY}}, {{ADDRESS}}, <a href="mailto:{{EMAIL}}">{{EMAIL}}</a>. We acknowledge complaints within 24 hours and aim to resolve them within 15 days.</p>
+    </article>
+  </div>
+</main>
+{{> footer}}
+</body>
+</html>

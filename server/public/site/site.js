@@ -339,8 +339,10 @@
   });
 
   // ---------------------------------------------------------------- prices
-  var P = { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5, viewerMinutePrice: 0.01, welcomeViewerMinutes: 100 };
+  var P = { freeCameras: 2, freeMinutes: 10, cameraPrice: 100, minutePrice: 5, viewerMinutePrice: 0.01, welcomeViewerMinutes: 100, brandingPrice: 100, tickerPrice: 0 };
   var inrPerCredit = 1;
+  var GST = { rate: 18, included: false };
+  var rupees = function (n) { return n > 0 && n < 1 ? '₹' + String(+Number(n).toFixed(2)) : '₹' + (Math.round(n * 100) / 100).toLocaleString('en-IN'); };
   function oursCredits(cams, hours) {
     return Math.max(0, cams - P.freeCameras) * P.cameraPrice + Math.max(0, hours * 60 - P.freeMinutes) * P.minutePrice;
   }
@@ -355,17 +357,31 @@
       if (body) {
         body.replaceChildren.apply(body, packs.map(function (p) {
           var tr = document.createElement('tr');
-          [p.label, inr(p.priceInr), num(p.credits)].forEach(function (v) { var td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+          var cells = [p.label, inr(p.priceInr) + (GST.included ? '' : ' + GST')];
+          if (!GST.included) cells.push(rupees(Math.round(p.priceInr * (100 + GST.rate)) / 100));
+          cells.push(num(p.credits));
+          cells.forEach(function (v) { var td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
           return tr;
         }));
       }
       // The dearest rate per credit, so the website never understates the cost.
       inrPerCredit = Math.max.apply(null, packs.map(function (p) { return p.priceInr / p.credits; }));
     }
+    // Rupee equivalents of credit prices (at 1 credit = ₹1, the Starter pack rate).
+    document.querySelectorAll('[data-pi]').forEach(function (n) {
+      var v = P[n.getAttribute('data-pi')];
+      n.textContent = v != null ? rupees(v * inrPerCredit) : '';
+    });
+    document.querySelectorAll('[data-free]').forEach(function (n) {
+      if (!(P[n.getAttribute('data-free')] > 0)) n.textContent = 'Free';
+    });
+    document.querySelectorAll('.gst-col').forEach(function (n) { n.hidden = GST.included; n.textContent = 'With ' + GST.rate + '% GST'; });
+    var gn = document.getElementById('gst-note');
+    if (gn) gn.textContent = GST.included ? 'Prices include ' + GST.rate + '% GST.' : 'Prices are plus ' + GST.rate + '% GST, added at checkout.';
     var ex = document.getElementById('example');
     if (ex) {
       var c = oursCredits(4, 3);
-      ex.textContent = 'Example: a 3-hour show with 4 cameras uses ' + num(c) + ' credits, about ' + inr(c * inrPerCredit) + '.';
+      ex.textContent = 'Example: a 3-hour show with 4 cameras uses ' + num(c) + ' credits, about ' + inr(c * inrPerCredit) + (GST.included ? ' including GST.' : ' plus GST.');
     }
   }
 
@@ -442,6 +458,7 @@
   fetch('/api/public/pricing').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
     if (!d || !d.pricing) return;
     P = d.pricing;
+    if (d.gst) GST = d.gst;
     fillPrices(d.packs);
     update();
   }).catch(function () {});

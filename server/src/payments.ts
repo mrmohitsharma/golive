@@ -259,8 +259,29 @@ export class PaymentsService {
     const { packs } = await this.billing.settings();
     const pack = packs.find((p) => p.id === packId);
     if (!pack) throw new HttpError(404, 'pack_not_found', 'That credit pack is no longer offered. Refresh and pick again.');
-    const out = { pack, listInr: pack.priceInr, amountInr: pack.priceInr, discountInr: 0, credits: pack.credits, bonusCredits: 0, coupon: null as CouponRow | null };
-    if (!code) return out;
+    const out = { pack, listInr: pack.priceInr, amountInr: pack.priceInr, discountInr: 0, credits: pack.credits, bonusCredits: 0, coupon: null as CouponRow | null, netInr: pack.priceInr, gstInr: 0, gstRate: 0, gstIncluded: true };
+    if (code) await this.applyCoupon(out, orgId, code);
+    // Prices plus GST (Admin > Money > Invoices): the customer pays the pack price (after any
+    // discount) plus GST; the invoice then splits exactly what was paid.
+    const g = await this.gstMode();
+    out.netInr = out.amountInr;
+    out.gstRate = g.rate;
+    out.gstIncluded = g.included;
+    if (!g.included && g.rate > 0) {
+      out.gstInr = Math.round(out.netInr * g.rate) / 100;
+      out.amountInr = Math.round((out.netInr + out.gstInr) * 100) / 100;
+    }
+    return out;
+  }
+
+  /** GST on credit packs: included in the price (default), or added on top at checkout. */
+  async gstMode(): Promise<{ rate: number; included: boolean }> {
+    const s = this.invoices ? await this.invoices.settings() : null;
+    return { rate: s?.gstRate ?? 18, included: s ? s.pricesIncludeGst : true };
+  }
+
+  private async applyCoupon(out: { pack: { priceInr: number }; amountInr: number; discountInr: number; bonusCredits: number; coupon: CouponRow | null }, orgId: string, code: string) {
+    const pack = out.pack;
     const c = (await this.repo.db.query<CouponRow>('SELECT * FROM coupons WHERE code = $1', [code.trim().toUpperCase()])).rows[0];
     const bad = (m: string) => new HttpError(400, 'coupon_invalid', m);
     if (!c || !c.active) throw bad('That coupon code is not valid.');
@@ -278,7 +299,6 @@ export class PaymentsService {
       out.amountInr = Math.max(1, Math.round((pack.priceInr - out.discountInr) * 100) / 100);
       out.discountInr = Math.round((pack.priceInr - out.amountInr) * 100) / 100;
     } else out.bonusCredits = Number(c.value);
-    return out;
   }
 
   async checkout(orgId: string, user: { id: string; email: string; name: string }, packId: string, phone: string, couponCode?: string | null, returnPath?: string | null): Promise<{ payment: PaymentRow; checkoutUrl: string }> {

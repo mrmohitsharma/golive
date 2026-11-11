@@ -692,3 +692,7 @@ input[type='range'] { width: 100%; accent-color: var(--tally); height: 28px; }
 @keyframes fx-float { 50% { translate: 0 -10px; border-color: rgba(238, 59, 47, .6); } }
 @media (max-width: 900px) { .fx-hero-grid { grid-template-columns: 1fr; } .fx-hero-art { display: none; } }
 @media (prefers-reduced-motion: reduce) { .fx-orbit, .fx-orbit span { animation: none; } }
+.contact-list { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px 20px; margin: 0 0 8px; }
+.contact-list dt { color: var(--muted); }
+.contact-list dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .contact-list { grid-template-columns: 1fr; gap: 2px; } .contact-list dd { margin-bottom: 10px; } }

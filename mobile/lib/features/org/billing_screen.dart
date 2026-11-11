@@ -69,7 +69,9 @@ class _BillingScreenState extends State<BillingScreen> with WidgetsBindingObserv
     final ok = await confirm(
       context,
       title: 'Buy ${formatAmount(pack.credits)} credits?',
-      message: 'Pay ₹${formatAmount(pack.priceInr)} by UPI, card or net banking on Cashfree’s secure page. Credits are added as soon as the payment goes through.',
+      message: b.gstIncluded
+          ? 'Pay ₹${formatAmount(pack.priceInr)} (GST included) by UPI, card or net banking on Cashfree’s secure page. Credits are added as soon as the payment goes through.'
+          : 'Pay ₹${formatAmount(b.payInr(pack))} (₹${formatAmount(pack.priceInr)} + ${formatAmount(b.gstRate)}% GST) by UPI, card or net banking on Cashfree’s secure page. Credits are added as soon as the payment goes through.',
       action: 'Continue to payment',
     );
     if (!ok || !mounted) return;
@@ -241,10 +243,10 @@ class _BillingScreenState extends State<BillingScreen> with WidgetsBindingObserv
                       color: Theme.of(context).colorScheme.surfaceContainerHigh,
                       child: ListTile(
                         title: Text('${formatAmount(p.credits)} credits', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text([p.label, if (p.bonusPercent > 0) '${p.bonusPercent}% extra'].join(' · ')),
+                        subtitle: Text([p.label, if (p.bonusPercent > 0) '${p.bonusPercent}% extra', if (!b.gstIncluded) '₹${formatAmount(b.payInr(p))} with GST'].join(' · ')),
                         trailing: FilledButton(
                           onPressed: b.suspended || _waiting != null ? null : () => _buy(p),
-                          child: Text('₹${formatAmount(p.priceInr)}'),
+                          child: Text(b.gstIncluded ? '₹${formatAmount(p.priceInr)}' : '₹${formatAmount(p.priceInr)} + GST'),
                         ),
                       ),
                     ),

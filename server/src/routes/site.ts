@@ -23,6 +23,9 @@ const PAGES: Record<string, string> = {
   '/privacy': 'privacy.html',
   '/delete-account': 'delete-account.html',
   '/features': 'features.html',
+  '/contact': 'contact.html',
+  '/refunds': 'refunds.html',
+  '/shipping': 'shipping.html',
 };
 
 const ASSETS: Record<string, string> = {
@@ -95,6 +98,11 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: Ctx) {
     EMAIL: esc(supportEmail),
     ENTITY: config.LEGAL_ENTITY ? esc(config.LEGAL_ENTITY) : missing('Company legal name: set LEGAL_ENTITY'),
     ADDRESS: config.LEGAL_ADDRESS ? esc(config.LEGAL_ADDRESS) : missing('Registered address: set LEGAL_ADDRESS'),
+    // Contact page: the phone line only when SUPPORT_PHONE is set.
+    PHONE_ROW: config.SUPPORT_PHONE
+      ? `<dt>Phone and WhatsApp</dt><dd><a href="tel:${esc(config.SUPPORT_PHONE.replace(/[^\d+]/g, ''))}">${esc(config.SUPPORT_PHONE)}</a></dd>`
+      : '',
+    HOURS: esc(config.SUPPORT_HOURS),
     GRIEVANCE: config.GRIEVANCE_OFFICER ? esc(config.GRIEVANCE_OFFICER) : missing('Grievance Officer name: set GRIEVANCE_OFFICER'),
     JURISDICTION: esc(config.LEGAL_JURISDICTION),
     UPDATED: esc(config.LEGAL_UPDATED),
@@ -137,6 +145,10 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: Ctx) {
   // Common aliases people and app stores type.
   app.get('/privacy-policy', async (_req, reply) => reply.redirect('/privacy', 301));
   app.get('/terms-of-service', async (_req, reply) => reply.redirect('/terms', 301));
+  app.get('/contact-us', async (_req, reply) => reply.redirect('/contact', 301));
+  app.get('/refund-policy', async (_req, reply) => reply.redirect('/refunds', 301));
+  app.get('/cancellation-policy', async (_req, reply) => reply.redirect('/refunds', 301));
+  app.get('/shipping-policy', async (_req, reply) => reply.redirect('/shipping', 301));
   app.get('/signin', async (_req, reply) => reply.redirect('/login', 301));
 
   app.get('/site/:file', async (req, reply) => {
@@ -158,6 +170,6 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/public/pricing', async (_req, reply) => {
     const { pricing, packs } = await billing.settings();
     reply.header('Cache-Control', 'public, max-age=300');
-    return { billing: billing.enabled, pricing, packs };
+    return { billing: billing.enabled, pricing, packs, gst: await ctx.payments.gstMode() };
   });
 }

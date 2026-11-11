@@ -32,6 +32,7 @@ describe('V7 web billing: slots, back to the web after paying, billing emails', 
 
   before(async () => {
     h = await startHarness({ env: { BILLING_ENABLED: 'true', CASHFREE_CLIENT_ID: 'id', CASHFREE_CLIENT_SECRET: 'secret', CASHFREE_API_BASE: 'https://cf.fake/pg' }, cashfreeFetch: cf.fetchImpl });
+    await h.db.query('UPDATE platform_settings SET invoice = $1 WHERE id', [JSON.stringify({ pricesIncludeGst: true })]);
     admin = await signup(h, 'boss@golive.test', 'Go Live HQ');
     await h.db.query('UPDATE users SET is_platform_admin = true WHERE id = $1', [admin.userId]);
     owner = await signup(h, 'rahul@dlf.test', 'DLF Golf Club');

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shipping and delivery | {{BRAND}}</title>
+<meta name="description" content="{{BRAND}} is a digital service: credits are delivered to your wallet instantly after payment. Nothing is shipped.">
+<meta name="theme-color" content="#0f1a28">
+<link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/site/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/site/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/site/site.css">
+</head>
+<body>
+{{> header}}
+<main id="main" class="legal">
+  <div class="wrap">
+    <nav class="legal-toc" aria-label="Contents">
+      <ol>
+        <li><a href="#digital">Digital delivery</a></li>
+        <li><a href="#when">When you get it</a></li>
+        <li><a href="#problems">If it does not arrive</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ol>
+    </nav>
+    <article>
+      <h1>Shipping and delivery</h1>
+      <p class="updated">Last updated {{UPDATED}}</p>
+
+      <h2 id="digital">1. Digital delivery only</h2>
+      <p>{{BRAND}} is an online service. We do not ship any physical goods. What you buy, prepaid credits, is delivered electronically to your club's wallet on {{DOMAIN}} and in the {{BRAND}} app. The service works in India and anywhere your phones have internet.</p>
+
+      <h2 id="when">2. When you get it</h2>
+      <p>Credits are added <strong>instantly</strong>, as soon as Cashfree Payments confirms the payment, usually within a few seconds. You see them in your wallet and receive a receipt by email. Your account and the service itself are available immediately after you sign up.</p>
+
+      <h2 id="problems">3. If credits do not arrive</h2>
+      <p>If you were charged but credits are not in your wallet within 1 hour, email <a href="mailto:{{EMAIL}}">{{EMAIL}}</a> with your order number. We add them or refund you as described in our <a href="/refunds">Refunds and cancellations policy</a>.</p>
+
+      <h2 id="contact">4. Contact</h2>
+      <p>{{ENTITY}}, {{ADDRESS}}. Email <a href="mailto:{{EMAIL}}">{{EMAIL}}</a>, {{HOURS}}.</p>
+    </article>
+  </div>
+</main>
+{{> footer}}
+</body>
+</html>
